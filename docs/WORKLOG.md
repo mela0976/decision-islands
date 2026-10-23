@@ -7,7 +7,7 @@
 - [x] Phase B: Design the workflow
 - [x] Phase C: Run the loop
 - [x] Phase D: Keep the audit trail
-- [ ] Phase E: Verify and hand back
+- [x] Phase E: Verify and hand back
 
 ## 本次範圍與驗收
 

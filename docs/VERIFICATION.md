@@ -22,4 +22,19 @@
 
 歷年真實PDF尚未提供，目前以合成第二年度驗證匯入與前端年度切換。掃描型PDF需要先OCR與人工校對。3分鐘介紹稿已準備，但未錄製影片或代填競賽報名。
 
-正式GitHub版本、Pages部署與讀回結果會在發布後補入本檔。
+## 正式發布讀回
+
+- GitHub儲存庫 https://github.com/mela0976/decision-islands 。
+- 網站 https://mela0976.github.io/decision-islands/ 。
+- 部署原始碼版本 `d8cab595f755981580cc26901628b45e4ca6de41`。
+- GitHub Actions run `39954203376` 的build及deploy均success，部署完成時間2026-10-23 20:34 Asia/Taipei。
+- 正式網址重跑7組瀏覽器情境通過，無page errors。44個文章與PDF連結均HTTP200。
+- 正式index.html與本機建置工件逐位元相同，SHA256為 `fd0f57d0d6dbddd16e86c64a9bd87fcc258fe52baf4ae9327a2181fbc5d81a75`。
+
+最後驗收文件以docs-only提交補入，沿用上述已驗證的網站工件，不為文件改動重建網站。CI提示舊版action宣告Node20，但本次runner已強制使用Node24且全部工作成功；這不是測試失敗，也未據此宣稱已更新所有action版本。
+
+## 獨立審查
+
+reviewed by gpt-6-astra。
+
+審查確認來源分配總數、公開邊界、實際畫面與瀏覽器紀錄。發現的鍵盤跳轉及未實作縮放提示已修正並重跑瀏覽器測試。沒有未解決的發布阻斷問題。錨點核對不代表逐字人工校稿；實體手機與其他年份真實PDF仍未驗證。審查代理未取得完整transcript，因此未將歷史調度與觀看紀錄提升為其獨立驗證。

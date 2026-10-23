@@ -6,3 +6,5 @@ ts	phase	decision	why	evidence	result
 2026-10-23T20:29:43+08:00	visual	首頁改為星空圖書館及中央書塔聖誕樹	使用者於實作中追加的明確方向	../src/world.ts	桌機及手機尺寸畫面已檢視
 2026-10-23T20:29:43+08:00	source	唯一錨點排序正文並隔離重複標籤與來源差異	排版故事順序不等於讀序且未核對文字不公開	../public/data/2026-source-audit.json	1904段正文132段補充7段未發布
 2026-10-23T20:29:43+08:00	verify	完成行為來源及實際瀏覽器驗收	以真實工件檢查整體閱讀旅程	VERIFICATION.md	5個Node測試13個Python測試及7組瀏覽器情境通過
+2026-10-23T20:35:00+08:00	publish	推送mela0976並以GitHubPages發布	使用者要求上傳且競賽需要公開網址	https://github.com/mela0976/decision-islands/actions/runs/39954203376	正式瀏覽器7組情境與44個來源連結通過
+2026-10-23T20:35:00+08:00	review	修正跳轉目錄的鍵盤入口並移除未實作縮放提示	Astra獨立審查的可重現發現	VERIFICATION.md	修正後正式瀏覽器驗收通過
