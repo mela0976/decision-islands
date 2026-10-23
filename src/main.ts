@@ -240,7 +240,8 @@ function commandExplorer(command: ExplorerCommand) {
       explorerState.season = command.season; applySeason(command.season); world?.setSeason(command.season);
       if (!saveSeason(command.season)) toast(t('瀏覽器無法儲存節慶設定。', 'Your browser could not save the season.'));
       break;
-    case 'chapter': selectChapter(command.chapter); return;
+    case 'chapter':
+      explorerState.chapter = command.chapter; chapter = command.chapter; renderList(); break;
     case 'toggle': explorerState[command.key] = command.value; break;
     case 'query': explorerState.query = command.query; break;
     case 'tab': explorerState.tab = command.tab; break;

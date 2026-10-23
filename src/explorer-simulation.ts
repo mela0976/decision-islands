@@ -16,7 +16,6 @@ export function createSimulation(data: ExplorerData, graph: PathGraph): Explorer
             elapsed: number;
         })[] = [];
         const startMinute = minute;
-        // Piecewise exact constant-speed traversal consumes all foreground time, including low FPS frames.
         for (const w of walkers) {
             let remaining = dtSeconds, elapsed = 0;
             const emit = (type: ExplorerEvent['type']) => { events.push({ id: 0, elapsed, type, flowId: w.flow.id, walkerId: w.id, islandId: w.direction === 1 ? w.flow.to : w.flow.from, minute: (startMinute + elapsed * 10) % 1440 }); };
@@ -24,7 +23,7 @@ export function createSimulation(data: ExplorerData, graph: PathGraph): Explorer
                 continue;
             while (remaining > 1e-10) {
                 if (w.status === 'waiting') {
-                    const step = Math.min(w.wait, remaining);
+                    const step = Math.min(w.wait, remaining, .08);
                     w.wait -= step;
                     remaining -= step;
                     elapsed += step;
@@ -36,7 +35,7 @@ export function createSimulation(data: ExplorerData, graph: PathGraph): Explorer
                     }
                 }
                 else {
-                    const destination = w.direction === 1 ? w.route.length : 0, needed = Math.abs(destination - w.distance) / w.speed, step = Math.min(needed, remaining);
+                    const destination = w.direction === 1 ? w.route.length : 0, needed = Math.abs(destination - w.distance) / w.speed, step = Math.min(needed, remaining, .08);
                     w.distance += w.direction * w.speed * step;
                     remaining -= step;
                     elapsed += step;
@@ -47,7 +46,6 @@ export function createSimulation(data: ExplorerData, graph: PathGraph): Explorer
                         emit('arrive');
                     }
                 }
-                // Keep public batches bounded during intentionally huge manual advances.
                 if (events.length > 200)
                     events.splice(0, events.length - 100);
             }

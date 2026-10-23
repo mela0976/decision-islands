@@ -50,12 +50,12 @@
 | 連線 | from → to | articleIds 尾號 | level | 搬運物與角色 |
 | --- | --- | --- | --- | --- |
 | opening | growth → human | 01,02 | source | 書本，策展員 |
-| authenticity | human → trust | 03,06 | thematic | 資料 data，研究者 |
-| conversation | trust → community | 06,09 | thematic | 想法 idea，讀者 |
+| authenticity | human → trust | 03,06 | thematic | 想法 idea，研究者 |
+| conversation | trust → community | 06,09 | thematic | 資料 data，讀者 |
 | shared-memory | community → attention | 09,11 | thematic | 記憶 memory，通勤讀者 |
 | attention-insight | attention → insight | 13,12 | thematic | 資料 data，學生 |
-| source-sequence | insight → choice | 12,13 | source | 書本，策展員 |
-| decision-experience | choice → experience | 15,17 | thematic | 想法 idea，研究者 |
+| source-sequence | insight → choice | 12,13 | source | 書本，家長讀者 |
+| decision-experience | choice → experience | 15,17 | thematic | 想法 idea，園丁讀者 |
 | experience-agents | experience → agents | 18,22 | thematic | 書本，騎車讀者 |
 | craft-governance | craft → governance | 21,20 | pending | 想法 idea，讀者 |
 | culture-governance | culture → governance | 16,20 | thematic | 資料 data，工作者 |

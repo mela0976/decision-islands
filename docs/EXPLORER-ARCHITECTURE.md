@@ -4,7 +4,7 @@ Design only. Source inspected on 2026-10-23. No implementation, browser run, per
 
 ## Grounding and constraints
 
-The current `src/world.ts` owns one renderer, one RAF, visibility and resize observers, a library scene group, cosmos group, four hand-built chapter islands, an orthographic explorer camera, manual pointer rotation, manual projected DOM labels and a WebGL fallback. `src/main.ts` owns the current Edition, history/deep links, reader dialog, bookmarks, search and year changes. `src/library.ts` owns four original chapters, three editorial reading paths and protected localStorage access. `src/types.ts` already describes real Article content and Edition. These content types should remain authoritative.
+At the initial baseline, `src/world.ts` owned one renderer, one RAF, visibility and resize observers, a library scene group, cosmos group, four hand-built chapter islands, an orthographic explorer camera, manual pointer rotation, manual projected DOM labels and a WebGL fallback. `src/main.ts` owns the current Edition, history/deep links, reader dialog, bookmarks, search and year changes. `src/library.ts` owns four original chapters, three editorial reading paths and protected localStorage access. `src/types.ts` already describes real Article content and Edition. These content types should remain authoritative.
 
 `src/entrance.ts` defines a 6.5-second entrance and a separate `treeRotationForElapsed` function with a 150-second full rotation. Preserve this distinction. The requested 150 seconds belongs to tree rotation, not entrance duration. Preserve `library-scene.ts`, `library-materials.ts`, the natural library, its rotating tree and cosmos passage.
 
@@ -89,16 +89,16 @@ export interface ExplorerItem {
   caption: I18nText;
 }
 export type FlowEvidence =
-  | { kind: 'editorial'; rationale: I18nText }
-  | { kind: 'article'; articleIds: readonly string[]; rationale: I18nText }
+  | { kind: 'thematic'; rationale: I18nText }
+  | { kind: 'source'; rationale: I18nText }
   | { kind: 'pending'; rationale: I18nText };
 export interface ExplorerFlow {
   id: FlowId;
   from: IslandId;
   to: IslandId;
   articleIds: readonly string[];
-  cargo: 'book';
-  role: 'reader' | 'researcher' | 'maker';
+  cargo: 'book' | 'idea' | 'memory' | 'data';
+  role: string; // Resolves one of the nine DATA.roles entries.
   evidence: FlowEvidence;
   walkerCount: number;
 }
@@ -159,9 +159,11 @@ Approved 2026 theme order selectors live only in DATA.
 
 The union of these selectors covers orders 1 through 22. Check 48 unique placement IDs and 22 unique canonical article references for the supplied edition. No empty article placeholders or fictional policy-item expansion. Non-2026 editions use explicitly declared year curation if present. Otherwise resolve available orders against that edition and omit missing placements, with deterministic chapter/order grouping for any unmapped actual articles. Empty themes may be visible as unavailable navigation but never get invented articles. Relationships with missing endpoints or source articles are omitted. Six to ten flows is the acceptance target for the supplied 2026 data, not an excuse to fabricate relationships for unknown editions.
 
-Do not silently mark a connection `official`. Editorial links are labeled “Editorial connection / 策展連結”. An `article` relationship requires real supporting article IDs and a truthful explanation of what those articles support. It still must not imply an official institution or policy endorsement. Line treatment derives from evidence kind. If no directly supported numeric fact exists, item cards use real reading minutes, printed page range and article order rather than fabricated metrics. Do not regex-mine unrelated years or page numbers into impressive factual claims. English UI uses translated editorial chrome; real article titles and bodies remain original unless an actual translation exists.
+Do not silently mark a connection `official`. Editorial links are labeled “Editorial connection / 策展連結”. A `source` relationship requires real supporting article IDs and a truthful explanation of what those articles support. It still must not imply an official institution or policy endorsement. Line treatment derives from evidence kind. If no directly supported numeric fact exists, item cards use real reading minutes, printed page range and article order rather than fabricated metrics. Do not regex-mine unrelated years or page numbers into impressive factual claims. English UI uses translated editorial chrome; real article titles and bodies remain original unless an actual translation exists.
 
 At the data boundary check unique IDs, valid article references, valid registry model kinds, all item ownership, connected axial layout, finite time/keyframe numbers, nonnegative edge weights, and valid segment ranges. Emit a useful data error and retain normal article reading if validation fails. Internals use the validated shape without repeating guards.
+
+The sketches below explain ownership; the final source contract in `src/explorer-types.ts` and complete specification in `EXPLORER-PROMPT.md` take precedence over any omitted fields.
 
 ## State and commands
 
@@ -253,7 +255,7 @@ The kit lives in `src/explorer-modelkit.ts`. Export a total `Record<ModelKind, M
 
 Animated walker batches use DynamicDrawUsage, a stable walker-index-to-ID table and the same hit contract. Hit priority resolves the nearest meaningful item/walker/flow before its island base. Pointer-down records coordinates and cancels camera flight; pointer-up raycasts only if total movement is at most 6 CSS pixels and no control drag/cancel occurred. Raycast uses the active camera and canvas bounding rectangle, including instanced hits. CSS label buttons dispatch the identical selection union. A reset in the middle of a pointer gesture cancels the gesture.
 
-Optional model thumbnails should be rendered by the existing shared renderer into a 160 by 160 render target on demand, with render target, viewport, scissor, clear state and camera restored. They must not allocate a second WebGL context or run a thumbnail RAF. A small geometric/schematic thumbnail is acceptable until that ownership is implemented; a blank or misleading article illustration is not.
+Required model thumbnails render the actual model through the existing shared renderer into a 160 by 160 render target on demand. Restore render target, viewport, scissor, clear state, exposure and shadow mode. Do not allocate a second WebGL context or thumbnail RAF. Without WebGL, show an explicitly labeled unavailable preview while preserving reading.
 
 ## Rendering and resources
 

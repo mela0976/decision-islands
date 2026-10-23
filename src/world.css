@@ -32,3 +32,6 @@
 .entrance-controls button:focus-visible{outline:2px solid #f7d790;outline-offset:5px}
 .island-world[data-phase=transition] .entrance-controls{visibility:visible;opacity:1}
 @media(max-width:700px){.entrance-controls{bottom:25px;font-size:11px;gap:18px;padding:10px 16px}}
+.explorer-label-host{position:absolute;inset:0;pointer-events:none;z-index:2;overflow:hidden}
+.island-world:not([data-phase=islands]) .explorer-label-host{visibility:hidden!important;pointer-events:none!important}
+.island-world canvas:focus-visible{outline:3px solid var(--holiday-accent,#b84338);outline-offset:-5px}
