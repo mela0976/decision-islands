@@ -64,3 +64,10 @@ reviewed by gpt-6-astra。
 獨立Astra檢查貼圖色彩空間、UV、索引、法線、旋轉及資源釋放通過；Sol以101組輸入檢查刪除共面書皮後的可見屬性一致。這些檢查不代表實體GPU效能或攝影級外觀。後製AO試作未通過入口驗收，已移除；最終版使用原生渲染。前景時間不再截斷為每幀0.1秒，避免慢畫格延長轉場，背景與暫停仍重設時間基準。
 
 最終本機 `npm test` 10項、`npm run build`、`npm run test:e2e` 7組情境，以及 `node tests/visual-motion.mjs` 5項均通過。慢畫格情境以220毫秒延後animation callbacks，仍須在12秒驗收上限內抵達群島。這是入口行為回歸，不是FPS基準測試。桌面1440×1000與手機390×844尺寸已檢查，沒有page errors；實體手機及其他瀏覽器未驗證。
+
+### 自然材質版正式發布讀回
+
+- 部署版本 `46378b7dc81af7bec274f50b788e2691f92736dc`，Actions run `39961299460` build及deploy均success，完成時間2026-10-23 21:28:01 Asia/Taipei。CI亦通過13項Python來源管線測試與公開檔案邊界檢查。
+- 正式網址 https://mela0976.github.io/decision-islands/ 的7組完整瀏覽器情境重跑通過，沒有page errors。包含正常進場、手機減少動態、搜尋、原刊PDF及閱讀狀態。
+- 正式HTML、JS與CSS均與最終本機dist逐位元相同。index.html SHA256為 `98a8dad5887a265fc6befc0f618e1b66ddad93fa55dff16c8c563e68c9cdff3f`。
+- 5項動態專項為本機驗證，未在正式站重跑；正式程式工件一致，正式入口另由7組流程實際驗證。本機test-results保留正式截圖與瀏覽器結果。
