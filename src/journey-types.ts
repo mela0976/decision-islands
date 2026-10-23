@@ -1,6 +1,13 @@
 import type { I18nText } from './explorer-types';
 
 export type { I18nText } from './explorer-types';
+export type JourneyAudienceId = 'marketing' | 'everyday';
+export interface JourneyAudience {
+  id: JourneyAudienceId;
+  title: I18nText;
+  description: I18nText;
+  icon: string;
+}
 export type JourneyConnectionKind = 'complement' | 'tradeoff' | 'context';
 export interface JourneyConnection { kind: JourneyConnectionKind; explanation: I18nText }
 export interface JourneyStep {
@@ -17,6 +24,7 @@ export interface JourneyQuestion {
 }
 export interface JourneyPersona {
   id: string;
+  audienceId: JourneyAudienceId;
   title: I18nText;
   description: I18nText;
   icon: string;
@@ -25,6 +33,7 @@ export interface JourneyPersona {
 export interface ReadingJourneys {
   bookId: string;
   year: number;
+  audiences: readonly JourneyAudience[];
   personas: readonly JourneyPersona[];
   notice: I18nText;
 }
@@ -40,6 +49,7 @@ export interface JourneyPersonaDefinition extends Omit<JourneyPersona, 'question
 export interface JourneyDefinition {
   bookId: string;
   year: number;
+  audiences: readonly JourneyAudience[];
   personas: readonly JourneyPersonaDefinition[];
   notice: I18nText;
 }
