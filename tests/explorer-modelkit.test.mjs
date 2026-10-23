@@ -36,6 +36,21 @@ const data = {
 const day = { minute: 1260, skyTop: '22325f', horizon: '445488', sunColor: 'c0ccff', sunIntensity: 1.2, hemiSky: '98a8dc', hemiGround: '685a6e', hemiIntensity: 1.9, night: 1, water: '5a88b2', sunDirection: [0.35, 0.8, 0.48] };
 const readColor = (mesh, index) => { const result = new THREE.Color(); mesh.getColorAt(index, result); return result; };
 const colorDistance = (first, second) => Math.hypot(...first.toArray().map((value, index) => value - second.toArray()[index]));
+const ownerParts = (kit, owner) => kit.hitMeshes.flatMap(mesh => {
+  mesh.geometry.computeBoundingBox();
+  return Array.from({ length: mesh.count }, (_, instanceId) => {
+    if (kit.resolveHit(mesh, instanceId) !== owner) return null;
+    const matrix = new THREE.Matrix4();
+    mesh.getMatrixAt(instanceId, matrix);
+    const bounds = mesh.geometry.boundingBox.clone().applyMatrix4(matrix);
+    const position = new THREE.Vector3();
+    const size = new THREE.Vector3();
+    bounds.getCenter(position);
+    bounds.getSize(size);
+    return { kind: mesh.userData.geometryKind, position, size, color: readColor(mesh, instanceId) };
+  }).filter(Boolean);
+});
+const hasPartColor = (parts, hex) => parts.some(part => colorDistance(part.color, new THREE.Color(hex)) < 1e-6);
 
 test('the total model registry builds all twelve owner-addressable, repeatable archetypes', () => {
   assert.deepEqual(Object.keys(MODEL_BUILDERS), modelKinds);
@@ -74,6 +89,39 @@ test('each archetype stays inside the shared ground footprint and height envelop
     assert.ok(bounds.min.y >= -0.01 && bounds.max.y <= 1.51, `${model} height is bounded (${bounds.min.y}, ${bounds.max.y})`);
     kit.dispose();
   }
+});
+
+test('book archetype shows the specified reading-house roof, eaves, walls, and windows', () => {
+  const placement = { ...placements[0], id: 'reading-house', model: 'book', position: [0, 0, 0], scale: 1, color: '#58a6a6', rotation: 0 };
+  const kit = createModelKit([placement], 19);
+  const parts = ownerParts(kit, placement.id);
+  assert.ok(parts.some(part => part.kind === 'hip' && colorDistance(part.color, new THREE.Color('#db6a41')) < 1e-6), 'the reading house has a coral hip roof');
+  assert.ok(hasPartColor(parts, '#a34e34'), 'the reading house has terracotta eaves');
+  assert.ok(hasPartColor(parts, '#f4ebdd'), 'the reading house has cream walls');
+  assert.ok(hasPartColor(parts, '#a8c4c2'), 'the reading house has pale teal windows');
+  kit.dispose();
+});
+
+test('classroom presents a front-open reading room with desks, chairs, a blackboard, and a miniature reader', () => {
+  const placement = { ...placements[2], id: 'reading-classroom', model: 'classroom', position: [0, 0, 0], scale: 1, color: '#58a6a6', rotation: 0 };
+  const kit = createModelKit([placement], 19);
+  const parts = ownerParts(kit, placement.id);
+  const isColor = (part, hex) => colorDistance(part.color, new THREE.Color(hex)) < 1e-6;
+  const blockedEntry = parts.some(part => isColor(part, '#f4ebdd')
+    && part.position.x - part.size.x / 2 < 0.08
+    && part.position.x + part.size.x / 2 > -0.08
+    && part.position.y - part.size.y / 2 < 0.52
+    && part.position.y + part.size.y / 2 > 0.18
+    && part.position.z + part.size.z / 2 > 0.2);
+  assert.equal(blockedEntry, false, 'the front opening leaves the classroom interior visible');
+  assert.ok(parts.filter(part => isColor(part, '#b48560') && part.position.y > 0.25 && part.position.y < 0.36 && part.size.x > 0.2 && part.size.z > 0.14).length >= 2, 'the room has at least two desks');
+  assert.ok(parts.filter(part => isColor(part, '#b48560') && part.position.y > 0.13 && part.position.y < 0.2 && part.size.x > 0.13 && part.size.x < 0.18 && part.size.z > 0.12).length >= 2, 'the desks have visible chair seats');
+  assert.ok(parts.some(part => isColor(part, '#71806a') && part.position.y > 0.4 && part.size.x > 0.4 && part.size.y > 0.25), 'the room has a blackboard');
+  const readerHead = parts.find(part => part.kind === 'sphere' && isColor(part, '#f2b5c6') && part.position.y > 0.3 && part.position.y < 0.5 && part.size.x > 0.07 && part.size.x < 0.14);
+  assert.ok(readerHead, 'the room has a visible miniature reader');
+  assert.ok(parts.some(part => isColor(part, '#6f7fb5') && Math.abs(part.position.x - readerHead.position.x) < 0.02 && part.position.y > 0.18 && part.position.y < 0.3), 'the reader has a torso below the head');
+  assert.ok(parts.filter(part => isColor(part, '#211d1d') && Math.abs(part.position.x - readerHead.position.x) < 0.06 && Math.abs(part.position.z - readerHead.position.z) < 0.05 && part.position.y > 0.07 && part.position.y < 0.17).length >= 2, 'the reader has two legs');
+  kit.dispose();
 });
 
 test('highlight recalculates from base color in yellow-then-coral order and night emission is reversible', () => {
