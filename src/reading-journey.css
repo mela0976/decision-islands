@@ -1039,7 +1039,7 @@
 .journey-mission {
   bottom: 96px;
   left: 28px;
-  max-height: calc(100svh - 190px);
+  max-height: calc(100svh - 242px);
   width: min(720px, calc(100vw - 56px));
 }
 
@@ -1060,7 +1060,7 @@
 .journey-mission-eyebrow { color: var(--journey-secondary-ink); font-size: 11px; font-weight: 800; letter-spacing: .06em; margin: 0 0 8px; }
 .journey-mission h3 { font-size: 18px; line-height: 1.5; margin: 5px 0 10px; }
 .journey-mission-brief > p:not(.journey-mission-eyebrow) { font-size: 16px; line-height: 1.85; margin: 0; }
-.journey-mission-goal { border-top: 1px solid var(--journey-border); font-size: 14px; margin-top: 18px; padding-top: 14px; }
+.journey-mission h3.journey-mission-goal { font-size: 18px; margin: 0 0 12px; }
 .journey-mission-goal p { margin: 5px 0 0; }
 .journey-mission-condition { border-left: 3px solid var(--holiday-accent, #b84338); font-size: 13px; margin: 12px 0 18px; padding: 4px 0 4px 12px; }
 .journey-mission-condition ul { margin: 6px 0 0; padding-left: 18px; }
@@ -1099,6 +1099,8 @@
 .journey-mission-source > summary { align-content: center; color: var(--journey-secondary-ink); cursor: pointer; font-size: 13px; font-weight: 700; min-height: 48px; padding: 12px 0; }
 .journey-mission-source .journey-insight { margin-bottom: 14px; }
 .journey-mission-source .journey-insight p { font-size: 13px; }
+.journey-mission-help { color: var(--journey-muted); font-size: 12px; margin-top: 12px; }
+.journey-mission-help summary { align-content: center; cursor: pointer; min-height: 44px; }
 .journey-mission-plan { background: color-mix(in srgb, var(--holiday-secondary, #58775c) 9%, white); border: 1px solid var(--journey-border); border-radius: 18px; margin-top: 24px; padding: 20px; }
 .journey-mission-plan > p { font-size: 13px; }
 .journey-mission-plan ol { list-style: none; margin: 0 0 15px; padding: 0; }
@@ -1113,14 +1115,23 @@
 .journey-mission [tabindex="-1"]:focus-visible { outline: 3px solid var(--holiday-accent, #b84338); outline-offset: 3px; }
 
 @media (max-width: 760px) {
-  .journey-mission { bottom: 88px; left: 12px; max-height: calc(100svh - 154px); width: calc(100vw - 24px); }
+  .journey-mission { bottom: 88px; left: 12px; max-height: calc(100svh - 206px); width: calc(100vw - 24px); }
   .journey-mission .journey-rail-header { padding: 12px 14px; }
   .journey-mission .journey-rail-content { padding: 16px 16px 22px; }
-  .journey-mission .journey-rail-content h2 { font-size: 23px; }
+  .journey-mission .journey-rail-content > h2 {
+    clip-path: inset(50%);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+  .journey-mission .journey-step-markers { margin: 12px 0; }
   .journey-mission .journey-step-marker { font-size: 11px; gap: 5px; padding: 6px 4px; }
   .journey-mission .journey-rail-footer { gap: 8px; grid-template-columns: 1fr; padding: 10px 14px; }
   .journey-mission-brief, .journey-mission-feedback, .journey-mission-plan { padding: 16px; }
-  .journey-mission-brief > p:not(.journey-mission-eyebrow) { font-size: 15px; }
+  .journey-mission-brief > p:not(.journey-mission-eyebrow) { font-size: 15px; line-height: 1.7; }
   .journey-mission-role { gap: 8px; }
   .journey-mission .journey-rail-persona { font-size: 12px; }
   .journey-mission-choice { padding: 13px; }

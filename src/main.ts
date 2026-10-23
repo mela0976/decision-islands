@@ -47,14 +47,14 @@ root.innerHTML = `
     <div id="world" aria-label="決策群島互動場景"></div>
     <header class="masthead">
       <a class="brand" href="#" aria-label="決策群島首頁"><span class="brand-mark">決策<br>群島<span class="brand-dot">.</span></span><span class="brand-meta">決策智慧<br><b>2026</b></span></a>
-      <div class="top-actions"><button id="my-reading" class="icon-button">${t('我的起點', 'My starting point')}</button><label class="season-picker"><span>${t('節慶', 'Season')}</span><select id="season" aria-label="${t('選擇節慶', 'Choose a season')}">${(Object.keys(HOLIDAYS) as Season[]).map(value => `<option value="${value}" ${value === explorerState.season ? 'selected' : ''}>${HOLIDAYS[value].title[language]}</option>`).join('')}</select></label><button id="motion" class="icon-button" aria-pressed="${motion}">${motion ? '◌ 動態開啟' : '◌ 動態暫停'}</button><button id="overview" class="icon-button">⌖ 全景</button><button id="toggle-library" class="icon-button" aria-controls="library">☷ 目錄</button></div>
+      <div class="top-actions"><button id="my-reading" class="icon-button">${t('我的任務', 'My tasks')}</button><label class="season-picker"><span>${t('節慶', 'Season')}</span><select id="season" aria-label="${t('選擇節慶', 'Choose a season')}">${(Object.keys(HOLIDAYS) as Season[]).map(value => `<option value="${value}" ${value === explorerState.season ? 'selected' : ''}>${HOLIDAYS[value].title[language]}</option>`).join('')}</select></label><button id="motion" class="icon-button" aria-pressed="${motion}">${motion ? '◌ 動態開啟' : '◌ 動態暫停'}</button><button id="overview" class="icon-button">⌖ 全景</button><button id="toggle-library" class="icon-button" aria-controls="library">☷ 目錄</button></div>
     </header>
     <section class="welcome" aria-labelledby="welcome-title">
       <p class="edition-label">電通行銷傳播集團 · 決策智慧十週年</p>
       <h1 id="welcome-title">十年的智慧，<br>在這裡相遇。</h1>
       <p class="welcome-copy">穿過十年的智慧，<br>尋找品牌與人的真實距離。</p>
-      <div class="welcome-bottom"><button id="enter" class="primary">${t('找到我的閱讀起點', 'Find my starting point')} <span>↗</span></button><button id="skip-intro" class="text-button">直接開始閱讀</button></div>
-      <p class="welcome-note">選一個角色，找到適合你的第一篇。</p>
+      <div class="welcome-bottom"><button id="enter" class="primary">${t('開始我的情境任務', 'Start my scenario')} <span>↗</span></button><button id="skip-intro" class="text-button">直接開始閱讀</button></div>
+      <p class="welcome-note">選一個角色，在生活與工作的小選擇中理解觀點。</p>
     </section>
     <section class="world-caption" hidden><span class="small-line">2026 · Agentic 時代</span><h1>重塑品牌與人的<br>真實距離。</h1><p>點一座島，讓觀點連起來。</p></section>
     <div class="world-bottom" hidden><div class="chapter-legend">${Object.entries(chapters).map(([id,c]) => `<button data-chapter="${id}"><i style="background:${c.color}"></i>${c.title}</button>`).join('')}</div><span class="map-hint">拖曳旋轉 · 點選探索</span></div>
@@ -173,14 +173,23 @@ function openArticle(id: string, updateHash = true) {
     <div class="article-body">${a.paragraphs.map(p=>`<p>${h(p)}</p>`).join('')}</div>
     ${a.supplementaryParagraphs?.length ? `<details class="reading-guide"><summary>圖表、註解與補充文字</summary><p class="provenance">以下文字見於原刊的多個位置，集中保留供查閱；圖表關係請對照 PDF。</p>${a.supplementaryParagraphs.map(p=>`<p>${h(p)}</p>`).join('')}</details>` : ''}
     <footer class="article-end"><p>讀到這裡，你帶走了什麼？</p><button id="complete" class="primary">${state.completed.includes(a.id) ? '已完成閱讀 ✓' : '留下閱讀足跡'}</button>
-    ${next ? `<div class="next-reading"><span>${journeyContext ? t('補上另一個角度', 'Add another perspective') : activePath ? '沿著這條路線' : '繼續探索'}</span><h2>${h(next.title)}</h2>${journeyContext?.nextReason ? `<p>${h(journeyContext.nextReason)}</p>` : ''}${activePath && pathIndex >= 0 && activePath.connections[pathIndex] ? `<p>${h(activePath.connections[pathIndex])}</p>` : ''}<button id="next-article" class="text-button">閱讀下一篇 ↗</button></div>` : `<p>${t('你已走完這條閱讀路線。', 'You have reached the end of this reading path.')}</p>${journeyContext ? `<button id="return-journey" class="text-button">${t('回到我的閱讀路線', 'Back to my reading path')} ↗</button>` : ''}`}
+    ${next ? `<div class="next-reading"><span>${journeyContext ? t('補上另一個角度', 'Add another perspective') : activePath ? '沿著這條路線' : '繼續探索'}</span><h2>${h(next.title)}</h2>${journeyContext?.nextReason ? `<p>${h(journeyContext.nextReason)}</p>` : ''}${activePath && pathIndex >= 0 && activePath.connections[pathIndex] ? `<p>${h(activePath.connections[pathIndex])}</p>` : ''}<button id="next-article" class="text-button">閱讀下一篇 ↗</button></div>` : `<p>${journeyContext?.hasMission ? t('回到情境，整理你的選擇與尚待確認的條件。', 'Return to the task to review your choices and open questions.') : t('你已走完這條閱讀路線。', 'You have reached the end of this reading path.')}</p>${journeyContext ? `<button id="return-journey" class="text-button">${t('回到我的閱讀路線', 'Back to my reading path')} ↗</button>` : ''}`}
     <div class="related"><h2>同一座島，其他觀點</h2>${related.map(r=>`<button class="text-button" data-related="${r.id}">${h(r.title)} ↗</button>`).join('')}</div></footer></article>`;
   const bookmarked = () => { const value = state.bookmarks.includes(a.id); $('#bookmark').textContent = value ? '已收藏 ★' : '收藏 ☆'; $('#bookmark').setAttribute('aria-pressed',String(value)); };
   bookmarked();
   localizeChrome($('#reader'));
   $('#bookmark').onclick = () => { state.bookmarks = state.bookmarks.includes(a.id) ? state.bookmarks.filter(x=>x!==a.id) : [...state.bookmarks,a.id]; storage(); bookmarked(); localizeChrome($('#reader')); renderList(); syncExplorer(); };
   $('#complete').onclick = () => { if (!state.completed.includes(a.id)) state.completed.push(a.id); storage(); $('#complete').textContent='已完成閱讀 ✓'; renderList(); syncExplorer(); toast(t('已留下這篇的閱讀足跡。', 'Your reading progress has been saved.')); localizeChrome($('#reader')); };
-  $('#next-article')?.addEventListener('click',()=>openArticle(next!.id));
+  if (journeyContext?.hasMission) {
+    const nextButton = $('#next-article');
+    if (nextButton) nextButton.textContent = t('回到情境，進入下一回合 →', 'Return to the task and continue →');
+    const returnButton = $('#return-journey');
+    if (returnButton) returnButton.textContent = t('回到我的處理方案 ↗', 'Back to my plan ↗');
+  }
+  $('#next-article')?.addEventListener('click',()=>{
+    if (journeyContext?.hasMission) { closeReader(); journeyUI?.advance(); }
+    else openArticle(next!.id);
+  });
   $('#return-journey')?.addEventListener('click', closeReader);
   document.querySelectorAll<HTMLElement>('[data-related]').forEach(b=>b.onclick=()=>{activePath=null;openArticle(b.dataset.related!);});
   if (!reader.open) { lastFocus = document.activeElement as HTMLElement; reader.showModal(); }
@@ -297,7 +306,7 @@ function localizeChrome(host: HTMLElement) {
     '電通行銷傳播集團 · 決策智慧十週年': 'dentsu · Ten years of Decision Wisdom',
     '十年的智慧，': 'Ten years of wisdom,', '在這裡相遇。': 'meet here.', '穿過十年的智慧，': 'Travel through ten years of ideas,',
     '尋找品牌與人的真實距離。': 'discover the distance between brands and people.', '啟程，探索 2026': 'Begin exploring 2026',
-    '直接開始閱讀': 'Start reading', '選一個角色，找到適合你的第一篇。': 'Choose a context. Find your first article.',
+    '直接開始閱讀': 'Start reading', '選一個角色，在生活與工作的小選擇中理解觀點。': 'Choose a role. Explore ideas through everyday decisions.',
     '閱讀目錄': 'Article directory', '觀點在這裡相遇': 'Ideas meet here', '把理解，連起來。': 'Connect your understanding.',
     '搜尋觀點、作者、關鍵字': 'Search ideas, authors, keywords', '目錄類型': 'Directory view', '全部觀點': 'All articles',
     '策展路線': 'Reading paths', '我的書籤': 'Bookmarks', '觀點清單': 'Article list', '年度藏書': 'Edition', '選擇年度': 'Choose edition',

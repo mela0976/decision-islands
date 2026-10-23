@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import ts from 'typescript';
+import { createServer } from 'vite';
 import { readFileSync } from 'node:fs';
 
-const code = ts.transpileModule(readFileSync(new URL('../src/reading-journeys.ts', import.meta.url), 'utf8'), {
-  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
-}).outputText;
-const { buildReadingJourneys, JOURNEY_2026, resolveJourney } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+const server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: 'custom' });
+let journeys;
+try { journeys = await server.ssrLoadModule('/src/reading-journeys.ts'); }
+finally { await server.close(); }
+const { buildReadingJourneys, JOURNEY_2026, resolveJourney } = journeys;
 const edition = JSON.parse(readFileSync(new URL('../public/data/2026.json', import.meta.url), 'utf8'));
 const data = buildReadingJourneys(edition);
 const copy = () => structuredClone(JOURNEY_2026);
@@ -81,6 +82,7 @@ test('declarative definitions bind to a book and resolve its IDs or current orde
   config.audiences = config.audiences.filter(a => a.id === config.personas[0].audienceId);
   config.personas[0].questions = [config.personas[0].questions[0]];
   const steps = config.personas[0].questions[0].steps;
+  for (const step of steps) delete step.mission;
   for (const [index, step] of steps.entries()) { delete step.articleOrder; step.articleId = `new-${index}`; }
   const configured = buildReadingJourneys(next, config);
   assert.deepEqual(configured.personas[0].questions[0].steps.map(s => s.articleId), ['new-0', 'new-1', 'new-2']);
@@ -88,6 +90,38 @@ test('declarative definitions bind to a book and resolve its IDs or current orde
   delete steps[1].articleId; steps[1].articleOrder = 2;
   assert.equal(buildReadingJourneys(next, config).personas[0].questions[0].steps[1].articleId, 'new-1');
   assert.throws(() => buildReadingJourneys(edition, config), /another book/);
+});
+
+test('all curated routes offer three distinct role missions bound to their own canonical source', () => {
+  const missions = data.personas.flatMap(p => p.questions.flatMap(q => q.steps.map(s => s.mission)));
+  assert.equal(missions.length, 48);
+  assert.ok(missions.every(Boolean));
+  assert.equal(new Set(missions.map(m => m.id)).size, 48);
+  for (const mission of missions) {
+    assert.equal(mission.choices.length, 2);
+    assert.equal(new Set(mission.choices.map(c => c.id)).size, 2);
+    assert.notEqual(mission.choices[0].outcome.zh, mission.choices[1].outcome.zh);
+    assert.notEqual(mission.choices[0].tradeoff.zh, mission.choices[1].tradeoff.zh);
+  }
+});
+
+test('malformed mission identities, choices and feedback fail before the edition is installed', () => {
+  for (const mutate of [
+    m => { m.id = ''; },
+    m => { m.scene.en = ''; },
+    m => { m.goal.zh = ''; },
+    m => { m.takeaway.en = ''; },
+    m => { m.choices = []; },
+    m => { m.choices[1].id = m.choices[0].id; },
+    m => { m.choices[0].outcome.en = ''; },
+    m => { m.choices[0].tradeoff.zh = ''; },
+  ]) {
+    const config = copy(); mutate(config.personas[0].questions[0].steps[0].mission);
+    assert.throws(() => buildReadingJourneys(edition, config));
+  }
+  const config = copy();
+  config.personas[0].questions[0].steps[1].mission.id = config.personas[0].questions[0].steps[0].mission.id;
+  assert.throws(() => buildReadingJourneys(edition, config), /duplicate/);
 });
 
 test('invalid identities, references, duplicate selections and malformed copy fail at the boundary', () => {

@@ -1,5 +1,6 @@
 import type { Edition } from './types';
 import type { I18nText, JourneyAudienceId, JourneyConnectionKind, JourneyDefinition, JourneyPersonaDefinition, JourneyQuestionDefinition, JourneyStepDefinition, ReadingJourneys } from './journey-types';
+import { MISSION_ROUNDS } from './journey-mission-content';
 
 const t = (zh: string, en: string): I18nText => ({ zh, en });
 const step = (articleOrder: number, prompt: I18nText, reason: I18nText, kind?: JourneyConnectionKind, explanation?: I18nText): JourneyStepDefinition => ({
@@ -8,7 +9,7 @@ const step = (articleOrder: number, prompt: I18nText, reason: I18nText, kind?: J
 const question = (id: string, title: I18nText, why: I18nText, steps: JourneyStepDefinition[]): JourneyQuestionDefinition => ({ id, title, why, steps });
 const persona = (id: string, audienceId: JourneyAudienceId, title: I18nText, description: I18nText, icon: string, questions: JourneyQuestionDefinition[]): JourneyPersonaDefinition => ({ id, audienceId, title, description, icon, questions });
 
-export const JOURNEY_2026: JourneyDefinition = {
+const READING_2026: JourneyDefinition = {
   bookId: '決策智慧 2026｜Agentic 時代，重塑品牌與人的真實距離',
   year: 2026,
   audiences: [
@@ -116,7 +117,20 @@ export const JOURNEY_2026: JourneyDefinition = {
   ],
 };
 
-const fallback = t('這本書的角色導讀尚未編排，請先從文章目錄自由閱讀。', 'Role-based journeys have not been curated for this book yet. Explore its article list freely.');
+export const JOURNEY_2026: JourneyDefinition = {
+  ...READING_2026,
+  notice: t('這本書聚焦品牌、人與 AI。情境與選項由本站編輯設計，選擇後可核對書中觀點；推演不代表實際成效。', 'This book explores brands, people and AI. Scenarios and choices are editorial designs linked to the book, not predictions of real outcomes.'),
+  personas: READING_2026.personas.map(role => ({
+    ...role,
+    questions: role.questions.map(concern => {
+      const rounds = MISSION_ROUNDS[concern.id];
+      if (!rounds || rounds.length !== concern.steps.length) throw new Error('curated mission rounds must match the reading route');
+      return { ...concern, steps: concern.steps.map((entry, index) => ({ ...entry, mission: rounds[index] })) };
+    }),
+  })),
+};
+
+const fallback = t('這本書的角色情境尚未編排，請先從文章目錄自由閱讀。', 'Role-based missions have not been curated for this book yet. Explore its article list freely.');
 
 export function buildReadingJourneys(edition: Edition, config?: JourneyDefinition): ReadingJourneys {
   const ids = new Set<string>();
@@ -135,7 +149,7 @@ export function buildReadingJourneys(edition: Edition, config?: JourneyDefinitio
     if (!value || typeof value.zh !== 'string' || !value.zh.trim() || typeof value.en !== 'string' || !value.en.trim()) throw new Error('journey text must include both languages');
   };
   const checkId = (value: string, seen: Set<string>) => {
-    if (!value || seen.has(value)) throw new Error('duplicate or empty journey ID');
+    if (typeof value !== 'string' || !value.trim() || seen.has(value)) throw new Error('duplicate or empty journey ID');
     seen.add(value);
   };
   checkText(definition.notice);
@@ -148,6 +162,7 @@ export function buildReadingJourneys(edition: Edition, config?: JourneyDefinitio
   }
   const personaIds = new Set<string>();
   const questionIds = new Set<string>();
+  const missionIds = new Set<string>();
   const personas: ReadingJourneys['personas'][number][] = [];
   for (const role of definition.personas) {
     if (!audienceIds.has(role.audienceId)) throw new Error('unknown journey audience reference');
@@ -166,6 +181,17 @@ export function buildReadingJourneys(edition: Edition, config?: JourneyDefinitio
           if (!['complement', 'tradeoff', 'context'].includes(entry.connection.kind)) throw new Error('invalid journey connection');
           checkText(entry.connection.explanation);
         }
+        if (entry.mission) {
+          const mission = entry.mission;
+          checkId(mission.id, missionIds);
+          checkText(mission.scene); checkText(mission.goal); checkText(mission.takeaway);
+          if (!Array.isArray(mission.choices) || mission.choices.length < 2 || mission.choices.length > 3) throw new Error('a mission needs two or three choices');
+          const choiceIds = new Set<string>();
+          for (const choice of mission.choices) {
+            checkId(choice.id, choiceIds);
+            checkText(choice.label); checkText(choice.outcome); checkText(choice.tradeoff);
+          }
+        }
         if ((entry.articleId === undefined) === (entry.articleOrder === undefined)) throw new Error('provide exactly one article reference');
         if (entry.articleOrder !== undefined && !Number.isInteger(entry.articleOrder)) throw new Error('invalid journey article order');
         const article = edition.articles.find(a => entry.articleId !== undefined ? a.id === entry.articleId : a.order === entry.articleOrder);
@@ -176,7 +202,7 @@ export function buildReadingJourneys(edition: Edition, config?: JourneyDefinitio
         }
         if (used.has(article.id)) throw new Error('a reading journey needs three distinct articles');
         used.add(article.id);
-        return [{ articleId: article.id, prompt: entry.prompt, reason: entry.reason, ...(entry.connection ? { connection: entry.connection } : {}) }];
+        return [{ articleId: article.id, prompt: entry.prompt, reason: entry.reason, ...(entry.connection ? { connection: entry.connection } : {}), ...(entry.mission ? { mission: entry.mission } : {}) }];
       });
       if (!missing) questions.push({ id: concern.id, title: concern.title, why: concern.why, steps });
     }
