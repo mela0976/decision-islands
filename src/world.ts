@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import './world.css';
+import { createLibraryScene } from './library-scene';
+import { ENTRANCE_DURATION_MS, sampleEntrance } from './entrance';
 
 type Article = { id: string; chapter: string; title: string };
 type ChapterKey = 'intro' | 'people' | 'model' | 'ai';
@@ -22,8 +24,9 @@ export function createWorld(container: HTMLElement, options: Options) {
   let width = 1;
   let height = 1;
   let lastFrame = 0;
+  let lastTick = 0;
   let lastInteraction = performance.now();
-  let transitionStart = 0;
+  let transitionElapsed = 0;
   let finishEnter: (() => void) | undefined;
   let enterPromise: Promise<void> | undefined;
   let renderer: THREE.WebGLRenderer | undefined;
@@ -54,7 +57,20 @@ export function createWorld(container: HTMLElement, options: Options) {
   const hint = document.createElement('div');
   hint.className = 'world-hint';
   hint.textContent = '拖曳探索・點選島嶼閱讀';
-  root.append(map, labels, compass, hint);
+  const veil = document.createElement('div');
+  veil.className = 'entrance-veil';
+  veil.setAttribute('aria-hidden', 'true');
+  const entranceControls = document.createElement('div');
+  entranceControls.className = 'entrance-controls';
+  const entranceCaption = document.createElement('span');
+  entranceCaption.textContent = '走近書的記憶';
+  const skipEntrance = document.createElement('button');
+  skipEntrance.type = 'button';
+  skipEntrance.textContent = '略過轉場';
+  skipEntrance.addEventListener('click', () => completeEnter());
+  entranceControls.append(entranceCaption, skipEntrance);
+  entranceControls.inert = true;
+  root.append(map, labels, compass, hint, veil, entranceControls);
   container.append(root);
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xe4d7bd);
@@ -63,8 +79,7 @@ export function createWorld(container: HTMLElement, options: Options) {
   let activeCamera: THREE.Camera = libraryCamera;
   const world = new THREE.Group();
   const cosmos = new THREE.Group();
-  const library = new THREE.Group();
-  scene.add(world, cosmos, library);
+  scene.add(world, cosmos);
   cosmos.visible = false;
   world.visible = false;
   const mats = new Map<number, THREE.MeshStandardMaterial>();
@@ -82,116 +97,9 @@ export function createWorld(container: HTMLElement, options: Options) {
   };
   const box = (parent: THREE.Object3D, x: number, y: number, z: number, w: number, h: number, d: number, color: number) => mesh(new THREE.BoxGeometry(w, h, d), color, parent, x, y, z);
   const cylinder = (parent: THREE.Object3D, x: number, y: number, z: number, top: number, bottom: number, h: number, color: number, segments = 8) => mesh(new THREE.CylinderGeometry(top, bottom, h, segments), color, parent, x, y, z);
-  const instanceTransform = new THREE.Object3D();
-  const instances = (parent: THREE.Group, geometry: THREE.BufferGeometry, count: number, color: number, place: (index: number, transform: THREE.Object3D) => number | void) => {
-    const batch = new THREE.InstancedMesh(geometry, material(color), count);
-    for (let i = 0; i < count; i++) {
-      instanceTransform.position.set(0, 0, 0);
-      instanceTransform.rotation.set(0, 0, 0);
-      instanceTransform.scale.set(1, 1, 1);
-      const shade = place(i, instanceTransform);
-      instanceTransform.updateMatrix();
-      batch.setMatrixAt(i, instanceTransform.matrix);
-      if (shade !== undefined) batch.setColorAt(i, new THREE.Color(shade));
-    }
-    batch.receiveShadow = true;
-    parent.add(batch);
-    return batch;
-  };
-  box(library, 0, -.22, -1, 65, .4, 60, 0xb6a28a);
-  cylinder(library, 0, .04, 1.7, 7.1, 7.1, .12, 0xd7c7ac, 80);
-  const shelfPoint = (a: number, radius = 19) => new THREE.Vector3(Math.cos(a) * radius, 0, -Math.sin(a) * radius * .66 - 1);
-  const shelfAngle = (a: number) => Math.atan2(.66 * Math.cos(a), -Math.sin(a));
-  const bays = 58;
-  instances(library, new THREE.BoxGeometry(1, 1, 1), bays, 0x745039, (i, t) => {
-    const a = .03 + i / (bays - 1) * (Math.PI - .06);
-    t.position.copy(shelfPoint(a)); t.position.y = 7.25;
-    t.rotation.y = shelfAngle(a); t.scale.set(1.05, 14.5, .65);
-  });
-  instances(library, new THREE.BoxGeometry(1, 1, 1), bays * 21, 0xc89559, (i, t) => {
-    const a = .03 + i % bays / (bays - 1) * (Math.PI - .06);
-    t.position.copy(shelfPoint(a, 18.75)); t.position.y = .32 + Math.floor(i / bays) * .69;
-    t.rotation.y = shelfAngle(a); t.scale.set(1.12, .075, 1.25);
-  });
-  instances(library, new THREE.BoxGeometry(.1, 14.5, 1.3), 30, 0xa97643, (i, t) => {
-    const a = .02 + i / 29 * (Math.PI - .04);
-    t.position.copy(shelfPoint(a, 18.7)); t.position.y = 7.25; t.rotation.y = shelfAngle(a);
-  });
-  const spineColors = [0xe5d8bd, 0x846943, 0x324e50, 0xb47e50, 0x6c473d, 0xc5b38a, 0x7d8b79, 0xeadfc8];
-  instances(library, new THREE.BoxGeometry(1, 1, 1), 21 * 225, 0xffffff, (i, t) => {
-    const col = i % 225;
-    const a = .04 + col / 224 * (Math.PI - .08);
-    const h = .35 + (Math.sin(i * 12.7) + 1) * .1;
-    t.position.copy(shelfPoint(a, 18.04)); t.position.y = .39 + Math.floor(i / 225) * .69 + h / 2;
-    t.rotation.y = shelfAngle(a); t.scale.set(.14 + (i % 4) * .022, h, .42);
-    return spineColors[(i * 7 + Math.floor(i / 13)) % spineColors.length];
-  });
-  for (const level of [0, 7.4, 14.7]) {
-    const points = Array.from({ length: 100 }, (_, i) => { const p = shelfPoint(i / 99 * Math.PI, 17.8); p.y = level; return p; });
-    mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 99, level === 7.4 ? .18 : .1, 6, false), 0xe9c88e, library);
-  }
-  for (let i = 0; i < 13; i++) {
-    box(library, -24 + i * 4, 17.5, -2, .14, .25, 40, 0xdecdb0);
-    box(library, 0, 17.5, -19 + i * 3, 53, .25, .13, 0xdecdb0);
-  }
-  const skylight = new THREE.Mesh(new THREE.PlaneGeometry(65, 55), new THREE.MeshBasicMaterial({ color: 0xc6dce3, side: THREE.DoubleSide }));
-  skylight.position.set(0, 18, -2);
-  library.add(skylight);
-  skylight.rotation.x = Math.PI / 2;
-  const glowMaterial = new THREE.MeshBasicMaterial({ color: 0xffd38a });
-  const glow = (geometry: THREE.BufferGeometry, x: number, y: number, z: number) => {
-    const object = new THREE.Mesh(geometry, glowMaterial);
-    object.position.set(x, y, z); library.add(object); return object;
-  };
-  for (const x of [-12, 12]) {
-    box(library, x, 7.3, 2, 5.5, .24, 17, 0xb79065);
-    for (let i = 0; i < 12; i++) box(library, x + (x > 0 ? -2.6 : 2.6), 7.9, -5 + i * 1.3, .055, 1.2, .055, 0xe3ccb1);
-    box(library, x + (x > 0 ? -2.6 : 2.6), 8.5, 2, .08, .08, 17, 0xe3ccb1);
-    box(library, x, 7.2, 2, 5.5, .07, 17, 0xffe1ac);
-    for (let i = 0; i < 3; i++) box(library, x + (i - 1) * 1.7, 3.55, -5, .3, 7, .3, 0xc6ac86);
-    const escalator = box(library, x, 3.7, 5.2, 1.65, .4, 10, 0x494c48);
-    escalator.rotation.x = -.68;
-    for (let i = 0; i < 23; i++) box(library, x, .5 + i * .28, 9 - i * .34, 1.5, .14, .37, 0xc9c1ae);
-  }
-  const treeBooks: { x: number; y: number; z: number; angle: number; w: number; shade: number }[] = [];
-  const treePalette = [0x314c40, 0x6f3633, 0xb4894b, 0x405961, 0x9a6a40, 0xd0bea1];
-  for (let row = 0; row < 36; row++) {
-    const radius = 4.25 * (1 - row / 38);
-    const count = Math.max(3, Math.ceil(radius * 7));
-    for (let col = 0; col < count; col++) {
-      const a = col / count * Math.PI * 2 + row * .37;
-      treeBooks.push({ x: Math.cos(a) * radius, y: .5 + row * .265, z: 1.7 + Math.sin(a) * radius, angle: -a + Math.PI / 2, w: .7 + (col % 3) * .13, shade: treePalette[(row + col * 3) % treePalette.length] });
-    }
-  }
-  instances(library, new THREE.BoxGeometry(1, 1, 1), treeBooks.length, 0xf4e4c8, (i, t) => {
-    const b = treeBooks[i]; t.position.set(b.x, b.y, b.z); t.rotation.y = b.angle; t.scale.set(b.w, .19, .68);
-  });
-  instances(library, new THREE.BoxGeometry(1, 1, 1), treeBooks.length * 2, 0xffffff, (i, t) => {
-    const b = treeBooks[Math.floor(i / 2)]; t.position.set(b.x, b.y + (i % 2 ? .115 : -.115), b.z); t.rotation.y = b.angle; t.scale.set(b.w + .06, .035, .73); return b.shade;
-  });
-  instances(library, new THREE.BoxGeometry(.055, .24, .73), treeBooks.length, 0xffffff, (i, t) => {
-    const b = treeBooks[i]; t.position.set(b.x - Math.cos(b.angle) * b.w / 2, b.y, b.z + Math.sin(b.angle) * b.w / 2); t.rotation.y = b.angle; return b.shade;
-  });
-  const garlandPoints = Array.from({ length: 460 }, (_, i) => {
-    const fraction = i / 459; const a = fraction * Math.PI * 2 * 7;
-    const radius = 4.5 * (1 - fraction) + .12;
-    return new THREE.Vector3(Math.cos(a) * radius, .7 + fraction * 9.5, 1.7 + Math.sin(a) * radius);
-  });
-  glow(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(garlandPoints), 459, .022, 4, false), 0, 0, 0);
-  for (let i = 0; i < garlandPoints.length; i += 5) {
-    const p = garlandPoints[i]; glow(new THREE.SphereGeometry(.065, 6, 4), p.x, p.y, p.z);
-  }
-  const starShape = new THREE.Shape();
-  for (let i = 0; i < 10; i++) {
-    const a = i * Math.PI / 5 + Math.PI / 2; const r = i % 2 ? .29 : .7;
-    if (i === 0) starShape.moveTo(Math.cos(a) * r, Math.sin(a) * r);
-    else starShape.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-  }
-  starShape.closePath();
-  glow(new THREE.ExtrudeGeometry(starShape, { depth: .12, bevelEnabled: false }), 0, 10.7, 1.7);
-  const treeLight = new THREE.PointLight(0xffb962, 28, 19, 2);
-  treeLight.position.set(0, 7, 5); library.add(treeLight);
-  cylinder(library, 0, .24, 1.7, 5.1, 5.3, .35, 0x7a5c3e, 80);
+  const libraryScene = createLibraryScene();
+  const library = libraryScene.group;
+  scene.add(library);
   const book = (parent: THREE.Object3D, x: number, y: number, z: number, scale: number, color: number, rotation = 0) => {
     const group = new THREE.Group();
     group.position.set(x, y, z);
@@ -219,7 +127,8 @@ export function createWorld(container: HTMLElement, options: Options) {
     box(g, -.1, .23, 0, .1, .42, .12, COLORS.ink);
     box(g, .1, .23, 0, .1, .42, .12, COLORS.ink);
   };
-  scene.add(new THREE.HemisphereLight(0xfff9e9, 0x568782, 2.7));
+  world.add(new THREE.HemisphereLight(0xfff9e9, 0x568782, 2.7));
+  cosmos.add(new THREE.HemisphereLight(0xfff6e4, 0x122236, 1.7));
   const light = new THREE.DirectionalLight(0xfff0d4, 3.4);
   light.position.set(-12, 35, 18);
   light.castShadow = true;
@@ -227,7 +136,7 @@ export function createWorld(container: HTMLElement, options: Options) {
   Object.assign(light.shadow.camera, { left: -35, right: 35, top: 35, bottom: -35, near: 1, far: 100 });
   light.shadow.normalBias = .08;
   light.shadow.bias = -.0002;
-  scene.add(light);
+  world.add(light);
   const sea = mesh(new THREE.PlaneGeometry(300, 300), 0x427f83, world, 0, -1.2, 0);
   sea.rotation.x = -Math.PI / 2;
   sea.castShadow = false;
@@ -379,13 +288,13 @@ export function createWorld(container: HTMLElement, options: Options) {
   const stars = new THREE.Points(starGeometry, new THREE.PointsMaterial({ color: COLORS.cream, size: .075, transparent: true, opacity: .8, sizeAttenuation: true }));
   cosmos.add(stars);
   const project = new THREE.Vector3();
-  const setLibraryCamera = (zoom = 0) => {
+  const setLibraryCamera = (progress = 0) => {
     activeCamera = libraryCamera;
     libraryCamera.aspect = width / height;
-    const narrow = width / height < .8;
-    libraryCamera.fov = narrow ? 61 : 51;
-    libraryCamera.position.set(0, 7.2 + zoom * .2, (narrow ? 30 : 26) - zoom * 14);
-    libraryCamera.lookAt(0, 6.5 + zoom * 1.1, 0);
+    const shot = sampleEntrance(progress, width / height);
+    libraryCamera.fov = shot.fov;
+    libraryCamera.position.set(...shot.cameraPosition);
+    libraryCamera.lookAt(...shot.cameraTarget);
     libraryCamera.updateProjectionMatrix();
     libraryCamera.updateMatrixWorld();
   };
@@ -432,22 +341,30 @@ export function createWorld(container: HTMLElement, options: Options) {
   const tick = (now: number) => {
     frame = 0;
     if (phase === 'disposed' || document.hidden || !visible) return;
+    const delta = lastTick ? Math.min(.1, Math.max(0, (now - lastTick) / 1000)) : 0;
+    lastTick = now;
+    if (enabled && library.visible) libraryScene.update(delta);
     if (phase === 'transition') {
-      const t = Math.min(1, (now - transitionStart) / 3000);
-      const islandProgress = Math.max(0, (t - .46) / .54);
-      const smooth = islandProgress * islandProgress * (3 - 2 * islandProgress);
-      library.visible = t < .36;
-      cosmos.visible = t >= .36 && t < .76;
-      world.visible = t >= .64;
-      if (t < .36) setLibraryCamera(t / .36);
-      else setCamera(smooth);
-      cosmos.scale.setScalar(1 - smooth * .95);
-      cosmos.rotation.y += .018;
-      scene.background = t < .36 ? new THREE.Color(0xe4d7bd) : new THREE.Color(0x101e2c).lerp(new THREE.Color(COLORS.sea), smooth);
+      transitionElapsed += delta * 1000;
+      const t = Math.min(1, transitionElapsed / ENTRANCE_DURATION_MS);
+      const shot = sampleEntrance(t, width / height);
+      library.visible = shot.libraryVisible;
+      cosmos.visible = shot.cosmosVisible;
+      world.visible = shot.islandsVisible;
+      library.scale.setScalar(shot.libraryScale);
+      if (shot.stage === 'islands') setCamera();
+      else setLibraryCamera(t);
+      cosmos.position.set(0, 8, -6);
+      cosmos.scale.setScalar(shot.cosmosScale);
+      cosmos.rotation.y += delta * .35;
+      veil.style.opacity = String(shot.veil);
+      root.dataset.entranceStage = shot.stage;
+      entranceCaption.textContent = shot.stage === 'library' ? '走近書的記憶' : shot.stage === 'cosmos' ? '穿過觀點的宇宙' : '抵達決策群島';
+      scene.background = new THREE.Color(shot.stage === 'library' ? 0xe4d7bd : shot.stage === 'cosmos' ? 0x080f1c : COLORS.sea);
       if (t === 1) completeEnter();
     }
     const active = now - lastInteraction < 12000;
-    if (now - lastFrame > (active ? 1000 / 30 : 1000 / 8) || phase === 'transition') {
+    if (now - lastFrame > (phase === 'cosmos' ? 1000 / 24 : active ? 1000 / 30 : 1000 / 8) || phase === 'transition') {
       lastFrame = now;
       if (enabled) {
         if (phase === 'islands') {
@@ -460,7 +377,7 @@ export function createWorld(container: HTMLElement, options: Options) {
       }
       render();
     }
-    if (phase === 'transition' || (enabled && active)) frame = requestAnimationFrame(tick);
+    if (phase === 'transition' || (enabled && (phase === 'cosmos' || active))) frame = requestAnimationFrame(tick);
   };
   function wake() {
     lastInteraction = performance.now();
@@ -469,6 +386,8 @@ export function createWorld(container: HTMLElement, options: Options) {
   function completeEnter() {
     phase = 'islands';
     root.dataset.phase = phase;
+    veil.style.opacity = '0';
+    entranceControls.inert = true;
     labels.inert = false;
     library.visible = false;
     cosmos.visible = false;
@@ -485,7 +404,8 @@ export function createWorld(container: HTMLElement, options: Options) {
     height = Math.max(1, rect.height);
     renderer?.setSize(width, height, false);
     if (phase === 'cosmos') setLibraryCamera();
-    else setCamera(phase === 'transition' ? 0 : 1);
+    else if (phase === 'transition' && sampleEntrance(transitionElapsed / ENTRANCE_DURATION_MS, width / height).stage !== 'islands') setLibraryCamera(transitionElapsed / ENTRANCE_DURATION_MS);
+    else setCamera();
     render();
     wake();
   };
@@ -524,12 +444,14 @@ export function createWorld(container: HTMLElement, options: Options) {
   const resizeObserver = new ResizeObserver(resize);
   resizeObserver.observe(container);
   const intersectionObserver = new IntersectionObserver(entries => {
+    lastTick = 0;
     visible = entries[0]?.isIntersecting ?? true;
     if (visible) wake();
     else if (frame) { cancelAnimationFrame(frame); frame = 0; }
   });
   intersectionObserver.observe(container);
   const visibilityChange = () => {
+    lastTick = 0;
     if (document.hidden && frame) { cancelAnimationFrame(frame); frame = 0; }
     else if (!document.hidden) wake();
   };
@@ -541,7 +463,7 @@ export function createWorld(container: HTMLElement, options: Options) {
       if (enterPromise) return enterPromise;
       enterPromise = new Promise<void>(resolve => { finishEnter = resolve; });
       if (!enabled || !renderer) completeEnter();
-      else { phase = 'transition'; root.dataset.phase = phase; transitionStart = performance.now(); wake(); }
+      else { phase = 'transition'; root.dataset.phase = phase; entranceControls.inert = false; transitionElapsed = 0; lastTick = 0; wake(); }
       return enterPromise;
     },
     setChapter: (chapter: string | null) => {
@@ -580,6 +502,7 @@ export function createWorld(container: HTMLElement, options: Options) {
     },
     setMotion: (value: boolean) => {
       enabled = value;
+      lastTick = 0;
       if (!enabled && phase === 'transition') completeEnter();
       if (frame) { cancelAnimationFrame(frame); frame = 0; }
       render();
@@ -593,6 +516,8 @@ export function createWorld(container: HTMLElement, options: Options) {
       resizeObserver.disconnect();
       intersectionObserver.disconnect();
       document.removeEventListener('visibilitychange', visibilityChange);
+      library.removeFromParent();
+      libraryScene.dispose();
       scene.traverse(object => {
         if (object instanceof THREE.Mesh || object instanceof THREE.Line || object instanceof THREE.Points) object.geometry.dispose();
         if (object instanceof THREE.InstancedMesh) object.dispose();
@@ -600,7 +525,6 @@ export function createWorld(container: HTMLElement, options: Options) {
       for (const mat of mats.values()) mat.dispose();
       linkMaterial.dispose(); rippleMaterial.dispose();
       (stars.material as THREE.Material).dispose(); sailMesh.material.dispose();
-      glowMaterial.dispose(); skylight.material.dispose();
       renderer?.dispose();
       root.remove();
       finishEnter?.();

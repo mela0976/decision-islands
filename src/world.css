@@ -26,3 +26,9 @@
 .island-world[data-phase=transition] .world-labels{opacity:0}
 @media(max-width:700px){.world-chapter{font-size:11px;padding:8px 10px;gap:6px;letter-spacing:.04em}.world-chapter small{display:none}.world-article{width:22px;height:22px;font-size:9px}.world-compass{left:20px;bottom:22px;width:38px;height:38px}.world-hint{left:72px;bottom:32px;font-size:9px}.world-article:hover::after{max-width:170px}}
 @media(prefers-reduced-motion:reduce){.world-chapter,.world-article{transition:none}}
+.entrance-veil{position:absolute;inset:0;background:#090d16;pointer-events:none;opacity:0;z-index:4}
+.entrance-controls{position:absolute;bottom:32px;left:50%;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:28px;padding:12px 20px;border:1px solid #ffffff35;border-radius:30px;background:#10202ab8;backdrop-filter:blur(12px);color:#f3e7d0;font-size:12px;white-space:nowrap;visibility:hidden;opacity:0}
+.entrance-controls button{font:inherit;color:#f3e7d0;background:none;border:0;cursor:pointer;border-left:1px solid #ffffff35;padding:4px 0 4px 20px}
+.entrance-controls button:focus-visible{outline:2px solid #f7d790;outline-offset:5px}
+.island-world[data-phase=transition] .entrance-controls{visibility:visible;opacity:1}
+@media(max-width:700px){.entrance-controls{bottom:25px;font-size:11px;gap:18px;padding:10px 16px}}
