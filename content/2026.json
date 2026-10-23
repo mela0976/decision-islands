@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "year": 2026,
+  "title": "決策智慧 2026｜Agentic 時代，重塑品牌與人的真實距離",
+  "fullBookPdf": "ZH/電通 2026決策智慧 Agentic 時代 重塑品牌與人的真實距離.pdf",
+  "metadataWorkbook": "2026 決策智慧目錄與摘要.xlsx",
+  "metadataSheet": "上稿內容",
+  "headerRow": 1,
+  "metadataColumns": {
+    "title": "1. 標題",
+    "summary": "2. 摘要",
+    "authors": "3. 作者",
+    "highlights": "4. 必看三要素"
+  },
+  "printPagePdfMapping": {"divisor": 2, "offset": 2},
+  "maxSourcePage": 99,
+  "paragraphStylePrefixes": ["內文", "插題", "中插題", "Quote", "表格", "圖說", "註腳", "People Model 插題"],
+  "coverSource": "ZH/2026決策智慧封面 彩色.png",
+  "chapterAssets": {
+    "people": "封面 扉頁素材/Chapter 素材/artical_people1.png",
+    "model": "封面 扉頁素材/Chapter 素材/artical_model1.png",
+    "ai": "封面 扉頁素材/Chapter 素材/artical_ai1.png"
+  },
+  "articles": [
+    {"id":"2026-01","order":1,"chapter":"intro","metadataRow":2,"printedStart":6,"printedEnd":11,"idmlSource":"ZH/2026決策智慧美編indesign檔/0-1 AI for Growth 看懂世界，加速成長_唐心慧.idml"},
+    {"id":"2026-02","order":2,"chapter":"intro","metadataRow":3,"printedStart":12,"printedEnd":17,"idmlSource":"ZH/2026決策智慧美編indesign檔/0-2 Agentic 時代，品牌與人的真實距離_邵懿文.idml"},
+    {"id":"2026-03","order":3,"chapter":"people","metadataRow":4,"printedStart":20,"printedEnd":27,"idmlSource":"ZH/2026決策智慧美編indesign檔/1-3真實的力量，重新定義中.idml"},
+    {"id":"2026-04","order":4,"chapter":"people","metadataRow":5,"printedStart":28,"printedEnd":35,"idmlSource":"ZH/2026決策智慧美編indesign檔/1-4 Agents of Growth AI代理時代的增長推手_紀緻謙.idml"},
+    {"id":"2026-05","order":5,"chapter":"people","metadataRow":6,"printedStart":36,"printedEnd":43,"idmlSource":"ZH/2026決策智慧美編indesign檔/1-5 AI代理時代的增長架構師_朱芳儀.idml"},
+    {"id":"2026-06","order":6,"chapter":"people","metadataRow":7,"printedStart":44,"printedEnd":49,"idmlSource":"ZH/2026決策智慧美編indesign檔/1-6 信任為何成為AI時代最難複製的競爭力-楊欣怡.idml"},
+    {"id":"2026-07","order":7,"chapter":"people","metadataRow":8,"printedStart":50,"printedEnd":57,"idmlSource":"ZH/2026決策智慧美編indesign檔/1-7 AI可以幫人買東西，但品牌要讓人想買東西_陳蒔.idml"},
+    {"id":"2026-08","order":8,"chapter":"people","metadataRow":9,"printedStart":58,"printedEnd":65,"idmlSource":"ZH/2026決策智慧美編indesign檔/1-8_當注意力成為稀缺資源：娛樂與運動如何累積品牌心智資產_何華軒.idml"},
+    {"id":"2026-09","order":9,"chapter":"people","metadataRow":10,"printedStart":66,"printedEnd":71,"idmlSource":"ZH/2026決策智慧美編indesign檔/1-9 討好演算法，還是打動人_孫韞筑.idml"},
+    {"id":"2026-10","order":10,"chapter":"people","metadataRow":11,"printedStart":72,"printedEnd":79,"idmlSource":"ZH/2026決策智慧美編indesign檔/1-10 別買曝光了，開始買注意力吧 - 把媒體做成體驗，幫品牌累積「滑不走」的記憶資產_徐莉媛.idml"},
+    {"id":"2026-11","order":11,"chapter":"people","metadataRow":12,"printedStart":80,"printedEnd":93,"idmlSource":"ZH/2026決策智慧美編indesign檔/1-10b 從金曲獎到甄嬛傳 共同記憶帶來的品牌價值_吳宗霖陳炯文_智庫編輯.idml"},
+    {"id":"2026-12","order":12,"chapter":"model","metadataRow":13,"printedStart":96,"printedEnd":115,"idmlSource":"ZH/2026決策智慧美編indesign檔/2-11b People Model 介紹和應用.idml"},
+    {"id":"2026-13","order":13,"chapter":"model","metadataRow":14,"printedStart":116,"printedEnd":127,"idmlSource":"ZH/2026決策智慧美編indesign檔/2-12 重建 SOV：在注意力被 AI 稀釋的時代，如何守住品牌被選擇的關鍵場域_吳宗霖.idml"},
+    {"id":"2026-14","order":14,"chapter":"model","metadataRow":15,"printedStart":128,"printedEnd":135,"idmlSource":"ZH/2026決策智慧美編indesign檔/2-13 AI普及下的演算法世代，「衡斷力 (Judgment)」將成為最稀缺的競爭力_強義明.idml"},
+    {"id":"2026-15","order":15,"chapter":"model","metadataRow":16,"printedStart":136,"printedEnd":143,"idmlSource":"ZH/2026決策智慧美編indesign檔/2-14 生成式體驗來臨，誰能掌握顧客的下一步_鄭怡櫛 張家誠.idml"},
+    {"id":"2026-16","order":16,"chapter":"model","metadataRow":17,"printedStart":144,"printedEnd":149,"idmlSource":"ZH/2026決策智慧美編indesign檔/2-15 贏在AI時代的隱形戰場 看見文化暗流_王馥蓓 周允玉.idml"},
+    {"id":"2026-17","order":17,"chapter":"ai","metadataRow":18,"printedStart":152,"printedEnd":159,"idmlSource":"ZH/2026決策智慧美編indesign檔/3-16 顧客為何停下來，從洞察到治理的體驗優化_陳詳翰 康晉嵐_智庫編輯.idml"},
+    {"id":"2026-18","order":18,"chapter":"ai","metadataRow":19,"printedStart":160,"printedEnd":167,"idmlSource":"ZH/2026決策智慧美編indesign檔/3-17 體驗這件事，我們一直只問了一半_王姿喨詹佳穎黃靖婷.idml"},
+    {"id":"2026-19","order":19,"chapter":"ai","metadataRow":20,"printedStart":168,"printedEnd":175,"idmlSource":"ZH/2026決策智慧美編indesign檔/3-18 GEO 時代，被 AI 看見是技術，被消費者記住才是本事_莊閔雯 呂季霖.idml"},
+    {"id":"2026-20","order":20,"chapter":"ai","metadataRow":21,"printedStart":176,"printedEnd":181,"idmlSource":"ZH/2026決策智慧美編indesign檔/3-19 定義素材產出標準 AI Production時代的SLIP方法論_潘其偉.idml"},
+    {"id":"2026-21","order":21,"chapter":"ai","metadataRow":22,"printedStart":182,"printedEnd":187,"idmlSource":"ZH/2026決策智慧美編indesign檔/3-22超越效率 解碼 AI 製作驅動的創意代理商_Trent Agnew.idml"},
+    {"id":"2026-22","order":22,"chapter":"ai","metadataRow":23,"printedStart":188,"printedEnd":195,"idmlSource":"ZH/2026決策智慧美編indesign檔/3-23 AI Agent 走進消費旅程 保健、美妝與零售如何把 AI 變成行動能力.idml"}
+  ]
+}
