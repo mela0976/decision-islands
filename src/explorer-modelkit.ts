@@ -52,14 +52,25 @@ const post = (x: number, y: number, z: number, h: number, color: string = C.pape
 
 export const MODEL_BUILDERS: Record<ModelKind, ModelBuilder> = {
   book: model(() => [
-    box(0, 0.06, 0, 0.82, 0.12, 0.62, C.wood),
-    box(-0.19, 0.17, 0, 0.38, 0.11, 0.52, C.cream, 'rbox', [0, 0, -0.1]),
-    box(0.19, 0.17, 0, 0.38, 0.11, 0.52, C.cream, 'rbox', [0, 0, 0.1]),
-    box(-0.41, 0.17, 0, 0.055, 0.25, 0.63, C.coral),
-    box(0.02, 0.23, 0, 0.045, 0.018, 0.35, C.yellow, 'box'),
-    box(0, 0.31, 0, 0.66, 0.035, 0.42, C.coral),
-    box(0, 0.34, 0, 0.52, 0.018, 0.31, C.paper, 'rbox'),
-  ], 3),
+    box(0, 0.13, 0.38, 0.44, 0.045, 0.18, C.coral),
+    box(-0.105, 0.16, 0.37, 0.21, 0.035, 0.16, C.cream, 'rbox', [0, 0, -0.08]),
+    box(0.105, 0.16, 0.37, 0.21, 0.035, 0.16, C.cream, 'rbox', [0, 0, 0.08]),
+    box(0, 0.148, 0.38, 0.025, 0.045, 0.18, C.wood, 'box'),
+    box(0, 0.06, 0, 0.9, 0.12, 0.78, C.wood),
+    box(0, 0.345, -0.235, 0.72, 0.45, 0.055, C.paper),
+    box(-0.22, 0.345, 0.235, 0.28, 0.45, 0.055, C.paper),
+    box(0.22, 0.345, 0.235, 0.28, 0.45, 0.055, C.paper),
+    box(-0.332, 0.345, 0, 0.056, 0.45, 0.55, C.paper),
+    box(0.332, 0.345, 0, 0.056, 0.45, 0.55, C.paper),
+    box(0, 0.26, 0.278, 0.16, 0.28, 0.04, C.wood),
+    box(-0.22, 0.42, 0.278, 0.105, 0.13, 0.025, '#a8c4c2', 'rbox'),
+    box(0.22, 0.42, 0.278, 0.105, 0.13, 0.025, '#a8c4c2', 'rbox'),
+    box(0, 0.59, 0.34, 0.91, 0.055, 0.07, C.terracotta, 'box'),
+    box(0, 0.59, -0.34, 0.91, 0.055, 0.07, C.terracotta, 'box'),
+    box(-0.42, 0.59, -0.005, 0.07, 0.055, 0.68, C.terracotta, 'box'),
+    box(0.42, 0.59, -0.005, 0.07, 0.055, 0.68, C.terracotta, 'box'),
+    box(0, 0.72, 0, 0.96, 0.24, 0.86, C.coral, 'hip'),
+  ], 0),
   pavilion: model(() => [
     box(0, 0.06, 0, 0.9, 0.12, 0.82, C.stone),
     ...[-0.36, 0.36].flatMap(x => [-0.3, 0.3].map(z => post(x, 0.52, z, 0.86))),
@@ -70,20 +81,48 @@ export const MODEL_BUILDERS: Record<ModelKind, ModelBuilder> = {
     { kind: 'glowbox', position: [0, 0.66, 0], size: [0.12, 0.08, 0.12], color: C.yellow },
     { kind: 'glowsphere', position: [0, 0.72, 0], size: [0.09, 0.09, 0.09], color: C.yellow },
   ], 2),
-  classroom: model(() => [
-    box(0, 0.38, 0, 0.88, 0.74, 0.72, C.paper),
-    box(0, 0.79, -0.02, 0.94, 0.1, 0.82, C.coral, 'hip'),
-    box(0, 0.43, 0.371, 0.4, 0.36, 0.035, C.green),
-    box(-0.27, 0.44, 0.395, 0.018, 0.27, 0.014, C.cream, 'box'),
-    box(0.26, 0.44, 0.395, 0.018, 0.27, 0.014, C.cream, 'box'),
-    ...[-0.25, 0.05, 0.35].flatMap(x => [
-      box(x, 0.2, -0.27, 0.2, 0.045, 0.16, C.wood),
-      post(x - 0.065, 0.09, -0.31, 0.15, C.wood, 0.018), post(x + 0.065, 0.09, -0.31, 0.15, C.wood, 0.018),
-    ]),
-    box(-0.27, 0.4, -0.37, 0.16, 0.24, 0.035, C.glass, 'glowbox'),
-    box(0.27, 0.4, -0.37, 0.16, 0.24, 0.035, C.glass, 'glowbox'),
-    box(0.04, 0.12, 0.4, 0.16, 0.22, 0.04, C.wood),
-  ], 1),
+  classroom: model(() => {
+    const parts: Part[] = [
+      box(0, 0.06, 0, 0.9, 0.12, 0.84, C.stone, 'box'),
+      box(0, 0.42, -0.37, 0.82, 0.72, 0.06, C.paper, 'box'),
+      box(-0.38, 0.42, -0.005, 0.06, 0.72, 0.72, C.paper, 'box'),
+      box(0.38, 0.42, -0.005, 0.06, 0.72, 0.72, C.paper, 'box'),
+      box(0, 0.76, 0, 0.94, 0.07, 0.88, C.coral, 'box'),
+      box(0, 0.85, 0, 0.96, 0.18, 0.9, C.coral, 'hip'),
+      box(-0.09, 0.49, -0.315, 0.46, 0.34, 0.025, C.green, 'rbox'),
+      box(-0.2, 0.47, -0.298, 0.15, 0.012, 0.01, C.cream, 'box'),
+      box(-0.02, 0.51, -0.298, 0.11, 0.012, 0.01, C.cream, 'box'),
+      post(-0.38, 0.39, 0.31, 0.66, C.paper, 0.026),
+      post(0.38, 0.39, 0.31, 0.66, C.paper, 0.026),
+    ];
+    for (const x of [-0.2, 0.08]) {
+      const deskZ = 0.11;
+      parts.push(box(x, 0.3, deskZ, 0.24, 0.04, 0.18, C.wood, 'rbox'));
+      for (const dx of [-0.085, 0.085]) for (const dz of [-0.055, 0.055]) {
+        post(x + dx, 0.18, deskZ + dz, 0.24, C.wood, 0.015);
+      }
+      const chairZ = deskZ - 0.2;
+      parts.push(box(x, 0.17, chairZ, 0.15, 0.04, 0.14, C.wood, 'rbox'));
+      parts.push(box(x, 0.27, chairZ - 0.07, 0.15, 0.2, 0.035, C.wood, 'rbox'));
+      for (const dx of [-0.055, 0.055]) for (const dz of [-0.05, 0.05]) {
+        post(x + dx, 0.11, chairZ + dz, 0.1, C.wood, 0.012);
+      }
+    }
+    const readerX = 0.24;
+    const readerZ = -0.13;
+    parts.push(
+      box(readerX - 0.022, 0.115, readerZ, 0.035, 0.11, 0.04, C.ink, 'rbox'),
+      box(readerX + 0.022, 0.115, readerZ, 0.035, 0.11, 0.04, C.ink, 'rbox'),
+      box(readerX, 0.23, readerZ, 0.1, 0.13, 0.065, C.blue),
+      box(readerX - 0.078, 0.245, readerZ, 0.04, 0.105, 0.04, C.blue, 'rbox', [0, 0, -0.55]),
+      box(readerX + 0.078, 0.245, readerZ, 0.04, 0.105, 0.04, C.blue, 'rbox', [0, 0, 0.55]),
+      { kind: 'sphere', position: [readerX, 0.345, readerZ], size: [0.09, 0.09, 0.09], color: C.blush },
+      { kind: 'sphere', position: [readerX, 0.369, readerZ - 0.003], size: [0.1, 0.055, 0.1], color: C.wood },
+      box(readerX - 0.018, 0.35, readerZ + 0.043, 0.012, 0.012, 0.01, C.ink, 'box'),
+      box(readerX + 0.018, 0.35, readerZ + 0.043, 0.012, 0.012, 0.01, C.ink, 'box'),
+    );
+    return parts;
+  }, 4),
   observatory: model(() => [
     box(0, 0.36, 0, 0.82, 0.72, 0.78, C.paper),
     box(0, 0.75, 0, 0.92, 0.12, 0.88, C.teal),
