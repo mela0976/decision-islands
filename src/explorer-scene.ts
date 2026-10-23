@@ -177,7 +177,7 @@ export function createExplorerEngine(options: ExplorerEngineOptions): ExplorerEn
         addLabel(v3(p.position).add(new T.Vector3(0, p.scale * 1.55 + .16, 0)), ['①', '②', '③', '④', '⑤', '⑥', '⑦'][n - 1] ?? String(n), String(n), { kind: 'item', itemId: p.id }, 'item', p.id);
         const line = new T.Line(geometry(new T.BufferGeometry().setFromPoints([v3(p.position).add(new T.Vector3(0, p.scale * .9, 0)), v3(p.position).add(new T.Vector3(0, p.scale * 1.5, 0))])), own(new T.LineBasicMaterial({ color: coral, depthTest: false }))); line.userData.pinIsland = island.id; group.add(line);
       }
-      const walkers = simulation.snapshot().walkers, count = walkers.length, parts: Part[] = [], walkerGroup = new T.Group(); group.add(walkerGroup);
+      const walkers = simulation.snapshot().walkers, count = walkers.length, parts: Part[] = [], walkerGroup = new T.Group(); walkerGroup.name = 'explorer-walkers'; group.add(walkerGroup);
       const sphere = geometry(new T.SphereGeometry(1, 10, 8)), box = geometry(new T.BoxGeometry(1, 1, 1)), cylinder = geometry(new T.CylinderGeometry(1, 1, 1, 10)), torus = geometry(new T.TorusGeometry(1, .16, 5, 12)), capsule = geometry(new T.CapsuleGeometry(.5, .5, 3, 8));
       const addPart = (g: T.BufferGeometry, offset: number[], scale: number[], color: string, swing?: number, filter?: string, rotation?: number) => {
         const m = own(new T.InstancedMesh(g, material(color), count)); m.instanceMatrix.setUsage(T.DynamicDrawUsage); m.frustumCulled = false; walkerGroup.add(m); hits.push(m); parts.push({ mesh: m, offset: new T.Vector3(...offset), scale: new T.Vector3(...scale), swing, filter, rotation }); return m;

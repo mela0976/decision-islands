@@ -35,8 +35,9 @@ test('explorer scene renders, freezes, rebuilds, restores thumbnail state and di
       const inactiveRender = !!scene && labelHost.hidden && labelHost.inert;
       engine.setActive(true); engine.render(inspect);
       const islandLabels = labelHost.querySelectorAll('.explorer-scene-label--island').length;
-      const floorMeshes = []; scene.traverse(o => { if (o.isMesh && o.geometry.type === 'CircleGeometry' && o.geometry.parameters.segments === 6) floorMeshes.push(o); });
-      const topHeights = floorMeshes.map(m => m.position.y);
+      const floorMeshes = []; scene.traverse(o => { if (o.isMesh && o.name.startsWith('explorer-island-surface-')) floorMeshes.push(o); });
+      const topHeights = floorMeshes.flatMap(m => Array.from({length:m.geometry.attributes.position.count},(_,i)=>m.geometry.attributes.position.getY(i)));
+      const surfaceBatchCount=floorMeshes.length;
       const flows = []; scene.traverse(o => { if (o.userData.flowId) flows.push(o); });
       const flowsInitiallyHidden = flows.every(f => !f.visible);
       const furniture = scene.getObjectByName('explorer-small-furniture'); const farFurnitureHidden = !furniture.visible;
@@ -68,6 +69,9 @@ test('explorer scene renders, freezes, rebuilds, restores thumbnail state and di
       const thumbnail = engine.thumbnail(data.items[0].id, renderer);
       const restored = renderer.getRenderTarget() === rt && renderer.getViewport(new T.Vector4()).equals(new T.Vector4(1, 2, 19, 21)) && renderer.getScissor(new T.Vector4()).equals(new T.Vector4(3, 4, 9, 12)) && renderer.getScissorTest() && Math.abs(renderer.getClearAlpha() - .4) < 1e-8 && renderer.autoClear === false && renderer.toneMappingExposure === .8 && renderer.shadowMap.enabled;
       renderer.setRenderTarget(null); renderer.setScissorTest(false); engine.render(renderer);
+      const renderInfo={...renderer.info.render};
+      const excluded=[scene.getObjectByName('explorer-environment'),scene.getObjectByName('explorer-walkers'),...flows];
+      const visibility=excluded.map(o=>o.visible);excluded.forEach(o=>o.visible=false);renderer.shadowMap.enabled=false;engine.render(renderer);const staticCalls=renderer.info.render.calls;excluded.forEach((o,i)=>o.visible=visibility[i]);renderer.shadowMap.enabled=true;
       const pngImage = new Image(); pngImage.src = thumbnail ?? ''; if (thumbnail) await pngImage.decode();
       const sample = document.createElement('canvas'); sample.width = sample.height = 160; const sampleContext = sample.getContext('2d'); sampleContext.drawImage(pngImage, 0, 0); const pixelData = sampleContext.getImageData(0, 0, 160, 160).data; const colors = new Set(); for (let i = 0; i < pixelData.length; i += 4) colors.add(`${pixelData[i]},${pixelData[i + 1]},${pixelData[i + 2]}`); const thumbnailColorCount = colors.size;
       const newEdition = { ...edition, year: 2031, articles: [{ ...edition.articles[0], id: '2031-custom', year: 2031, order: 98 }] };
@@ -78,9 +82,9 @@ test('explorer scene renders, freezes, rebuilds, restores thumbnail state and di
       const atomic = labelHost.querySelectorAll('.explorer-scene-label--island').length === replacement.islands.length;
       engine.setActive(false); const inactive = engine.update(10); engine.render(inspect);
       engine.dispose(); engine.dispose(); rt.dispose(); renderer.dispose();
-      return { keyboardMoves, inputUntouched, clickWithinThreshold, dragIgnored, farFurnitureHidden, nearFurnitureShown, thumbnailColorCount, slowFrameMinute, reducedFrozen, reducedResult, birdHeight, inactiveRender, islandLabels, topHeights, flowsInitiallyHidden, exactMinute, frozenMatch, idle, relatedFlowCount, silentSelection, labelSelection, thumbnail: thumbnail?.startsWith('data:image/png'), thumbnailSize: [pngImage.width, pngImage.height], restored, rebuilt, atomic, rejected, inactive, disposedLabels: labelHost.childElementCount, invalidations, moved };
+      return { staticCalls, renderInfo, keyboardMoves, inputUntouched, clickWithinThreshold, dragIgnored, farFurnitureHidden, nearFurnitureShown, thumbnailColorCount, slowFrameMinute, reducedFrozen, reducedResult, birdHeight, inactiveRender, islandLabels, surfaceBatchCount, topHeights, flowsInitiallyHidden, exactMinute, frozenMatch, idle, relatedFlowCount, silentSelection, labelSelection, thumbnail: thumbnail?.startsWith('data:image/png'), thumbnailSize: [pngImage.width, pngImage.height], restored, rebuilt, atomic, rejected, inactive, disposedLabels: labelHost.childElementCount, invalidations, moved };
     });
-    assert.equal(result.inactiveRender, true); assert.equal(result.islandLabels, 12); assert.equal(result.topHeights.length, 12); assert.ok(result.topHeights.every(y => Math.abs(y - .652) < 1e-6));
+    assert.equal(result.inactiveRender, true); assert.equal(result.islandLabels, 12); assert.equal(result.surfaceBatchCount, 3); assert.equal(result.topHeights.length, 96); assert.ok(result.topHeights.every(y => Math.abs(y - .652) < 1e-6));
     assert.equal(result.flowsInitiallyHidden, true); assert.ok(Math.abs(result.exactMinute - 601.37) < 1e-8); assert.equal(result.frozenMatch, true); assert.equal(result.idle.continuous, false);
     assert.ok(Math.abs(result.slowFrameMinute - 626.37) < 1e-8); assert.equal(result.reducedFrozen, true); assert.equal(result.reducedResult.continuous, false);
     assert.ok(result.relatedFlowCount > 0 && result.relatedFlowCount < 10); assert.equal(result.silentSelection, true); assert.equal(result.labelSelection.kind, 'island');
@@ -88,6 +92,8 @@ test('explorer scene renders, freezes, rebuilds, restores thumbnail state and di
     assert.equal(result.keyboardMoves, true); assert.equal(result.inputUntouched, true); assert.equal(result.clickWithinThreshold, true); assert.equal(result.dragIgnored, true);
     assert.equal(result.farFurnitureHidden, true); assert.equal(result.nearFurnitureShown, true); assert.ok(result.thumbnailColorCount > 20, 'thumbnail contains a shaded model');
     assert.equal(result.thumbnail, true); assert.deepEqual(result.thumbnailSize, [160, 160]); assert.equal(result.restored, true); assert.equal(result.rebuilt, true); assert.equal(result.rejected, true); assert.equal(result.atomic, true); assert.equal(result.inactive.continuous, false); assert.equal(result.disposedLabels, 0); assert.ok(result.invalidations > 0); assert.equal(result.moved, true);
+    assert.ok(result.staticCalls >= 20 && result.staticCalls <= 30, 'static island/model batches meet the planned range');
+    console.log('scene render profile:', JSON.stringify({total:result.renderInfo,staticCalls:result.staticCalls}));
     assert.deepEqual(errors, []);
   } finally { await browser?.close(); server.kill('SIGTERM'); }
 });

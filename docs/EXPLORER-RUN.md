@@ -37,3 +37,25 @@ src/explorer-types.ts為凍結契約。純模組維持domain資料，不含DOM/T
 ## 同一目標中的使用者追加
 
 2026-10-24使用者要求首頁與所有遊戲頁面加入聖誕/萬聖/復活切換，預設聖誕。完整目標不替換：原0–10探索功能繼續，另加H01–H08。季節單一設定驅動首頁和探索，與日夜分開。src/season.ts為共用palette與保護storage入口，state加season與season command。角色卡透過onResolveWalker取得真snapshot，不解析walker ID。
+
+## 2026-10-24 整合紀錄（尚未正式部署）
+
+已合併核心資料/圖路/日夜/步行、12原型kit與環境、圖書館三季、DOM UI、獨立scene及main/world整合。實際分工：Luna負責kit/environment、library holidays及UI，Sol負責core、scene和main整合；Astra獨立需求審查。每個檔案同時只有一位寫入者，後續定向修正另開新代理。
+
+- `npm test` 首次完整整合24/24通過，含真正Chromium/WebGL的scene probe；後續修改仍須重跑。
+- `node tests/holidays-browser.mjs` 通過1440×1000與390×844：首次聖誕、三季首頁canvas確有差異、storage重載、探索器同步、原文閱讀；英文與storage拒絕情境也通過。截圖及結果在 `test-results/holiday-*`、`holiday-results.json`。
+- 獨立Astra source review找到並修正world排程每frame重設時鐘、UI遮擋標記、畫布Esc、探索章節開錯drawer、shadow target回收、首次模組失敗閱讀入口及步進≤.08；焦點/人物卡片與journal reduced-motion由UI後續修正。
+- 針對static batches進行實作：三種島面texture batch、側壁/環/橋板instances；側壁直接共享環境水材質。一次scene probe實測完整畫面69 draw calls、484650 triangles（1280×800 Chromium SwiftShader、鳥瞰、paused、非完整FPS測量）。此數字包含環境/角色/裝飾，不能當作20–30 static item子集已通過。
+- `test:e2e` 曾因開發中HMR重載造成進場click timeout，該次不算通過；最終需以固定production preview重跑，不能用舊結果代替。
+
+尚待：修正後全套production旅程、完整矩陣判定、正式GitHub Pages部署與讀回。沒有宣稱本機CPU/GPU等同真實手機效能，也沒有平行化節省比例的對照實測。
+
+## 使用者追加。角色與問題成為主要入口
+
+2026-10-24使用者指出主題島、搬運、名牌與協作線容易造成理解負擔，希望從角色/生活處境與在意的議題開始，再逐步理解相關內容。本次修改沿用同一goal並優先採用最新指示。原12主題幾何地圖保留為第二層自由探索；舊矩陣要求「所有工具首先攤開、人物和日誌預設顯示、主題先行」的部分由此追加明確取代，不能繼續當作首屏KPI。
+
+- 使用者結果。進入後先選角色，再選一個問題，看到一篇有明確推薦理由的真實文章。完成或繼續後補上第二、第三個觀點，顯示它們的互補或取捨，避免誤把策展關聯寫成必然因果。
+- 內容邊界。當前為《決策智慧》品牌、人與AI閱讀，不套用政策或投票說服文案。家長、轉換人生階段等入口不聲稱書中提供個人理財、退休或育兒建議。原文/PDF是來源，新增導讀明示為本站策展。
+- Throughput checkpoint。先固定每書persona/question/step/articleId資料形狀與多書回退，再並行製作角色入口/導讀rail和進階UI減法；main唯一整合者連結書籍、閱讀、地圖、完成狀態及節慶。每檔一位owner，最多先兩個代理。
+- 最小可驗證單位。資料與真實來源對帳；角色/問題/第一篇keyboard旅程；三步內容與關聯可開原文；切角色與切年度；舊目錄自由探索；三節慶與手機/減少動態保持可用；正式部署讀回。
+- 決策依據。採SOP B+C，沿用同goal已讀Notion即時規則。poteto Subtract Before You Add使工具退到進階；Redesign From First Principles使角色成為入口而非另加一個篩選器。未安裝的deslop/control-ui仍不宣稱執行，替以獨立審查與可重跑瀏覽器測試。

@@ -136,6 +136,7 @@
 }
 
 .explorer-detail {
+  max-height: calc(100vh - 320px);
   left: 30px;
   top: 200px;
   width: 340px;
