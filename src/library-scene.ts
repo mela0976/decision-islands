@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { treeRotationForElapsed } from './entrance';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createLibraryTextures } from './library-materials';
+import { HOLIDAYS, isSeason, type HolidayPalette, type Season } from './season';
 
 type BookPlacement = {
   x: number;
@@ -40,10 +41,15 @@ const ATLAS_ROWS = 8;
 const ATLAS_COVER_START = 0;
 const ATLAS_SPINE_START = 32;
 const ATLAS_PAPER_START = 56;
-export function createLibraryScene(): {
+const HOLIDAY_SEASONS: readonly Season[] = ['christmas', 'halloween', 'easter'];
+
+type ColoredPlacement = BoxPlacement & { color: THREE.ColorRepresentation };
+
+export function createLibraryScene(initialSeason: Season = 'christmas'): {
   group: THREE.Group;
   tree: THREE.Group;
   update: (deltaSeconds: number) => void;
+  setSeason: (season: Season) => void;
   dispose: () => void;
 } {
   const group = new THREE.Group();
@@ -299,7 +305,34 @@ export function createLibraryScene(): {
   treeBookMesh.castShadow = true;
   treeBookMesh.receiveShadow = true;
   tree.add(treeBookMesh);
-  addTreeDecorations(tree, ownGeometry, ownMaterial, ledMaterial, ornamentMaterial, starMaterial);
+
+  const treeDecorations: Record<Season, THREE.Group> = {
+    christmas: new THREE.Group(),
+    halloween: new THREE.Group(),
+    easter: new THREE.Group(),
+  };
+  const groundDecorations: Record<Season, THREE.Group> = {
+    christmas: new THREE.Group(),
+    halloween: new THREE.Group(),
+    easter: new THREE.Group(),
+  };
+  for (const season of HOLIDAY_SEASONS) {
+    treeDecorations[season].name = `holiday-tree-${season}`;
+    groundDecorations[season].name = `holiday-ground-${season}`;
+    tree.add(treeDecorations[season]);
+    group.add(groundDecorations[season]);
+  }
+
+  const pumpkinGeometry = ownGeometry(createPumpkinGeometry());
+  const pumpkinStemGeometry = ownGeometry(new THREE.CylinderGeometry(0.16, 0.2, 1, 8));
+  const eggGeometry = ownGeometry(createEggGeometry());
+
+  addTreeDecorations(treeDecorations.christmas, ownGeometry, ownMaterial, ledMaterial, ornamentMaterial, starMaterial);
+  addHalloweenTreeDecorations(treeDecorations.halloween, ownGeometry, ownMaterial, pumpkinGeometry, pumpkinStemGeometry, HOLIDAYS.halloween);
+  addEasterTreeDecorations(treeDecorations.easter, ownGeometry, ownMaterial, eggGeometry, HOLIDAYS.easter);
+  addHalloweenGroundDecorations(groundDecorations.halloween, ownGeometry, ownMaterial, pumpkinGeometry, pumpkinStemGeometry, HOLIDAYS.halloween);
+  addChristmasGroundDecorations(groundDecorations.christmas, ownGeometry, ownMaterial, HOLIDAYS.christmas);
+  addEasterGroundDecorations(groundDecorations.easter, ownGeometry, ownMaterial, eggGeometry, HOLIDAYS.easter);
 
   const sky = new THREE.HemisphereLight(0xfff8eb, 0x827563, 0.65);
   sky.name = 'library-ambient-sky';
@@ -334,8 +367,26 @@ export function createLibraryScene(): {
   treeGlow.position.set(0, 6.5, 1.2);
   tree.add(treeGlow);
 
+  let activeSeason: Season | null = null;
   let elapsedSeconds = 0;
   let disposed = false;
+  const setSeason = (season: Season) => {
+    if (disposed || !isSeason(season) || activeSeason === season) return;
+    activeSeason = season;
+    for (const value of HOLIDAY_SEASONS) {
+      treeDecorations[value].visible = value === season;
+      groundDecorations[value].visible = value === season;
+    }
+    const palette = HOLIDAYS[season];
+    sky.color.set(palette.sky);
+    sky.groundColor.set(palette.secondary);
+    daylight.color.set(palette.glow);
+    frontFill.color.set(palette.sea);
+    warmAccent.color.set(palette.glow);
+    treeGlow.color.set(palette.glow);
+  };
+  setSeason(isSeason(initialSeason) ? initialSeason : 'christmas');
+
   const update = (deltaSeconds: number) => {
     if (disposed || !Number.isFinite(deltaSeconds) || deltaSeconds <= 0) return;
     elapsedSeconds += deltaSeconds;
@@ -356,7 +407,7 @@ export function createLibraryScene(): {
     materials.clear();
 
   };
-  return { group, tree, update, dispose };
+  return { group, tree, update, setSeason, dispose };
 }
 
 function seededRandom(seed: number): () => number {
@@ -537,8 +588,285 @@ function createTreeBookPlacements(): BookPlacement[] {
   return books;
 }
 
+function createPumpkinGeometry(): THREE.BufferGeometry {
+  const segments = 24;
+  const rings = 16;
+  const positions = new Float32Array((segments + 1) * (rings + 1) * 3);
+  const indices: number[] = [];
+  let offset = 0;
+  for (let ring = 0; ring <= rings; ring++) {
+    const polar = (ring / rings) * Math.PI;
+    const y = Math.cos(polar) * 0.5;
+    const baseRadius = Math.sin(polar) * 0.47;
+    for (let segment = 0; segment <= segments; segment++) {
+      const angle = (segment / segments) * Math.PI * 2;
+      const radius = baseRadius * (1 + 0.095 * Math.cos(angle * 8));
+      positions.set([Math.cos(angle) * radius, y, Math.sin(angle) * radius], offset);
+      offset += 3;
+    }
+  }
+  for (let ring = 0; ring < rings; ring++) {
+    for (let segment = 0; segment < segments; segment++) {
+      const a = ring * (segments + 1) + segment;
+      const b = a + segments + 1;
+      indices.push(a, b, a + 1, b, b + 1, a + 1);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
+function createEggGeometry(): THREE.BufferGeometry {
+  const points: THREE.Vector2[] = [];
+  for (let step = 0; step <= 24; step++) {
+    const fraction = step / 24;
+    const radius = Math.sin(Math.PI * fraction) * (0.38 - fraction * 0.1);
+    points.push(new THREE.Vector2(radius, fraction - 0.5));
+  }
+  return new THREE.LatheGeometry(points, 16);
+}
+
+function createBatGeometry(): THREE.BufferGeometry {
+  const shape = new THREE.Shape();
+  shape.moveTo(-0.5, 0.12);
+  shape.lineTo(-0.28, 0.05);
+  shape.lineTo(-0.2, 0.34);
+  shape.lineTo(-0.04, 0.2);
+  shape.lineTo(0, 0.1);
+  shape.lineTo(0.04, 0.2);
+  shape.lineTo(0.2, 0.34);
+  shape.lineTo(0.28, 0.05);
+  shape.lineTo(0.5, 0.12);
+  shape.lineTo(0.4, -0.18);
+  shape.lineTo(0.16, -0.11);
+  shape.lineTo(0, -0.42);
+  shape.lineTo(-0.16, -0.11);
+  shape.lineTo(-0.4, -0.18);
+  shape.closePath();
+  return new THREE.ExtrudeGeometry(shape, { depth: 0.045, bevelEnabled: false, curveSegments: 2 });
+}
+
+function addHalloweenTreeDecorations(
+  group: THREE.Group,
+  ownGeometry: <T extends THREE.BufferGeometry>(geometry: T) => T,
+  ownMaterial: <T extends THREE.Material>(material: T) => T,
+  pumpkinGeometry: THREE.BufferGeometry,
+  stemGeometry: THREE.BufferGeometry,
+  palette: HolidayPalette,
+): void {
+  const pumpkinMaterial = ownMaterial(new THREE.MeshStandardMaterial({
+    color: palette.accent,
+    emissive: palette.glow,
+    emissiveIntensity: 0.62,
+    roughness: 0.38,
+    metalness: 0.04,
+  }));
+  const stemMaterial = ownMaterial(new THREE.MeshStandardMaterial({ color: palette.secondary, roughness: 0.82 }));
+  const pumpkins: BoxPlacement[] = [];
+  const stems: BoxPlacement[] = [];
+  const pumpkinCount = 22;
+  for (let index = 0; index < pumpkinCount; index++) {
+    const fraction = (index + 0.5) / pumpkinCount;
+    const angle = fraction * Math.PI * 2 * 4.3 + 0.28;
+    const radius = 4.12 * Math.pow(1 - fraction, 0.76) + 0.22;
+    const scale = new THREE.Vector3(0.29, 0.3, 0.29);
+    const position = new THREE.Vector3(Math.cos(angle) * radius, 0.72 + fraction * 9.15, Math.sin(angle) * radius);
+    pumpkins.push({ position, yaw: Math.atan2(position.x, position.z), scale });
+    stems.push({
+      position: new THREE.Vector3(position.x, position.y + scale.y * 0.58, position.z),
+      yaw: Math.atan2(position.x, position.z),
+      scale: new THREE.Vector3(0.15, 0.18, 0.15),
+    });
+  }
+  pumpkins.push({ position: new THREE.Vector3(0, 10.27, 0), yaw: 0, scale: new THREE.Vector3(1.22, 1.1, 1.22) });
+  stems.push({ position: new THREE.Vector3(0, 10.94, 0), yaw: 0, scale: new THREE.Vector3(0.28, 0.24, 0.28) });
+  addBoxInstances(group, pumpkins, pumpkinGeometry, pumpkinMaterial, false);
+  addBoxInstances(group, stems, stemGeometry, stemMaterial, false);
+
+  const batGeometry = ownGeometry(createBatGeometry());
+  const batMaterial = ownMaterial(new THREE.MeshStandardMaterial({ color: palette.ink, roughness: 0.84, side: THREE.DoubleSide }));
+  const bats: BoxPlacement[] = [];
+  for (let index = 0; index < 10; index++) {
+    const height = 1.2 + index * 0.86;
+    const fraction = height / 11;
+    const angle = index * 2.4;
+    const radius = 4.3 * Math.pow(1 - fraction, 0.76) + 0.4;
+    const x = Math.cos(angle) * radius;
+    const z = Math.sin(angle) * radius;
+    bats.push({
+      position: new THREE.Vector3(x, height, z),
+      yaw: Math.atan2(x, z),
+      scale: new THREE.Vector3(0.75, 0.62, 0.75),
+    });
+  }
+  addBoxInstances(group, bats, batGeometry, batMaterial, false);
+}
+
+function addEasterTreeDecorations(
+  group: THREE.Group,
+  ownGeometry: <T extends THREE.BufferGeometry>(geometry: T) => T,
+  ownMaterial: <T extends THREE.Material>(material: T) => T,
+  eggGeometry: THREE.BufferGeometry,
+  palette: HolidayPalette,
+): void {
+  const eggMaterial = ownMaterial(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.36, metalness: 0.025 }));
+  const eggColors = [palette.accent, palette.ornament, palette.glow, palette.paper, palette.secondary];
+  const eggs: ColoredPlacement[] = [];
+  const eggCount = 24;
+  for (let index = 0; index < eggCount; index++) {
+    const fraction = (index + 0.5) / eggCount;
+    const angle = fraction * Math.PI * 2 * 4.2 + 0.5;
+    const radius = 4.08 * Math.pow(1 - fraction, 0.76) + 0.22;
+    const position = new THREE.Vector3(Math.cos(angle) * radius, 0.72 + fraction * 9.0, Math.sin(angle) * radius);
+    eggs.push({
+      position,
+      yaw: Math.atan2(position.x, position.z),
+      scale: new THREE.Vector3(0.28, 0.42, 0.28),
+      color: eggColors[index % eggColors.length],
+    });
+  }
+  eggs.push({
+    position: new THREE.Vector3(0, 10.22, 0), yaw: 0,
+    scale: new THREE.Vector3(0.9, 1.28, 0.9), color: palette.ornament,
+  });
+  addColoredInstances(group, eggs, eggGeometry, eggMaterial, false);
+
+  const earsGeometry = ownGeometry(new THREE.SphereGeometry(1, 10, 8));
+  const earsMaterial = ownMaterial(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.68 }));
+  const ears: ColoredPlacement[] = [];
+  for (const side of [-1, 1]) {
+    ears.push({
+      position: new THREE.Vector3(side * 0.29, 10.6, -0.12), yaw: side * 0.12,
+      scale: new THREE.Vector3(0.14, 0.48, 0.1), color: palette.paper,
+    });
+    ears.push({
+      position: new THREE.Vector3(side * 0.29, 10.62, -0.018), yaw: side * 0.12,
+      scale: new THREE.Vector3(0.06, 0.32, 0.04), color: palette.accent,
+    });
+  }
+  addColoredInstances(group, ears, earsGeometry, earsMaterial, false);
+}
+
+function addChristmasGroundDecorations(
+  group: THREE.Group,
+  ownGeometry: <T extends THREE.BufferGeometry>(geometry: T) => T,
+  ownMaterial: <T extends THREE.Material>(material: T) => T,
+  palette: HolidayPalette,
+): void {
+  const boxGeometry = ownGeometry(new THREE.BoxGeometry(1, 1, 1));
+  const giftMaterial = ownMaterial(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.54, metalness: 0.025 }));
+  const ribbonMaterial = ownMaterial(new THREE.MeshStandardMaterial({ color: palette.glow, roughness: 0.34, metalness: 0.22 }));
+  const gifts: ColoredPlacement[] = [];
+  const ribbons: BoxPlacement[] = [];
+  for (let index = 0; index < 6; index++) {
+    const angle = (index / 6) * Math.PI * 2 + Math.PI / 6;
+    const x = Math.cos(angle) * 4.95;
+    const z = 1.7 + Math.sin(angle) * 4.95;
+    const height = 0.38 + (index % 2) * 0.09;
+    const y = -0.13 + height / 2;
+    gifts.push({
+      position: new THREE.Vector3(x, y, z), yaw: angle,
+      scale: new THREE.Vector3(0.52, height, 0.5),
+      color: index % 2 === 0 ? palette.accent : palette.secondary,
+    });
+    ribbons.push({ position: new THREE.Vector3(x, y, z), yaw: angle, scale: new THREE.Vector3(0.075, height + 0.01, 0.52) });
+    ribbons.push({ position: new THREE.Vector3(x, -0.13 + height, z), yaw: angle, scale: new THREE.Vector3(0.53, 0.055, 0.075) });
+  }
+  addColoredInstances(group, gifts, boxGeometry, giftMaterial, false);
+  addBoxInstances(group, ribbons, boxGeometry, ribbonMaterial, false);
+}
+
+function addHalloweenGroundDecorations(
+  group: THREE.Group,
+  ownGeometry: <T extends THREE.BufferGeometry>(geometry: T) => T,
+  ownMaterial: <T extends THREE.Material>(material: T) => T,
+  pumpkinGeometry: THREE.BufferGeometry,
+  stemGeometry: THREE.BufferGeometry,
+  palette: HolidayPalette,
+): void {
+  const pumpkinMaterial = ownMaterial(new THREE.MeshStandardMaterial({
+    color: palette.accent,
+    emissive: palette.glow,
+    emissiveIntensity: 0.72,
+    roughness: 0.4,
+  }));
+  const stemMaterial = ownMaterial(new THREE.MeshStandardMaterial({ color: palette.secondary, roughness: 0.84 }));
+  const pumpkins: BoxPlacement[] = [];
+  const stems: BoxPlacement[] = [];
+  for (let index = 0; index < 7; index++) {
+    const angle = (index / 7) * Math.PI * 2 + Math.PI / 7;
+    const x = Math.cos(angle) * 4.95;
+    const z = 1.7 + Math.sin(angle) * 4.95;
+    const scale = new THREE.Vector3(0.78, 0.7, 0.78);
+    const position = new THREE.Vector3(x, -0.13 + scale.y / 2, z);
+    pumpkins.push({ position, yaw: Math.atan2(x, z - 1.7), scale });
+    stems.push({
+      position: new THREE.Vector3(x, position.y + scale.y * 0.57, z),
+      yaw: Math.atan2(x, z - 1.7),
+      scale: new THREE.Vector3(0.26, 0.2, 0.26),
+    });
+  }
+  addBoxInstances(group, pumpkins, pumpkinGeometry, pumpkinMaterial, false);
+  addBoxInstances(group, stems, stemGeometry, stemMaterial, false);
+}
+
+function addEasterGroundDecorations(
+  group: THREE.Group,
+  ownGeometry: <T extends THREE.BufferGeometry>(geometry: T) => T,
+  ownMaterial: <T extends THREE.Material>(material: T) => T,
+  eggGeometry: THREE.BufferGeometry,
+  palette: HolidayPalette,
+): void {
+  const eggMaterial = ownMaterial(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.36, metalness: 0.025 }));
+  const colors = [palette.accent, palette.ornament, palette.glow, palette.paper, palette.secondary];
+  const eggs: ColoredPlacement[] = [];
+  for (let index = 0; index < 7; index++) {
+    const angle = (index / 7) * Math.PI * 2 + Math.PI / 7;
+    eggs.push({
+      position: new THREE.Vector3(Math.cos(angle) * 4.95, 0.13, 1.7 + Math.sin(angle) * 4.95),
+      yaw: angle,
+      scale: new THREE.Vector3(0.34, 0.52, 0.34),
+      color: colors[index % colors.length],
+    });
+  }
+  addColoredInstances(group, eggs, eggGeometry, eggMaterial, false);
+
+  const petalGeometry = ownGeometry(new THREE.SphereGeometry(1, 8, 6));
+  const stemGeometry = ownGeometry(new THREE.CylinderGeometry(0.06, 0.08, 1, 6));
+  const centerGeometry = ownGeometry(new THREE.SphereGeometry(1, 8, 6));
+  const petalMaterial = ownMaterial(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.72 }));
+  const stemMaterial = ownMaterial(new THREE.MeshStandardMaterial({ color: palette.secondary, roughness: 0.88 }));
+  const centerMaterial = ownMaterial(new THREE.MeshStandardMaterial({ color: palette.glow, roughness: 0.48 }));
+  const petals: ColoredPlacement[] = [];
+  const stems: BoxPlacement[] = [];
+  const centers: BoxPlacement[] = [];
+  for (let flower = 0; flower < 6; flower++) {
+    const angle = (flower / 6) * Math.PI * 2;
+    const x = Math.cos(angle) * 5.65;
+    const z = 1.7 + Math.sin(angle) * 5.65;
+    stems.push({ position: new THREE.Vector3(x, 0.02, z), yaw: 0, scale: new THREE.Vector3(0.58, 0.32, 0.58) });
+    centers.push({ position: new THREE.Vector3(x, 0.2, z), yaw: 0, scale: new THREE.Vector3(0.09, 0.09, 0.09) });
+    for (let petal = 0; petal < 5; petal++) {
+      const petalAngle = (petal / 5) * Math.PI * 2;
+      petals.push({
+        position: new THREE.Vector3(x + Math.cos(petalAngle) * 0.13, 0.19, z + Math.sin(petalAngle) * 0.13),
+        yaw: -petalAngle,
+        scale: new THREE.Vector3(0.1, 0.045, 0.15),
+        color: petal % 2 === 0 ? palette.accent : palette.ornament,
+      });
+    }
+  }
+  addColoredInstances(group, petals, petalGeometry, petalMaterial, false);
+  addBoxInstances(group, stems, stemGeometry, stemMaterial, false);
+  addBoxInstances(group, centers, centerGeometry, centerMaterial, false);
+}
+
 function addTreeDecorations(
-  tree: THREE.Group,
+  group: THREE.Group,
   ownGeometry: <T extends THREE.BufferGeometry>(geometry: T) => T,
   ownMaterial: <T extends THREE.Material>(material: T) => T,
   ledMaterial: THREE.Material,
@@ -572,9 +900,9 @@ function addTreeDecorations(
     metalness: 0.56,
   })));
   garland.name = 'warm-gold-spiral-garland';
-  tree.add(garland);
-  addBoxInstances(tree, lightPlacements, ownGeometry(new THREE.SphereGeometry(1, 8, 6)), ledMaterial, false);
-  addBoxInstances(tree, ornamentPlacements, ownGeometry(new THREE.SphereGeometry(1, 10, 7)), ornamentMaterial, false);
+  group.add(garland);
+  addBoxInstances(group, lightPlacements, ownGeometry(new THREE.SphereGeometry(1, 8, 6)), ledMaterial, false);
+  addBoxInstances(group, ornamentPlacements, ownGeometry(new THREE.SphereGeometry(1, 10, 7)), ornamentMaterial, false);
 
   const starShape = new THREE.Shape();
   for (let point = 0; point < 10; point++) {
@@ -597,10 +925,10 @@ function addTreeDecorations(
   star.name = 'faceted-brass-star';
   star.position.set(0, 10.25, 0);
   star.castShadow = true;
-  tree.add(star);
+  group.add(star);
   const starStem = new THREE.Mesh(ownGeometry(new THREE.CylinderGeometry(0.045, 0.07, 0.52, 10)), starMaterial);
   starStem.position.set(0, 9.88, 0);
-  tree.add(starStem);
+  group.add(starStem);
 }
 
 function addCentralAtrium(
@@ -791,7 +1119,6 @@ function addEscalator(
   group.add(landing);
   const warmPost = new THREE.Mesh(ownGeometry(new THREE.BoxGeometry(0.16, 7.1, 0.18)), ownMaterial(new THREE.MeshStandardMaterial({
     color: 0xb76c35,
-    map: undefined,
     roughness: 0.55,
     metalness: 0.08,
   })));
@@ -835,6 +1162,32 @@ function addReadingFurniture(
   addBoxInstances(group, wood, geometry, timber, true);
   addBoxInstances(group, legs, geometry, metal, true);
   addBoxInstances(group, upholstery, geometry, ownMaterial(new THREE.MeshStandardMaterial({ color: 0x69756b, roughness: 0.94 })), true);
+}
+
+function addColoredInstances(
+  parent: THREE.Group,
+  placements: ColoredPlacement[],
+  geometry: THREE.BufferGeometry,
+  material: THREE.Material,
+  castShadow: boolean,
+): THREE.InstancedMesh | undefined {
+  if (placements.length === 0) return undefined;
+  const instances = new THREE.InstancedMesh(geometry, material, placements.length);
+  const matrix = new THREE.Matrix4();
+  const quaternion = new THREE.Quaternion();
+  for (let index = 0; index < placements.length; index++) {
+    const placement = placements[index];
+    quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), placement.yaw);
+    matrix.compose(placement.position, quaternion, placement.scale);
+    instances.setMatrixAt(index, matrix);
+    instances.setColorAt(index, new THREE.Color(placement.color));
+  }
+  instances.instanceMatrix.needsUpdate = true;
+  if (instances.instanceColor) instances.instanceColor.needsUpdate = true;
+  instances.castShadow = castShadow;
+  instances.receiveShadow = false;
+  parent.add(instances);
+  return instances;
 }
 
 function addBoxInstances(
