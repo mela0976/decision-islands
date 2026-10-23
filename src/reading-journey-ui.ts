@@ -9,6 +9,7 @@ export interface ReadingJourneyContext {
   total: number;
   nextArticleId: string | null;
   nextReason: string | null;
+  hasMission?: boolean;
 }
 
 export interface ReadingJourneyCallbacks {
@@ -42,17 +43,17 @@ type JourneyView =
   | { kind: 'rail'; selection: SelectedJourney };
 
 const copy = {
-  audienceHeading: { zh: '你想從哪個面向開始？', en: 'Where would you like to start?' },
-  audienceIntro: { zh: '先選工作或日常情境，再挑一個貼近自己的角色。', en: 'Start with work or everyday life, then choose a role that fits.' },
+  audienceHeading: { zh: '先開始一個小任務', en: 'Start a small mission' },
+  audienceIntro: { zh: '挑一個工作或日常角色，走過三輪情境選擇，整理自己的處理方案。', en: 'Choose a work or everyday role. Make three decisions and build your own plan.' },
   roleHeading: { zh: '選一個最貼近你的角色', en: 'Choose a role that fits you' },
   roleIntro: { zh: '從你此刻所在的位置，挑一個切入點。', en: 'Choose a perspective that fits where you are now.' },
-  questionHeading: { zh: '你最想先弄懂哪一件事？', en: 'What would you like to understand first?' },
-  questionIntro: { zh: '先選一個問題。你可以隨時換角度或跳到其他文章。', en: 'Choose a question to begin. You can change views or skip to another article at any time.' },
-  firstQuestion: { zh: '先看看適合我的文章', en: 'Show me an article to start with' },
+  questionHeading: { zh: '你想先處理哪一件事？', en: 'What would you like to work through first?' },
+  questionIntro: { zh: '選一個問題，做三輪選擇，看看每個行動的影響與代價。沒有標準答案，也能隨時跳輪。', en: 'Choose a question, make three decisions, and consider their consequences and costs. There is no correct answer. Jump between rounds freely.' },
+  firstQuestion: { zh: '從第一個小任務開始', en: 'Start the first mission' },
   backRoles: { zh: '← 回到角色', en: '← Back to roles' },
   backAudiences: { zh: '← 換個面向', en: '← Change area' },
-  closePicker: { zh: '關閉閱讀引導', en: 'Close reading guide' },
-  pickerLabel: { zh: '從工作與日常找到閱讀起點', en: 'Find a reading start in work or everyday life' },
+  closePicker: { zh: '關閉任務選擇', en: 'Close mission picker' },
+  pickerLabel: { zh: '從工作與日常開始情境任務', en: 'A mission from work or everyday life' },
   railLabel: { zh: '你的閱讀起點', en: 'Your reading start' },
   switchQuestion: { zh: '換個問題', en: 'Choose another question' },
   freeExplore: { zh: '改用自由探索', en: 'Explore freely' },
@@ -124,6 +125,8 @@ export function createReadingJourneyUI(
   let pickerQuery = '';
   let returnFocus: HTMLElement | null = null;
   let view: JourneyView = { kind: 'closed', selection: null };
+  const answers = new Map<string, { kind: 'answered'; choiceId: string } | { kind: 'skipped' }>();
+  let compareMissionId: string | null = null;
 
   const selected = (): SelectedJourney | null => view.selection;
   const personaFor = (personaId: string): JourneyPersona | undefined => data?.personas.find(persona => persona.id === personaId);
@@ -184,6 +187,7 @@ export function createReadingJourneyUI(
     const route = selected();
     view = route ? { kind: 'rail', selection: route } : { kind: 'closed', selection: null };
     setPickerOpen(false, restoreFocus);
+    renderRail();
   }
 
   function startQuestion(personaId: string, questionId: string): void {
@@ -285,7 +289,7 @@ export function createReadingJourneyUI(
     </nav>` : '';
     picker.innerHTML = `<section class="journey-picker">
       <header class="journey-picker-header">
-        <div><p class="journey-picker-kicker">${html(words('pickerLabel'))}</p><h2 id="journey-picker-title" tabindex="-1">${html(heading)}</h2><p id="journey-picker-description">${html(isQuestions && persona ? localized(persona.description) : intro)}</p></div>
+        <div><p class="journey-picker-kicker">${html(words('pickerLabel'))}</p><h2 id="journey-picker-title" tabindex="-1">${html(heading)}</h2><p id="journey-picker-description">${html(intro)}</p></div>
         <button class="journey-picker-close" type="button" data-action="close-picker" aria-label="${html(words('closePicker'))}">×</button>
         ${isQuestions ? `<button class="journey-back-button" type="button" data-action="back-roles">${html(words('backRoles'))}</button>` : ''}
         ${isRoles ? `<button class="journey-back-button" type="button" data-action="back-audiences" data-change-role="true">${html(words('backAudiences'))}</button>` : ''}
@@ -328,9 +332,44 @@ export function createReadingJourneyUI(
   }
 
   function stepName(step: JourneyStep, index: number): string {
+    if (step.mission) {
+      const answer = answers.get(step.mission.id);
+      return `${language === 'zh' ? '第' : 'Round '}${index + 1}${language === 'zh' ? ' 輪' : ''} · ${answer?.kind === 'answered' ? (language === 'zh' ? '已選擇' : 'Answered') : answer?.kind === 'skipped' ? (language === 'zh' ? '已略過' : 'Skipped') : (language === 'zh' ? '尚未選擇' : 'Unanswered')}`;
+    }
     const title = articlesById.get(step.articleId)?.title ?? words('missingArticle');
     const read = completed.has(step.articleId) ? words('stepComplete') : '';
     return words('stepLabel').replace('{step}', String(index + 1)).replace('{title}', title) + read;
+  }
+
+  function renderMission(persona: JourneyPersona, question: JourneyQuestion, step: JourneyStep, selection: SelectedJourney): void {
+    const mission = step.mission!;
+    const answer = answers.get(mission.id);
+    const choice = answer?.kind === 'answered' ? mission.choices.find(value => value.id === answer.choiceId) : undefined;
+    const article = articlesById.get(step.articleId);
+    const zh = language === 'zh';
+    const previous = question.steps.slice(0, selection.stepIndex).map((value, index) => {
+      const previousAnswer = value.mission && answers.get(value.mission.id);
+      const previousChoice = previousAnswer?.kind === 'answered' ? value.mission?.choices.find(option => option.id === previousAnswer.choiceId) : undefined;
+      return `<li>${html(`${zh ? '第' : 'Round '}${index + 1}${zh ? '輪' : ''}`)} · ${html(previousChoice ? localized(previousChoice.label) : previousAnswer?.kind === 'skipped' ? (zh ? '已略過，尚未決定' : 'Skipped, no decision yet') : (zh ? '尚未決定' : 'No decision yet'))}</li>`;
+    }).join('');
+    const markers = question.steps.map((value, index) => `<button class="journey-step-marker${index === selection.stepIndex ? ' is-current' : ''}${value.mission && answers.get(value.mission.id)?.kind === 'answered' ? ' is-complete' : ''}" type="button" data-action="choose-step" data-step="${index}" aria-current="${index === selection.stepIndex ? 'step' : 'false'}" aria-label="${html(stepName(value, index))}"><span class="journey-step-number">${String(index + 1).padStart(2, '0')}</span><span>${html(stepName(value, index).split(' · ')[1] ?? '')}</span></button>`).join('');
+    const plan = question.steps.map((value, index) => {
+      const state = value.mission && answers.get(value.mission.id);
+      const option = state?.kind === 'answered' ? value.mission?.choices.find(candidate => candidate.id === state.choiceId) : undefined;
+      return `<li><span>${html(`${zh ? '第' : 'Round '}${index + 1}${zh ? '輪' : ''}`)}</span>${option ? `<strong>${html(localized(option.label))}</strong><p>${html(zh ? '方案條件' : 'Plan condition')} · ${html(localized(option.outcome))}</p><p>${html(zh ? '需要承擔的代價' : 'Cost to accept')} · ${html(localized(option.tradeoff))}</p><p>${html(zh ? '帶走的提醒' : 'Takeaway')} · ${html(localized(value.mission?.takeaway))}</p>${value.connection ? `<p>${html(zh ? '本站策展連結' : 'Editorial connection')} · ${html(localized(value.connection.explanation))}</p>` : ''}` : `<strong>${html(state?.kind === 'skipped' ? (zh ? '已略過，尚未決定' : 'Skipped, no decision yet') : (zh ? '尚未決定' : 'Not decided yet'))}</strong>`}<button class="journey-rail-action" type="button" data-action="choose-step" data-step="${index}">${html(zh ? '回到這一輪' : 'Revisit round')}</button></li>`;
+    }).join('');
+    const answeredCount = question.steps.filter(value => value.mission && answers.get(value.mission.id)?.kind === 'answered').length;
+    const feedback = choice ? `<section class="journey-mission-feedback" data-choice-id="${html(choice.id)}" aria-labelledby="journey-feedback-title" tabindex="-1" role="region"><p class="journey-mission-eyebrow">${html(zh ? '本站情境推演' : 'Site-created scenario')}</p><h3 id="journey-feedback-title">${html(zh ? '你選擇的行動' : 'Your chosen action')}</h3><strong>${html(localized(choice.label))}</strong><p><b>${html(zh ? '可能帶來的影響' : 'Possible effect')}</b>${html(localized(choice.outcome))}</p><p><b>${html(zh ? '需要承擔的代價' : 'Cost to accept')}</b>${html(localized(choice.tradeoff))}</p><div class="journey-mission-takeaway"><b>${html(zh ? '帶到下一輪的提醒' : 'Carry into your next decision')}</b><p>${html(localized(mission.takeaway))}</p></div><p class="journey-mission-attribution">${html(zh ? '本站策展連結' : 'Editorial connection')} · ${html(localized(step.reason))}</p></section>` : '';
+    root.innerHTML = `<aside class="journey-rail journey-mission" data-mission-id="${html(mission.id)}" aria-labelledby="journey-rail-title"><header class="journey-rail-header"><div class="journey-mission-role"><span class="journey-role-icon" aria-hidden="true">${html(persona.icon)}</span><div><p class="journey-rail-kicker">${html(zh ? '角色任務桌' : 'Your mission desk')}</p><p class="journey-rail-persona">${html(localized(persona.title))}</p></div></div><div class="journey-rail-actions"><button class="journey-rail-action" type="button" data-action="change-question" data-change-role="true">${html(words('switchQuestion'))}</button><button class="journey-rail-close" type="button" data-action="free-explore" data-free-explore="true" aria-label="${html(words('closeRail'))}">×</button></div></header>
+      <div class="journey-rail-content"><h2 id="journey-rail-title" tabindex="-1">${html(localized(question.title))}</h2><p class="journey-mission-session">${html(zh ? '選擇只留在這次開啟的頁面；重新載入會清除。情境與選項為本站設計；沒有標準答案，文章可隨時選讀。' : 'Choices remain only in this open page and clear on reload. Scenarios and choices are designed by this site. There is no correct answer. Source reading is optional.')}</p><nav class="journey-step-markers" aria-label="${html(zh ? '三輪決策，可自由跳轉' : 'Decision rounds, jump freely')}">${markers}</nav>
+      <section class="journey-current-step" data-step-current="${selection.stepIndex}"><div class="journey-mission-brief"><p class="journey-mission-eyebrow">${html(zh ? `第 ${selection.stepIndex + 1} 輪 · 本站虛構情境` : `Round ${selection.stepIndex + 1} · Fictional scenario`)}</p>${previous ? `<div class="journey-mission-condition"><b>${html(zh ? '你目前方案的條件' : 'Conditions from your plan so far')}</b><ul>${previous}</ul></div>` : ''}<h3>${html(zh ? '眼前的情況' : 'The situation')}</h3><p class="journey-mission-scene">${html(localized(mission.scene))}</p><div class="journey-mission-goal"><b>${html(zh ? '這輪要處理' : 'Your task')}</b><p>${html(localized(mission.goal))}</p></div></div>
+      <div class="journey-mission-choices" role="group" aria-label="${html(zh ? '選擇你的行動' : 'Choose your action')}">${mission.choices.map((option, index) => `<button type="button" class="journey-mission-choice${option.id === choice?.id ? ' is-selected' : ''}" data-action="mission-choice" data-mission-choice="${html(option.id)}" aria-pressed="${option.id === choice?.id}"><span aria-hidden="true">${String.fromCharCode(65 + index)}</span><strong>${html(localized(option.label))}</strong></button>`).join('')}</div>
+      <p class="journey-mission-live" role="status" aria-live="polite">${html(choice ? (zh ? '已記錄這輪選擇，以下是影響與代價。' : 'Choice recorded. Effects and costs follow.') : answer?.kind === 'skipped' ? (zh ? '這輪已略過，仍可重新選擇。' : 'Round skipped. You can still choose an action.') : '')}</p>${feedback}
+      ${choice ? `<div class="journey-mission-tools"><button class="journey-secondary-button" type="button" data-action="mission-compare" data-mission-compare aria-expanded="${compareMissionId === mission.id}">${html(zh ? '比較其他做法' : 'Compare alternatives')}</button><button class="journey-rail-action" type="button" data-action="mission-retry" data-mission-retry>${html(zh ? '重做這一輪' : 'Retry this round')}</button></div>` : ''}
+      ${choice && compareMissionId === mission.id ? `<section class="journey-mission-comparison" aria-label="${html(zh ? '其他做法的取捨' : 'Alternative trade-offs')}">${mission.choices.filter(option => option.id !== choice.id).map(option => `<article><h3>${html(localized(option.label))}</h3><p>${html(localized(option.outcome))}</p><p><b>${html(zh ? '代價' : 'Cost')} · </b>${html(localized(option.tradeoff))}</p><button type="button" class="journey-secondary-button" data-action="mission-choice" data-mission-choice="${html(option.id)}" data-mission-adopt>${html(zh ? '改選這個做法' : 'Choose this instead')}</button></article>`).join('')}</section>` : ''}
+      ${article ? `<details class="journey-mission-source"><summary>${html(zh ? '選讀原文，看看這輪的策展來源' : 'Optional source reading')}</summary><p class="journey-mission-eyebrow">${html(zh ? '本站策展連結' : 'Editorial connection')}</p><p>${html(localized(step.reason))}</p><h3>${html(article.title)}</h3>${choice ? `<div class="journey-insight"><span>${html(words('articleLabel'))}</span><p>${html(article.summary)}</p></div>` : ''}<button class="journey-secondary-button" type="button" data-action="read-current" data-read-article="${html(article.id)}">${html(words('readArticle'))} ↗</button></details>` : ''}
+      ${selection.stepIndex === question.steps.length - 1 ? `<section class="journey-mission-plan" aria-labelledby="journey-plan-title"><p class="journey-mission-eyebrow">${html(zh ? '你的三輪決策' : 'Your decisions')}</p><h3 id="journey-plan-title">${html(zh ? '我的處理方案' : 'My action plan')}</h3><p>${html(zh ? `已選擇 ${answeredCount} / ${question.steps.length} 輪；未選擇的部分仍待決定。` : `${answeredCount} of ${question.steps.length} rounds answered. Unanswered slots remain open.`)}</p><ol>${plan}</ol><button type="button" class="journey-secondary-button" data-action="mission-restart" data-mission-restart>${html(zh ? '重新走這個任務' : 'Replay this mission')}</button></section>` : ''}</section></div>
+      <footer class="journey-rail-footer">${selection.stepIndex + 1 < question.steps.length ? `<button type="button" class="journey-primary-button" data-action="advance" ${choice ? '' : 'disabled'}>${html(zh ? '帶著方案進下一輪' : 'Take the plan to the next round')} →</button><button type="button" class="journey-next-button" data-action="mission-skip">${html(zh ? '略過這輪，稍後再決定' : 'Skip this round for now')}</button>` : `<button type="button" class="journey-primary-button" data-action="mission-plan">${html(zh ? '查看我的處理方案' : 'View my action plan')}</button><button type="button" class="journey-next-button" data-action="change-question">${html(zh ? '試另一個任務' : 'Try another mission')}</button>`}</footer></aside>`;
   }
 
   function renderRail(): void {
@@ -347,6 +386,7 @@ export function createReadingJourneyUI(
       root.innerHTML = '';
       return;
     }
+    if (step.mission) { renderMission(persona, question, step, selection); return; }
     const article = articlesById.get(step.articleId);
     const hasNext = selection.stepIndex + 1 < question.steps.length;
     const markers = question.steps.map((journeyStep, index) => {
@@ -408,6 +448,42 @@ export function createReadingJourneyUI(
     const button = event.target.closest<HTMLElement>('[data-action]');
     if (!button) return;
     const action = button.dataset.action;
+
+    if (action?.startsWith('mission-')) {
+      const route = selected();
+      const question = route && questionFor(route.personaId, route.questionId);
+      const mission = route && question?.steps[route.stepIndex]?.mission;
+      if (!route || !question || !mission) return;
+      if (action === 'mission-choice') {
+        const choiceId = button.dataset.missionChoice;
+        if (!mission.choices.some(choice => choice.id === choiceId)) return;
+        answers.set(mission.id, { kind: 'answered', choiceId: choiceId! });
+        compareMissionId = null;
+        renderRail();
+        root.querySelector<HTMLElement>('.journey-mission-feedback')?.focus();
+      } else if (action === 'mission-compare') {
+        compareMissionId = compareMissionId === mission.id ? null : mission.id;
+        renderRail();
+        root.querySelector<HTMLElement>('[data-mission-compare]')?.focus();
+      } else if (action === 'mission-retry') {
+        answers.delete(mission.id);
+        compareMissionId = null;
+        renderRail(); focusRailHeading();
+      } else if (action === 'mission-restart') {
+        for (const step of question.steps) if (step.mission) answers.delete(step.mission.id);
+        compareMissionId = null;
+        view = { kind: 'rail', selection: { ...route, stepIndex: 0 } };
+        renderRail(); focusRailHeading();
+      } else if (action === 'mission-skip') {
+        answers.set(mission.id, { kind: 'skipped' });
+        advance();
+      } else if (action === 'mission-plan') {
+        root.querySelector<HTMLElement>('.journey-mission-plan')?.scrollIntoView({ block: 'start' });
+        const title = root.querySelector<HTMLElement>('#journey-plan-title');
+        title?.setAttribute('tabindex', '-1'); title?.focus({ preventScroll: true });
+      }
+      return;
+    }
 
     if (action === 'close-picker') { closePicker(); return; }
     if (action === 'back-roles' && view.kind === 'questions') {
@@ -532,6 +608,7 @@ export function createReadingJourneyUI(
       total: question.steps.length,
       nextArticleId: availableNext?.articleId ?? null,
       nextReason,
+      hasMission: Boolean(question.steps[index].mission),
     };
   }
 
@@ -557,10 +634,19 @@ export function createReadingJourneyUI(
 
   return {
     setData(nextData, nextArticles) {
-      const changedBook = data !== null && data.bookId !== nextData.bookId;
+      const changedBook = data !== null && (data.bookId !== nextData.bookId || data.year !== nextData.year);
+      if (changedBook) {
+        answers.clear(); compareMissionId = null;
+        view = pickerOpen ? { kind: 'audiences', selection: null } : { kind: 'closed', selection: null };
+      }
       data = nextData;
       articles = nextArticles;
       articlesById = new Map(nextArticles.map(article => [article.id, article]));
+      const validMissions = new Map(nextData.personas.flatMap(persona => persona.questions.flatMap(question => question.steps.flatMap(step => step.mission ? [[step.mission.id, step.mission] as const] : []))));
+      for (const [id, answer] of answers) {
+        const mission = validMissions.get(id);
+        if (!mission || (answer.kind === 'answered' && !mission.choices.some(choice => choice.id === answer.choiceId))) answers.delete(id);
+      }
       const route = selected();
       const question = route && questionFor(route.personaId, route.questionId);
       const currentStep = route && question?.steps[route.stepIndex];
@@ -572,6 +658,8 @@ export function createReadingJourneyUI(
       const next = new Set(ids);
       if (next.size === completed.size && [...next].every(id => completed.has(id))) return;
       completed = next;
+      const currentRoute = selected();
+      if (currentRoute && questionFor(currentRoute.personaId, currentRoute.questionId)?.steps[currentRoute.stepIndex]?.mission) return;
       for (const marker of root.querySelectorAll<HTMLElement>('.journey-step-marker[data-step]')) {
         const route = selected();
         const stepIndex = Number(marker.dataset.step);

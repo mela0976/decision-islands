@@ -1036,6 +1036,97 @@
   }
 }
 
+.journey-mission {
+  bottom: 96px;
+  left: 28px;
+  max-height: calc(100svh - 190px);
+  width: min(720px, calc(100vw - 56px));
+}
+
+.journey-mission .journey-rail-header { padding: 16px 22px; }
+.journey-mission .journey-rail-content { padding: 20px 26px 26px; }
+.journey-mission .journey-rail-content h2 { font-size: clamp(23px, 2.2vw, 30px); }
+.journey-mission .journey-rail-persona { font-size: 13px; }
+.journey-mission-role { align-items: center; display: flex; gap: 11px; }
+.journey-mission .journey-step-markers { gap: 10px; margin: 18px 0; }
+.journey-mission .journey-step-marker { font-size: 12px; min-height: 48px; }
+.journey-mission-session { color: var(--journey-muted); font-size: 12px; margin: 9px 0; }
+.journey-mission-brief {
+  background: color-mix(in srgb, var(--holiday-secondary, #58775c) 8%, white);
+  border: 1px solid var(--journey-border);
+  border-radius: 18px;
+  padding: 20px;
+}
+.journey-mission-eyebrow { color: var(--journey-secondary-ink); font-size: 11px; font-weight: 800; letter-spacing: .06em; margin: 0 0 8px; }
+.journey-mission h3 { font-size: 18px; line-height: 1.5; margin: 5px 0 10px; }
+.journey-mission-brief > p:not(.journey-mission-eyebrow) { font-size: 16px; line-height: 1.85; margin: 0; }
+.journey-mission-goal { border-top: 1px solid var(--journey-border); font-size: 14px; margin-top: 18px; padding-top: 14px; }
+.journey-mission-goal p { margin: 5px 0 0; }
+.journey-mission-condition { border-left: 3px solid var(--holiday-accent, #b84338); font-size: 13px; margin: 12px 0 18px; padding: 4px 0 4px 12px; }
+.journey-mission-condition ul { margin: 6px 0 0; padding-left: 18px; }
+.journey-mission-condition li + li { margin-top: 5px; }
+.journey-mission-choices { display: grid; gap: 10px; margin: 18px 0 0; }
+.journey-mission-choice {
+  align-items: flex-start;
+  background: color-mix(in srgb, var(--holiday-paper, #fff8ef) 80%, white) !important;
+  border: 1px solid var(--journey-border) !important;
+  border-radius: 13px;
+  display: flex;
+  gap: 13px;
+  line-height: 1.7;
+  min-height: 64px;
+  padding: 15px 17px;
+  text-align: left;
+  width: 100%;
+}
+.journey-mission-choice > span { align-items: center; background: color-mix(in srgb, var(--holiday-secondary, #58775c) 12%, white); border-radius: 7px; display: inline-flex; flex: 0 0 28px; font-family: Georgia, serif; height: 28px; justify-content: center; }
+.journey-mission-choice strong { font-size: 15px; font-weight: 650; }
+.journey-mission-choice:hover { border-color: var(--holiday-secondary, #58775c) !important; }
+.journey-mission-choice.is-selected { background: color-mix(in srgb, var(--holiday-secondary, #58775c) 15%, white) !important; border-color: var(--holiday-secondary, #58775c) !important; }
+.journey-mission-feedback { background: color-mix(in srgb, var(--holiday-paper, #fff8ef) 75%, white); border: 1px solid var(--journey-border); border-left: 4px solid var(--holiday-accent, #b84338); border-radius: 14px; font-size: 14px; line-height: 1.85; margin-top: 16px; padding: 20px; }
+.journey-mission-feedback > p > b, .journey-mission-takeaway > b { color: var(--journey-secondary-ink); display: block; font-size: 12px; }
+.journey-mission-takeaway { background: color-mix(in srgb, var(--holiday-secondary, #58775c) 9%, white); border-radius: 10px; padding: 12px 14px; }
+.journey-mission-takeaway p { margin: 4px 0 0; }
+.journey-mission-attribution { color: var(--journey-muted); font-size: 12px; margin-bottom: 0; }
+.journey-mission-live { color: var(--journey-secondary-ink); font-size: 12px; margin: 10px 0 0; }
+.journey-mission-live:empty { display: none; }
+.journey-mission-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.journey-mission-comparison { display: grid; gap: 10px; margin-top: 12px; }
+.journey-mission-comparison article { border: 1px dashed var(--journey-border); border-radius: 12px; padding: 16px; }
+.journey-mission-comparison h3 { font-size: 15px; }
+.journey-mission-comparison p { font-size: 13px; }
+.journey-mission-source { border-top: 1px solid var(--journey-border); font-size: 13px; margin-top: 20px; padding-top: 6px; }
+.journey-mission-source > summary { align-content: center; color: var(--journey-secondary-ink); cursor: pointer; font-size: 13px; font-weight: 700; min-height: 48px; padding: 12px 0; }
+.journey-mission-source .journey-insight { margin-bottom: 14px; }
+.journey-mission-source .journey-insight p { font-size: 13px; }
+.journey-mission-plan { background: color-mix(in srgb, var(--holiday-secondary, #58775c) 9%, white); border: 1px solid var(--journey-border); border-radius: 18px; margin-top: 24px; padding: 20px; }
+.journey-mission-plan > p { font-size: 13px; }
+.journey-mission-plan ol { list-style: none; margin: 0 0 15px; padding: 0; }
+.journey-mission-plan li { border-top: 1px solid var(--journey-border); padding: 13px 0; }
+.journey-mission-plan li > span { color: var(--journey-secondary-ink); display: block; font-size: 11px; margin-bottom: 4px; }
+.journey-mission-plan li > strong { font-size: 14px; }
+.journey-mission-plan li > p { font-size: 13px; line-height: 1.8; margin: 6px 0; }
+.journey-mission .journey-rail-footer { padding: 14px 22px; }
+.journey-mission .journey-rail-action, .journey-mission .journey-rail-close,
+#journey-picker button { min-height: 44px; }
+.journey-mission .journey-rail-close { min-width: 44px; }
+.journey-mission [tabindex="-1"]:focus-visible { outline: 3px solid var(--holiday-accent, #b84338); outline-offset: 3px; }
+
+@media (max-width: 760px) {
+  .journey-mission { bottom: 88px; left: 12px; max-height: calc(100svh - 154px); width: calc(100vw - 24px); }
+  .journey-mission .journey-rail-header { padding: 12px 14px; }
+  .journey-mission .journey-rail-content { padding: 16px 16px 22px; }
+  .journey-mission .journey-rail-content h2 { font-size: 23px; }
+  .journey-mission .journey-step-marker { font-size: 11px; gap: 5px; padding: 6px 4px; }
+  .journey-mission .journey-rail-footer { gap: 8px; grid-template-columns: 1fr; padding: 10px 14px; }
+  .journey-mission-brief, .journey-mission-feedback, .journey-mission-plan { padding: 16px; }
+  .journey-mission-brief > p:not(.journey-mission-eyebrow) { font-size: 15px; }
+  .journey-mission-role { gap: 8px; }
+  .journey-mission .journey-rail-persona { font-size: 12px; }
+  .journey-mission-choice { padding: 13px; }
+  .journey-mission-choice strong { font-size: 14px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .reading-journey-ui *,
   .reading-journey-ui *::before,
