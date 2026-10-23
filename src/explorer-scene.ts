@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { ExplorerData, ExplorerEngine, ExplorerEngineOptions, ExplorerSelection, ExplorerState, WalkerSnapshot, ModelKit, Vec3 } from './explorer-types';
 import { initialExplorerState } from './explorer-data';
 import { axialToWorld, buildPathGraph, findRoute, itemPlacements } from './explorer-graph';
@@ -8,6 +9,7 @@ import { createSimulation } from './explorer-simulation';
 import { createModelKit } from './explorer-modelkit';
 import { createExplorerEnvironment } from './explorer-environment';
 import { hashSeed, mulberry32 } from './explorer-random';
+import { HOLIDAYS } from './season';
 import './explorer-scene.css';
 
 const v3 = (p: Vec3) => new T.Vector3(...p);
@@ -58,7 +60,8 @@ export function createExplorerEngine(options: ExplorerEngineOptions): ExplorerEn
   const moving = () => active && !state.paused && !state.reducedMotion;
   const onChange = () => invalidate(); controls.addEventListener('change', onChange);
   function build(data: ExplorerData) {
-    const group = new T.Group(), owned = new Set<{ dispose(): void }>(), dom: Label[] = [], hits: T.Object3D[] = [], islandHits = new Map<T.Object3D, string>();
+    const group = new T.Group(), owned = new Set<{ dispose(): void }>(), dom: Label[] = [], hits: T.Object3D[] = [];
+    const islandHits = new Map<T.Object3D, { mode: 'instance' | 'face'; ids: readonly string[] }>();
     let kit: ModelKit | undefined, environment: ReturnType<typeof createExplorerEnvironment> | undefined;
     const own = <A extends { dispose(): void }>(value: A): A => { owned.add(value); return value; };
     const geometry = <A extends T.BufferGeometry>(g: A): A => own(g);
@@ -75,21 +78,45 @@ export function createExplorerEngine(options: ExplorerEngineOptions): ExplorerEn
       const builtKit = createModelKit(placements, data.seed); kit = builtKit; group.add(builtKit.group); hits.push(...builtKit.hitMeshes);
       environment = createExplorerEnvironment(data); environment.setSeason(state.season); group.add(environment.group);
       const textures = new Map(['brick', 'speckle', 'stripe'].map(kind => [kind, own(groundTexture(kind, hashSeed(data.seed, kind)))]));
-      const wall = own(new T.ShaderMaterial({ uniforms: { color: { value: new T.Color('#9fcfd6') }, time: { value: 0 } }, vertexShader: 'varying vec3 p; void main(){p=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}', fragmentShader: 'uniform vec3 color;uniform float time;varying vec3 p;void main(){float w=sin(p.x*8.+p.z*5.+time*.6)*.035;gl_FragColor=vec4(color+w,1.);}' }));
+      const wall = environment.waterMaterial;
       const roadMat = material('#dfc8ac'), curbMat = material('#e4d6c3');
+      type StaticInstance = { matrix: T.Matrix4; color?: string; islandId?: string };
+      const batch = (name: string, g: T.BufferGeometry, m: T.Material, records: StaticInstance[]) => {
+        const value = own(new T.InstancedMesh(g, m, records.length)); value.name = name; value.receiveShadow = true;
+        records.forEach((record, index) => { value.setMatrixAt(index, record.matrix); if (record.color) value.setColorAt(index, new T.Color(record.color)); });
+        value.instanceMatrix.needsUpdate = true; if (value.instanceColor) value.instanceColor.needsUpdate = true;
+        group.add(value);
+        if (records.some(record => record.islandId)) { islandHits.set(value, { mode: 'instance', ids: records.map(record => record.islandId!) }); hits.push(value); }
+        return value;
+      };
+      const walls: StaticInstance[] = [], roads: StaticInstance[] = [], curbs: StaticInstance[] = [], bands: StaticInstance[] = [], shallows: StaticInstance[] = [], foams: StaticInstance[] = [];
+      const surfaces = new Map<string, { parts: T.BufferGeometry[]; ids: string[] }>();
+      const at = (x: number, y: number, z: number, islandId?: string, color?: string): StaticInstance => ({ matrix: new T.Matrix4().makeTranslation(x, y, z), islandId, color });
+      const r = data.layout.radius, top = data.layout.top;
       for (const [index, island] of data.islands.entries()) {
-        const [x, , z] = axialToWorld(...island.axial, data.layout.spacing), r = data.layout.radius, top = data.layout.top;
-        const base = mesh(geometry(new T.CylinderGeometry(r, r * .97, top - data.layout.waterY, 6)), wall, x, (top + data.layout.waterY) / 2, z); islandHits.set(base, island.id); hits.push(base);
+        const [x, , z] = axialToWorld(...island.axial, data.layout.spacing);
+        walls.push(at(x, (top + data.layout.waterY) / 2, z, island.id));
         const topGeometry = geometry(new T.CircleGeometry(r - .05, 6).rotateZ(Math.PI / 6).rotateX(-Math.PI / 2));
         const pos = topGeometry.attributes.position, uv = topGeometry.attributes.uv; for (let i = 0; i < pos.count; i++) uv.setXY(i, (pos.getX(i) + x) / 2.2, (pos.getZ(i) + z) / 2.2);
-        const face = mesh(topGeometry, material('#ffffff', { map: textures.get(island.ground) }), x, top + .002, z); islandHits.set(face, island.id); hits.push(face);
-        mesh(geometry(new T.RingGeometry(1.66, 1.94, 6).rotateZ(Math.PI / 6).rotateX(-Math.PI / 2)), roadMat, x, top + .009, z);
-        mesh(geometry(new T.RingGeometry(r - .07, r, 6).rotateZ(Math.PI / 6).rotateX(-Math.PI / 2)), curbMat, x, top + .012, z);
-        mesh(geometry(new T.CylinderGeometry(r + .008, r + .008, .16, 6, 1, true)), material(island.color, { map: textures.get('stripe') }), x, top - .08, z);
-        mesh(geometry(new T.RingGeometry(r, r + .7, 64).rotateX(-Math.PI / 2)), own(new T.MeshBasicMaterial({ color: '#bce3d9', transparent: true, opacity: .2, depthWrite: false })), x, data.layout.waterY + .008, z);
-        mesh(geometry(new T.RingGeometry(r + .11, r + .16, 64).rotateX(-Math.PI / 2)), own(new T.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: .55, depthWrite: false })), x, data.layout.waterY + .014, z);
+        topGeometry.translate(x, top + .002, z);
+        let surface = surfaces.get(island.ground); if (!surface) { surface = { parts: [], ids: [] }; surfaces.set(island.ground, surface); }
+        surface.parts.push(topGeometry); for (let triangle = 0; triangle < topGeometry.index!.count / 3; triangle++) surface.ids.push(island.id);
+        roads.push(at(x, top + .009, z)); curbs.push(at(x, top + .012, z)); bands.push(at(x, top - .08, z, undefined, island.color));
+        shallows.push(at(x, data.layout.waterY + .008, z)); foams.push(at(x, data.layout.waterY + .014, z));
         addLabel(new T.Vector3(x, top + .1, z + r * .88), `${String(index + 1).padStart(2, '0')} ${island.title[state.language]}`, String(index + 1).padStart(2, '0'), { kind: 'island', islandId: island.id }, 'island', island.id);
       }
+      batch('explorer-island-walls', geometry(new T.CylinderGeometry(r, r * .97, top - data.layout.waterY, 6)), wall, walls);
+      for (const [ground, surface] of surfaces) {
+        const merged = mergeGeometries(surface.parts, false); if (!merged) throw new Error('Could not merge island surfaces');
+        for (const part of surface.parts) { owned.delete(part); part.dispose(); }
+        const face = mesh(geometry(merged), material('#ffffff', { map: textures.get(ground) })); face.name = `explorer-island-surface-${ground}`;
+        islandHits.set(face, { mode: 'face', ids: surface.ids }); hits.push(face);
+      }
+      batch('explorer-island-paths', geometry(new T.RingGeometry(1.66, 1.94, 6).rotateZ(Math.PI / 6).rotateX(-Math.PI / 2)), roadMat, roads);
+      batch('explorer-island-curbs', geometry(new T.RingGeometry(r - .07, r, 6).rotateZ(Math.PI / 6).rotateX(-Math.PI / 2)), curbMat, curbs);
+      batch('explorer-island-bands', geometry(new T.CylinderGeometry(r + .008, r + .008, .16, 6, 1, true)), material('#ffffff', { map: textures.get('stripe') }), bands);
+      batch('explorer-island-shallows', geometry(new T.RingGeometry(r, r + .7, 64).rotateX(-Math.PI / 2)), own(new T.MeshBasicMaterial({ color: '#bce3d9', transparent: true, opacity: .2, depthWrite: false })), shallows);
+      batch('explorer-island-foam', geometry(new T.RingGeometry(r + .11, r + .16, 64).rotateX(-Math.PI / 2)), own(new T.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: .55, depthWrite: false })), foams);
       const smallObjects = new T.Group(); smallObjects.name = 'explorer-small-furniture'; group.add(smallObjects);
       const decorGeometry = {
         box: geometry(new T.BoxGeometry(1, 1, 1)), cylinder: geometry(new T.CylinderGeometry(1, 1, 1, 10)),
@@ -135,9 +162,14 @@ export function createExplorerEngine(options: ExplorerEngineOptions): ExplorerEn
         batch.records.forEach((part, index) => { mesh.setMatrixAt(index, part.matrix); mesh.setColorAt(index, new T.Color(part.color)); }); (batch.small ? smallObjects : group).add(mesh);
       }
       const plank = geometry(new T.BoxGeometry(.39, .07, 1));
-      for (const bridge of graph.bridges) for (let i = 0; i < 9; i++) { const a = v3(bridge.points[i]), b = v3(bridge.points[i + 1]), board = mesh(plank, roadMat); board.position.copy(a).lerp(b, .5); board.scale.z = a.distanceTo(b) + .012; board.quaternion.setFromUnitVectors(new T.Vector3(0, 0, 1), b.sub(a).normalize()); }
+      const boards: StaticInstance[] = [];
+      for (const bridge of graph.bridges) for (let i = 0; i < 9; i++) {
+        const a = v3(bridge.points[i]), b = v3(bridge.points[i + 1]), board = new T.Object3D(); board.position.copy(a).lerp(b, .5); board.scale.z = a.distanceTo(b) + .012;
+        board.quaternion.setFromUnitVectors(new T.Vector3(0, 0, 1), b.sub(a).normalize()); board.updateMatrix(); boards.push({ matrix: board.matrix.clone() });
+      }
+      batch('explorer-bridge-boards', plank, roadMat, boards);
       const flows = data.flows.map(flow => {
-        const route = findRoute(graph, flow.from, flow.to), shader = own(new T.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: { time: { value: 0 }, length: { value: route.length }, kind: { value: flow.evidence.kind === 'source' ? 0 : flow.evidence.kind === 'thematic' ? 1 : 2 }, motion: { value: 1 } }, vertexShader: 'varying vec2 uvFlow;void main(){uvFlow=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}', fragmentShader: 'varying vec2 uvFlow;uniform float time;uniform float length;uniform float kind;uniform float motion;void main(){float u=uvFlow.x*length*5.-time*1.4;float limit=kind<.5?(motion<.5?.65:1.):(kind<1.5?.6:.3);if(fract(u)>limit)discard;gl_FragColor=vec4(.859,.416,.255,.82);}' }));
+        const route = findRoute(graph, flow.from, flow.to), shader = own(new T.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: { time: { value: 0 }, color: { value: new T.Color(HOLIDAYS[state.season].accent) }, length: { value: route.length }, kind: { value: flow.evidence.kind === 'source' ? 0 : flow.evidence.kind === 'thematic' ? 1 : 2 }, motion: { value: 1 } }, vertexShader: 'varying vec2 uvFlow;void main(){uvFlow=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}', fragmentShader: 'varying vec2 uvFlow;uniform vec3 color;uniform float time;uniform float length;uniform float kind;uniform float motion;void main(){float u=uvFlow.x*length*5.-time*1.4;float limit=kind<.5?(motion<.5?.65:1.):(kind<1.5?.6:.3);if(fract(u)>limit)discard;gl_FragColor=vec4(color,.82);}' }));
         const tube = mesh(geometry(new T.TubeGeometry(new RouteCurve(route.points, route.cumulative, route.length), Math.max(32, route.points.length * 8), .035, 5, false)), shader); tube.userData.flowId = flow.id; hits.push(tube); return { flow, tube, shader };
       });
       for (const p of placements) {
@@ -170,6 +202,7 @@ export function createExplorerEngine(options: ExplorerEngineOptions): ExplorerEn
       const matrix = new T.Matrix4(), object = new T.Object3D(), rootMatrix = new T.Matrix4(), localMatrix = new T.Matrix4(), q = new T.Quaternion(), scale = new T.Vector3();
       function updateWalkers(snapshot: readonly WalkerSnapshot[], _animate: boolean) {
         walkerGroup.visible = state.walkers;
+        const seasonalAccent = new T.Color(HOLIDAYS[state.season].accent), seasonalSecondary = new T.Color(HOLIDAYS[state.season].secondary);
         snapshot.forEach((w, index) => {
           const role = data.roles.find(r => r.id === w.role)!, distance = camera.position.distanceTo(v3(w.position)), size = T.MathUtils.clamp(distance / 20, 1, 1.45), phase = w.phase * 20, bob = w.status === 'moving' ? Math.abs(Math.sin(phase)) * .012 : 0;
           q.setFromAxisAngle(new T.Vector3(0, 1, 0), w.heading); rootMatrix.compose(v3(w.position).add(new T.Vector3(0, bob, 0)), q, scale.setScalar(size));
@@ -177,7 +210,8 @@ export function createExplorerEngine(options: ExplorerEngineOptions): ExplorerEn
             object.position.copy(part.offset); object.rotation.set(part.swing && w.status === 'moving' ? Math.sin(phase) * part.swing : 0, part.rotation ?? 0, 0); object.scale.copy(part.scale);
             if (part.filter && role.accessory !== part.filter) object.scale.setScalar(0);
             object.updateMatrix(); localMatrix.copy(object.matrix); matrix.multiplyMatrices(rootMatrix, localMatrix); part.mesh.setMatrixAt(index, matrix);
-            if (!part.filter && part.offset.y === .14) part.mesh.setColorAt(index, new T.Color(role.color));
+            if (!part.filter && part.offset.y === .14) part.mesh.setColorAt(index, new T.Color(role.color).lerp(seasonalAccent, .22));
+            if (part.filter && role.accessory === part.filter) part.mesh.setColorAt(index, new T.Color('#ffffff').lerp(seasonalSecondary, .2));
             if (!part.filter && part.offset.y === .28 && part.offset.z === 0) part.mesh.setColorAt(index, new T.Color(role.skin));
           }
           object.position.copy(v3(w.position)).add(new T.Vector3(0, .006, 0)); object.rotation.set(0, 0, 0); object.scale.setScalar(size); object.updateMatrix(); shadow.setMatrixAt(index, object.matrix);
@@ -206,10 +240,9 @@ export function createExplorerEngine(options: ExplorerEngineOptions): ExplorerEn
     resources.kit.highlight(ids, new Set(snap.activeItemIds)); resources.kit.setNight(snap.day.night); resources.environment.applyDay(snap.day); if (resources.lastSeason !== state.season) { resources.environment.setSeason(state.season); resources.lastSeason = state.season; }
     for (const glow of resources.decorGlow) glow.emissiveIntensity = snap.day.night * 3.2;
     for (const pool of resources.decorPools) pool.opacity = snap.day.night * .18;
-    resources.wall.uniforms.color.value.set(snap.day.water);
     const current = selection;
     const selectedFlow = current?.kind === 'flow' ? current.flowId : current?.kind === 'walker' ? snap.walkers.find(w => w.id === current.walkerId)?.flowId : null;
-    for (const { flow, tube, shader } of resources.flows) { tube.visible = state.flows || flow.id === selectedFlow || flow.from === island || flow.to === island; shader.uniforms.motion.value = moving() ? 1 : 0; }
+    for (const { flow, tube, shader } of resources.flows) { tube.visible = state.flows || flow.id === selectedFlow || flow.from === island || flow.to === island; shader.uniforms.motion.value = moving() ? 1 : 0; shader.uniforms.color.value.set(HOLIDAYS[state.season].accent); }
     for (const l of resources.dom) {
       if (l.type === 'island') { const i = resources.data.islands.find(i => i.id === l.owner)!; l.full = `${l.short} ${i.title[state.language]}`; l.element.classList.toggle('is-selected', island === l.owner); l.element.classList.toggle('is-muted', !!island && island !== l.owner); }
       l.element.setAttribute('aria-label', l.full); l.element.setAttribute('aria-pressed', String(JSON.stringify(l.selection) === JSON.stringify(selection)));
@@ -248,7 +281,11 @@ export function createExplorerEngine(options: ExplorerEngineOptions): ExplorerEn
       if (resources.parts.some(p => p.mesh === hit.object) && hit.instanceId !== undefined) { const walker = resources.simulation.snapshot().walkers[hit.instanceId]; if (walker) { dispatch({ kind: 'walker', walkerId: walker.id }); return; } }
       if (hit.object.userData.flowId) { dispatch({ kind: 'flow', flowId: hit.object.userData.flowId }); return; }
     }
-    const island = intersections.map(h => resources.islandHits.get(h.object)).find(Boolean); dispatch(island ? { kind: 'island', islandId: island } : null);
+    const island = intersections.map(hit => {
+      const mapping = resources.islandHits.get(hit.object); if (!mapping) return undefined;
+      const index = mapping.mode === 'instance' ? hit.instanceId : hit.faceIndex;
+      return index === undefined || index === null ? undefined : mapping.ids[index];
+    }).find(Boolean); dispatch(island ? { kind: 'island', islandId: island } : null);
   };
   const keydown = (e: KeyboardEvent) => {
     if (!active || document.activeElement !== options.canvas || !e.key.startsWith('Arrow')) return;
@@ -292,7 +329,7 @@ export function createExplorerEngine(options: ExplorerEngineOptions): ExplorerEn
     update(dtSeconds) {
       if (disposed || !active) return { dirty: false, continuous: false };
       const motion = moving(), dt = Number.isFinite(dtSeconds) ? Math.max(0, dtSeconds) : 0;
-      if (motion) { elapsed += dt; const events = resources.simulation.update(dt, true); if (events.length) options.onEvents(events.slice(-100)); const snapshot = resources.simulation.snapshot(); options.onMinute(snapshot.minute); resources.environment.update(dt); resources.wall.uniforms.time.value = elapsed; for (const flow of resources.flows) flow.shader.uniforms.time.value = elapsed; refresh(); }
+      if (motion) { elapsed += dt; const events = resources.simulation.update(dt, true); if (events.length) options.onEvents(events.slice(-100)); const snapshot = resources.simulation.snapshot(); options.onMinute(snapshot.minute); resources.environment.update(dt); for (const flow of resources.flows) flow.shader.uniforms.time.value = elapsed; refresh(); }
       else resources.environment.update(0);
       if (flight && motion) { flight.time += dt; const p = Math.min(1, flight.time / .8), ease = p < .5 ? 4 * p ** 3 : 1 - (-2 * p + 2) ** 3 / 2; camera.position.copy(flight.from).lerp(flight.to, ease); controls.target.copy(flight.fromTarget).lerp(flight.target, ease); camera.lookAt(controls.target); if (p === 1) flight = null; dirty = true; }
       else if (motion) controls.update();

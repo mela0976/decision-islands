@@ -7,6 +7,7 @@ import { HOLIDAYS, type Season } from './season';
 export interface ExplorerEnvironment {
   group: THREE.Group;
   fog: THREE.Fog;
+  readonly waterMaterial: THREE.ShaderMaterial;
   applyDay(day: DaySnapshot): void;
   update(dtSeconds: number): void;
   setMobile(mobile: boolean): void;
@@ -433,7 +434,16 @@ export function createExplorerEnvironment(data: ExplorerData): ExplorerEnvironme
     transparent: false,
     depthWrite: true,
     side: THREE.DoubleSide,
-    vertexShader: `varying vec3 vWorld; varying float vDepth; void main(){ vec4 world=modelMatrix*vec4(position,1.0); vWorld=world.xyz; vec4 mv=modelViewMatrix*vec4(position,1.0); vDepth=-mv.z; gl_Position=projectionMatrix*mv; }`,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
+    vertexShader: `varying vec3 vWorld; varying float vDepth; void main(){
+      vec4 local=vec4(position,1.0);
+      #ifdef USE_INSTANCING
+        local=instanceMatrix*local;
+      #endif
+      vec4 world=modelMatrix*local; vWorld=world.xyz; vec4 mv=viewMatrix*world; vDepth=-mv.z; gl_Position=projectionMatrix*mv;
+    }`,
     fragmentShader: `
       uniform float uTime; uniform vec3 uWater; uniform vec3 uHorizon; uniform float uFogNear; uniform float uFogFar;
       varying vec3 vWorld; varying float vDepth;
@@ -651,6 +661,7 @@ export function createExplorerEnvironment(data: ExplorerData): ExplorerEnvironme
   return {
     group,
     fog,
+    waterMaterial,
     applyDay(day) {
       if (disposed) return;
       lastDay = { ...day, sunDirection: [...day.sunDirection] as DaySnapshot['sunDirection'] };
@@ -678,6 +689,7 @@ export function createExplorerEnvironment(data: ExplorerData): ExplorerEnvironme
       if (disposed) return;
       disposed = true;
       group.removeFromParent();
+      sun.dispose();
       for (const object of ownedMeshes) object.dispose();
       for (const geometry of ownedGeometries) geometry.dispose();
       for (const material of ownedMaterials) material.dispose();
