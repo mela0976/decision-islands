@@ -13,7 +13,7 @@
 - [x] Phase B: Design the workflow. 已比較共用場景與獨立Explorer Scene，採後者且共享單一renderer/RAF。
 - [x] Phase C: Run the loop. 依下列單位實作、驗證、保留或修正。
 - [x] Phase D: Keep the audit trail. 逐階段更新本檔與需求矩陣，未驗不得寫通過。
-- [ ] Phase E: Verify and hand back. 全部需求須有對應現行工件及執行證據，正式網址讀回後才完成goal。
+- [x] Phase E: Verify and hand back. 全部需求須有對應現行工件及執行證據，正式網址讀回後才完成goal。
 
 1. 固定types、改寫指令與驗收矩陣，建置保持原網站可用。
 2. 平行交付DATA/graph/time/simulation、12原型instance kit、獨立scene、DOM UI。
@@ -85,3 +85,14 @@ Static islands/bridges/models/furniture在鳥瞰28 calls、近距離29 calls；�
 尚未驗證：真實手機硬體效能、一般讀者理解率、完整十年PDF（目前只有2026）、每個暫存整合commit可獨立展示。保留最終分模組交付與可重跑檢查，不能把中途commit冒稱五個已發布demo。正式部署另記下節。
 
 - `tests/visual-motion.mjs`：5項通過；13秒後仍慢轉、暫停畫面固定、恢復動畫、略過入口、220ms慢RAF下入口仍在12秒內完成。
+
+
+## 正式發布與讀回
+
+- 發布程式SHA：`582fd4eb4f6e1bcb3ad41bdb60f7bfec6aa1368e`。GitHub Actions run `39995976609` 的build與deploy均success。
+- 正式網址：https://mela0976.github.io/decision-islands/ 。HTML讀回資產為`index-uh3I17aF.js`和`index-C_U96BMC.css`，與本機已驗證build一致。
+- `TEST_URL=https://mela0976.github.io/decision-islands/ node tests/journey-browser.mjs`：1280×900與390×844均通過兩大類/各四角色、問題與略過、真實摘要、首屏CTA、三步跳讀、reader/history同步、節慶保存、自由探索；英文無WebGL全文閱讀亦通過。
+- 後續本節文件提交不改發布程式或資產，文件SHA不冒充部署程式SHA。
+- 清理五個已整合CLI worktree；scene臨時依賴副本先與原提交逐byte核對一致，再移除。保留各分支commit可追溯。
+
+最終狀態：功能、改寫指令、來源保護、必要檢查與正式版讀回完成。效能硬體測試、讀者理解實驗與其餘九年PDF仍屬上述明示範圍外，不宣稱完成。
