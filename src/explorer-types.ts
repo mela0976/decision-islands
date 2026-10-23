@@ -39,6 +39,7 @@ export interface ThemeDefinition extends Omit<ExplorerIsland, 'itemIds'> {
 }
 export interface FlowDefinition extends Omit<ExplorerFlow, 'articleIds'> { articleOrders: readonly number[] }
 export interface ExplorerConfig {
+  curation?: { year: number; title: string };
   seed: number; title: I18nText; layout: ExplorerLayout; themes: readonly ThemeDefinition[];
   flows: readonly FlowDefinition[]; roles: readonly ExplorerRole[];
   daySegments: readonly (Omit<DaySegment, 'itemIds'> & { islandIds: readonly string[] })[];

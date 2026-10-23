@@ -10,7 +10,7 @@ async function load(name) {
   for(const match of imports) {await load(match[1]);code=code.replace(match[0],`from '${urls.get(match[1])}'`);}
   const url=`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`;urls.set(name,url);return import(url);
 }
-const {DATA,buildExplorerData,initialExplorerState}=await load('explorer-data');
+const {DATA,buildExplorerData,isExplorerCurated,initialExplorerState}=await load('explorer-data');
 const {buildPathGraph,findRoute,pointOnRoute,itemPlacements,axialToWorld}=await load('explorer-graph');
 const {sampleDay,activeItemIds}=await load('explorer-daycycle');
 const {createSimulation}=await load('explorer-simulation');
@@ -25,11 +25,42 @@ test('48 distinct reading placements resolve all 22 canonical articles and bilin
 });
 test('sparse new editions never leak old article IDs; invalid input fails at boundary',()=>{
  const article={...edition.articles[0],id:'2031-custom',year:2031,order:98};const sparse=buildExplorerData(DATA,{...edition,year:2031,articles:[article]});
- assert.equal(sparse.items.length,1);assert.equal(sparse.items[0].articleId,'2031-custom');assert.equal(sparse.flows.length,0);assert.doesNotThrow(()=>buildPathGraph(sparse));
+ assert.equal(sparse.items.length,1);assert.equal(sparse.items[0].articleId,'2031-custom');assert.equal(sparse.items[0].id,'2031-reading-01-2031-custom');assert.equal(sparse.flows.length,0);assert.doesNotThrow(()=>buildPathGraph(sparse));
  assert.throws(()=>buildExplorerData(DATA,{...edition,articles:[{...article,year:2025}]}),/another year/);
  assert.throws(()=>buildExplorerData(DATA,{...edition,articles:[edition.articles[0],edition.articles[0]]}),/duplicate/);
  const bad=structuredClone(DATA);bad.themes[0].models[0]='bad';assert.throws(()=>buildExplorerData(bad,edition),/invalid model/);
  const broken=structuredClone(DATA);broken.themes[0].axial=[99,99];assert.throws(()=>buildExplorerData(broken,edition),/disconnected/);
+});
+test('curation requires the exact book identity and unknown books have neutral reading placements',()=>{
+ assert.equal(isExplorerCurated(DATA,edition),true);
+ for(const book of [
+  {...edition,title:'另一本文集'},
+  {...edition,year:2027,title:'未來旅行筆記',articles:edition.articles.slice(0,2).map((article,index)=>({...article,id:`2027-unrelated-${index+1}`,year:2027,order:index+1,title:`旅行觀察 ${index+1}`}))},
+ ]) {
+  assert.equal(isExplorerCurated(DATA,book),false);
+  const neutral=buildExplorerData(DATA,book),neutralGraph=buildPathGraph(neutral);
+  assert.equal(neutral.islands.length,12);assert.equal(neutral.items.length,book.articles.length);
+  assert.deepEqual(neutral.flows,[]);assert.ok(neutral.daySegments.every(segment=>segment.itemIds.length===0));
+  for(const article of book.articles)assert.equal(neutral.items.filter(item=>item.articleId===article.id).length,1);
+  assert.deepEqual(neutral.items.map(item=>item.articleId),[...book.articles].sort((a,b)=>a.order-b.order).map(article=>article.id));
+  for(const [index,island] of neutral.islands.entries()) {
+   assert.equal(island.id,`reading-${String(index+1).padStart(2,'0')}`);
+   assert.equal(island.title.zh,`閱讀區 ${String(index+1).padStart(2,'0')}`);
+   assert.equal(island.title.en,`Reading area ${String(index+1).padStart(2,'0')}`);
+   for(const target of neutral.islands)assert.ok(Number.isFinite(findRoute(neutralGraph,island.id,target.id).length));
+  }
+  for(const item of neutral.items)assert.match(item.caption.zh,/^從原文開始/);
+  assert.doesNotMatch(JSON.stringify({islands:neutral.islands,items:neutral.items,flows:neutral.flows}),/成長羅盤|代理商務|組織轉型|Growth compass|Agent commerce|Culture and change|策展導讀|opening|source-sequence/);
+  assert.deepEqual(buildExplorerData(DATA,{...book,articles:[...book.articles].reverse()}).items,neutral.items);
+ }
+ const future={...edition,year:2027,title:'指定策展版本',articles:edition.articles.map(article=>({...article,year:2027,id:article.id.replace('2026','2027')}))};
+ const config={...DATA,curation:{year:future.year,title:future.title}};
+ assert.equal(isExplorerCurated(config,future),true);
+ const custom=buildExplorerData(config,future);
+ assert.equal(custom.items.length,48);assert.equal(custom.flows.length,10);assert.equal(custom.islands[0].id,'growth');
+ const unbound={...DATA};delete unbound.curation;
+ assert.equal(isExplorerCurated(unbound,edition),false);assert.equal(buildExplorerData(unbound,edition).items.length,22);
+ assert.throws(()=>buildExplorerData({...DATA,curation:{year:2026,title:''}},edition),/invalid curation identity/);
 });
 test('12-node rings and adjacent-only nine-panel arch bridges produce real shortest paths',()=>{
  assert.equal(graph.nodes.length,144);assert.ok(graph.bridges.length>11);
@@ -40,7 +71,6 @@ test('12-node rings and adjacent-only nine-panel arch bridges produce real short
  }
  for(const a of data.islands)for(const b of data.islands){const route=findRoute(graph,a.id,b.id);assert.ok(Number.isFinite(route.length));assert.ok(route.length>=dist(route.points[0],route.points.at(-1))-1e-9);assert.equal(route.points.length,route.cumulative.length);assert.deepEqual(pointOnRoute(route,route.length).position,route.points.at(-1));}
  const route=findRoute(graph,'growth','human');const crossings=graph.bridges.filter(b=>route.nodeIds.includes(b.from)&&route.nodeIds.includes(b.to));assert.ok(crossings.length);for(const b of crossings)for(const p of b.points)assert.ok(route.points.some(v=>dist(v,p)<1e-8),'every arch centerline point is in route');
- // Independently relax all undirected edges to verify Dijkstra's cost.
  const costs=new Map(graph.nodes.map(n=>[n.id,Infinity]));costs.set('growth:0',0);for(let i=0;i<graph.nodes.length;i++)for(const e of graph.edges){costs.set(e.to,Math.min(costs.get(e.to),costs.get(e.from)+e.distance));costs.set(e.from,Math.min(costs.get(e.from),costs.get(e.to)+e.distance));}
  assert.ok(Math.abs(route.length-costs.get('human:0'))<1e-9);assert.throws(()=>findRoute(graph,'bad','growth'),/unknown/);
 });

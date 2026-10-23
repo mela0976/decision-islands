@@ -12,6 +12,7 @@ const theme = (id: string, zh: string, en: string, axial: readonly [
 });
 /** The sole editorial configuration. References are resolved against the supplied edition. */
 export const DATA: ExplorerConfig = {
+    curation: { year: 2026, title: '決策智慧 2026｜Agentic 時代，重塑品牌與人的真實距離' },
     seed: 20261023, title: text('決策群島', 'Decision Islands'), layout: { radius: 2.02, spacing: 2.28, top: .65, waterY: -.18 },
     themes: [
         theme('growth', '成長羅盤', 'Growth compass', [0, 0], [1, 4, 5, 14], 'globe', '#db6a41', 0),
@@ -99,9 +100,14 @@ export const DATA: ExplorerConfig = {
 };
 function requireData(ok: unknown, message: string): asserts ok { if (!ok)
     throw new Error(`Explorer data: ${message}`); }
+export function isExplorerCurated(config: ExplorerConfig, edition: Edition): boolean {
+    return config.curation?.year === edition.year && config.curation.title === edition.title;
+}
 export function buildExplorerData(config: ExplorerConfig, edition: Edition): ExplorerData {
     requireData(Number.isInteger(edition.year), 'invalid edition year');
     requireData(Number.isFinite(config.seed), 'invalid seed');
+    requireData(!config.curation || (Number.isInteger(config.curation.year) && typeof config.curation.title === 'string' && config.curation.title.length > 0), 'invalid curation identity');
+    const curated = isExplorerCurated(config, edition);
     const articleIds = new Set<string>(), orders = new Map<number, Edition['articles'][number]>();
     for (const article of edition.articles) {
         requireData(article.year === edition.year, `article ${article.id} belongs to another year`);
@@ -114,7 +120,16 @@ export function buildExplorerData(config: ExplorerConfig, edition: Edition): Exp
     const models = new Set<ModelKind>(['book', 'pavilion', 'classroom', 'observatory', 'studio', 'bridge', 'garden', 'stage', 'clock', 'globe', 'workshop', 'lighthouse']);
     const items: ExplorerData['items'][number][] = [];
     const covered = new Set<string>();
-    const islands = config.themes.map(theme => {
+    const orderedArticles = [...edition.articles].sort((a, b) => a.order - b.order);
+    const themes = curated ? config.themes : config.themes.map((theme, index) => ({
+        ...theme,
+        id: `reading-${String(index + 1).padStart(2, '0')}`,
+        title: text(`閱讀區 ${String(index + 1).padStart(2, '0')}`, `Reading area ${String(index + 1).padStart(2, '0')}`),
+        description: text('依文章讀序安排的閱讀空間，點選模型閱讀原文。', 'A reading space arranged by article order. Select a model to read the original article.'),
+        orders: orderedArticles.filter((_, articleIndex) => articleIndex % config.themes.length === index).map(article => article.order),
+        captions: orderedArticles.filter((_, articleIndex) => articleIndex % config.themes.length === index).map(() => text('從原文開始，閱讀本篇文章的完整觀點。', 'Start with the original article and read its full perspective.')),
+    }));
+    const islands = themes.map(theme => {
         requireData(theme.axial.length === 2 && theme.axial.every(Number.isInteger), 'invalid axial coordinates');
         requireData(theme.models.length > 0 && theme.models.every(model => models.has(model)), 'invalid model registry');
         requireData(theme.orders.every(Number.isInteger) && new Set(theme.orders).size === theme.orders.length, 'invalid or duplicate theme article order');
@@ -133,14 +148,17 @@ export function buildExplorerData(config: ExplorerConfig, edition: Edition): Exp
         const { orders: _orders, models: _models, captions: _captions, ...island } = theme;
         return { ...island, itemIds: owned };
     });
-    // Keep physical islands connected even when a later edition has sparse content.
-    for (const article of [...edition.articles].sort((a, b) => a.order - b.order)) {
+    for (const article of orderedArticles) {
         if (covered.has(article.id))
             continue;
         const island = islands[article.order % islands.length];
         const item = { id: `${edition.year}-${island.id}-${article.id}`, islandId: island.id, articleId: article.id, model: 'book' as const, caption: text('策展導讀：本年度原刊文章。', 'Curator guide: an original article from this edition.') };
         items.push(item);
         island.itemIds.push(item.id);
+    }
+    if (!curated) {
+        const articleOrder = new Map(orderedArticles.map((article, index) => [article.id, index]));
+        items.sort((a, b) => articleOrder.get(a.articleId)! - articleOrder.get(b.articleId)!);
     }
     requireData(new Set(items.map(i => i.id)).size === items.length, 'duplicate placement ID');
     const seen = new Set([islands[0].id]);
@@ -162,7 +180,7 @@ export function buildExplorerData(config: ExplorerConfig, edition: Edition): Exp
     requireData(roles.size === config.roles.length && roles.size > 0, 'duplicate or missing role ID');
     requireData(config.roles.every(role => ['badge', 'glasses', 'cane', 'cap', 'stroller', 'bicycle', 'hat', 'helmet', 'suitcase'].includes(role.accessory)), 'invalid role accessory');
     requireData(new Set(config.flows.map(f => f.id)).size === config.flows.length, 'duplicate flow ID');
-    const flows = config.flows.flatMap(flow => {
+    const flows = (curated ? config.flows : []).flatMap(flow => {
         requireData(islands.some(i => i.id === flow.from) && islands.some(i => i.id === flow.to), 'invalid flow endpoint');
         requireData(['source', 'thematic', 'pending'].includes(flow.evidence.kind) && ['book', 'idea', 'memory', 'data'].includes(flow.cargo), 'invalid flow evidence/cargo');
         requireData(roles.has(flow.role) && Number.isInteger(flow.walkerCount) && flow.walkerCount >= 4 && flow.walkerCount <= 14, 'invalid flow role/count');
@@ -174,9 +192,9 @@ export function buildExplorerData(config: ExplorerConfig, edition: Edition): Exp
     });
     const daySegments = config.daySegments.map(segment => {
         requireData(Number.isFinite(segment.startMinute) && Number.isFinite(segment.endMinute) && segment.startMinute >= 0 && segment.endMinute <= 1440 && segment.startMinute < segment.endMinute, 'invalid day segment');
-        requireData(segment.islandIds.every(id => islands.some(i => i.id === id)), 'unknown segment island');
+        requireData(!curated || segment.islandIds.every(id => islands.some(i => i.id === id)), 'unknown segment island');
         const { islandIds, ...base } = segment;
-        return { ...base, itemIds: items.filter(i => islandIds.includes(i.islandId)).map(i => i.id) };
+        return { ...base, itemIds: curated ? items.filter(i => islandIds.includes(i.islandId)).map(i => i.id) : [] };
     });
     return { schemaVersion: 1, year: edition.year, title: config.title, seed: config.seed + edition.year - 2026, layout: { ...config.layout }, articles: [...edition.articles], islands, items, flows, roles: config.roles, daySegments, dayKeyframes: config.dayKeyframes };
 }
