@@ -10,11 +10,25 @@ export interface JourneyAudience {
 }
 export type JourneyConnectionKind = 'complement' | 'tradeoff' | 'context';
 export interface JourneyConnection { kind: JourneyConnectionKind; explanation: I18nText }
+export interface JourneyMissionChoice {
+  id: string;
+  label: I18nText;
+  outcome: I18nText;
+  tradeoff: I18nText;
+}
+export interface JourneyMission {
+  id: string;
+  scene: I18nText;
+  goal: I18nText;
+  choices: readonly JourneyMissionChoice[];
+  takeaway: I18nText;
+}
 export interface JourneyStep {
   articleId: string;
   prompt: I18nText;
   reason: I18nText;
   connection?: JourneyConnection;
+  mission?: JourneyMission;
 }
 export interface JourneyQuestion {
   id: string;
