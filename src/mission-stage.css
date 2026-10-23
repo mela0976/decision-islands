@@ -1,0 +1,55 @@
+.mission-stage {
+  margin: 0;
+  overflow: hidden;
+  width: 100%;
+  color: var(--holiday-ink, #304d47);
+  border: 1px solid color-mix(in srgb, var(--holiday-secondary, #789181) 22%, transparent);
+  border-radius: 20px 20px 12px 12px;
+  background: color-mix(in srgb, var(--holiday-paper, #f7f6ed) 88%, white);
+}
+.mission-stage > svg {
+  display: block;
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  overflow: visible;
+}
+.mission-stage [data-scene-entity] {
+  transform-box: view-box;
+  transform-origin: 0 0;
+}
+.mission-stage [data-scene-entity] > use {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+.mission-stage-label {
+  font: 600 12px 'Noto Sans TC', sans-serif;
+  fill: #354e4c;
+  stroke: #faf8ed;
+  stroke-width: 5px;
+  stroke-linejoin: round;
+  paint-order: stroke;
+}
+.mission-stage-flows {
+  opacity: .88;
+}
+.mission-stage figcaption {
+  padding: 10px 16px 13px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: color-mix(in srgb, var(--holiday-ink, #304d47) 82%, #fff);
+  border-top: 1px solid color-mix(in srgb, var(--holiday-secondary, #789181) 13%, transparent);
+}
+.mission-stage[data-preview='true'] figcaption {
+  border-left: 3px solid var(--holiday-accent, #b65b36);
+  padding-left: 13px;
+}
+@media (max-width: 600px) {
+  .mission-stage { border-radius: 14px 14px 10px 10px; }
+  .mission-stage > svg { aspect-ratio: 1.8 / 1; min-height: 180px; }
+  .mission-stage-label { font-size: 18px; }
+  .mission-stage figcaption { padding: 8px 12px 10px; font-size: 11px; }
+}
+
+@media (max-width: 380px) {
+  .mission-stage > svg { min-height: 160px; }
+}
