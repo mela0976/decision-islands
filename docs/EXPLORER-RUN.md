@@ -33,3 +33,7 @@
 src/explorer-types.ts為凍結契約。純模組維持domain資料，不含DOM/Three物件；engine與kit介面型別可引用Three但不持有renderer。模型落點id與articleId不可互換。使用者主模型未由執行期資訊獨立讀回，不宣稱skill切換主模型。
 
 分支寫入者與實際檢查於派出後更新。官方與歷史查核仍以現有原刊PDF與來源紀錄為準，新增連線只是策展閱讀關係。沒有實測就不宣稱draw call或速度數字。
+
+## 同一目標中的使用者追加
+
+2026-10-24使用者要求首頁與所有遊戲頁面加入聖誕/萬聖/復活切換，預設聖誕。完整目標不替換：原0–10探索功能繼續，另加H01–H08。季節單一設定驅動首頁和探索，與日夜分開。src/season.ts為共用palette與保護storage入口，state加season與season command。角色卡透過onResolveWalker取得真snapshot，不解析walker ID。
