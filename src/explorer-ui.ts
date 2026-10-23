@@ -24,18 +24,19 @@ type ListFocusKey = { attribute: 'data-item-id' | 'data-island-id' | 'data-flow-
 const COPY = {
   region: { zh: '決策群島探索介面', en: 'Decision Islands explorer interface' },
   overview: { zh: '全景', en: 'Overview' },
-  themes: { zh: '探索清單', en: 'Explore list' },
-  help: { zh: '操作說明', en: 'Help' },
+  themes: { zh: '自由探索', en: 'Explore freely' },
+  moreTools: { zh: '更多探索工具', en: 'More tools' },
+  help: { zh: '探索說明', en: 'Explore help' },
   close: { zh: '關閉', en: 'Close' },
   closeDetail: { zh: '關閉詳細卡', en: 'Close detail card' },
   closeList: { zh: '關閉探索清單', en: 'Close explorer list' },
   detail: { zh: '探索詳細資訊', en: 'Explorer details' },
-  list: { zh: '主題與連線清單', en: 'Themes and connections' },
-  journal: { zh: '閱讀日誌', en: 'Reading journal' },
-  search: { zh: '搜尋主題、原文、作者或連線', en: 'Search themes, articles, authors, or connections' },
+  list: { zh: '主題與觀點關聯清單', en: 'Themes and related perspectives' },
+  journal: { zh: '場景動畫紀錄', en: 'Scene animation log' },
+  search: { zh: '搜尋主題、原文、作者或觀點關聯', en: 'Search themes, articles, authors, or related perspectives' },
   searchPlaceholder: { zh: '搜尋主題、文章或作者', en: 'Search themes, articles, or authors' },
   themeTab: { zh: '閱讀主題', en: 'Reading themes' },
-  connectionTab: { zh: '閱讀連線', en: 'Reading connections' },
+  connectionTab: { zh: '觀點關聯', en: 'Related perspectives' },
   chapter: { zh: '原刊章節篩選', en: 'Original chapter filter' },
   allChapters: { zh: '全部章節', en: 'All chapters' },
   intro: { zh: '前言', en: 'Introduction' },
@@ -60,61 +61,62 @@ const COPY = {
   publicationYear: { zh: '刊物年度', en: 'Publication year' },
   printedPages: { zh: '原刊印刷頁', en: 'Printed pages' },
   chapterLabel: { zh: '原刊章節', en: 'Original chapter' },
-  noSelection: { zh: '選擇一座島、文章落點、閱讀連線或閱讀者，查看相關資料。', en: 'Choose a theme, article placement, reading connection, or walker to view its details.' },
+  noSelection: { zh: '選擇主題、文章或觀點關聯，查看相關資料。', en: 'Choose a theme, article, or related perspective to view its details.' },
   unavailableSelection: { zh: '這項選取已不在目前年度資料中。', en: 'This selection is unavailable in the current edition.' },
   emptyThemes: { zh: '目前沒有符合條件的主題或文章。', en: 'No themes or articles match these filters.' },
-  emptyFlows: { zh: '目前沒有符合條件的閱讀連線。', en: 'No reading connections match these filters.' },
+  emptyFlows: { zh: '目前沒有符合條件的觀點關聯。', en: 'No related perspectives match these filters.' },
   noArticles: { zh: '此主題目前沒有可用文章。', en: 'This theme has no available articles.' },
-  noConnections: { zh: '此主題目前沒有策展連線。', en: 'This theme has no curated connections.' },
+  noConnections: { zh: '此主題目前沒有策展的觀點關聯。', en: 'This theme has no curated perspective links.' },
   relatedArticles: { zh: '相關原文', en: 'Related articles' },
-  relatedConnections: { zh: '相關閱讀連線', en: 'Related reading connections' },
+  relatedConnections: { zh: '相關觀點關聯', en: 'Related perspectives' },
   from: { zh: '起點', en: 'From' },
   to: { zh: '目的地', en: 'To' },
   destination: { zh: '目前目的地', en: 'Current destination' },
-  walkerStatus: { zh: '閱讀者狀態', en: 'Walker status' },
-  walkerMoving: { zh: '移動中', en: 'Moving' },
-  walkerWaiting: { zh: '交接中', en: 'Handing off' },
+  walkerStatus: { zh: '閱讀夥伴狀態', en: 'Reading companion status' },
+  walkerMoving: { zh: '動畫移動中', en: 'Animation moving' },
+  walkerWaiting: { zh: '等待下一段', en: 'Waiting for next step' },
   walkerStatusUnavailable: { zh: '狀態無法取得', en: 'Status unavailable' },
-  evidence: { zh: '閱讀依據', en: 'Reading basis' },
-  cargo: { zh: '搬運內容', en: 'Carried item' },
-  readerRole: { zh: '閱讀者角色', en: 'Reader role' },
-  sourceSequence: { zh: '來源串讀', en: 'Source sequence' },
-  curatedTheme: { zh: '策展主題', en: 'Curated theme' },
-  openQuestion: { zh: '待探索', en: 'Open question' },
-  editorialBoundary: { zh: '所有連線都是網站策展閱讀，不代表官方認證、機構合作或因果證據。', en: 'All connections are curated reading suggestions. They do not indicate official endorsement, institutional partnership, or causal evidence.' },
-  walker: { zh: '閱讀者', en: 'Walker' },
-  walkerUnavailable: { zh: '這位閱讀者目前沒有可用的模擬快照。', en: 'This walker has no available simulation snapshot.' },
+  evidence: { zh: '關聯依據', en: 'Basis for the link' },
+  cargo: { zh: '閱讀焦點', en: 'Reading cue' },
+  readerRole: { zh: '閱讀夥伴', en: 'Reading companion' },
+  sourceSequence: { zh: '原刊順序', en: 'Original publication order' },
+  curatedTheme: { zh: '網站策展比較', en: 'Site-curated comparison' },
+  openQuestion: { zh: '開放問題', en: 'Open question' },
+  editorialBoundary: { zh: '觀點關聯連接相關原文，方便延伸閱讀；它不表示文章之間有因果關係，也不代表官方認證或機構合作。', en: 'Perspective links connect related source articles for further reading. They do not show causation or imply official endorsement or institutional partnership.' },
+  walkerDisclosure: { zh: '閱讀夥伴是場景引導動畫，並非真實讀者或文章因果證據。', en: 'Reading companions are scene guide animations, not real readers or evidence of causation between articles.' },
+  walker: { zh: '閱讀夥伴', en: 'Reading companion' },
+  walkerUnavailable: { zh: '目前沒有可用的閱讀夥伴場景動畫。', en: 'No reading companion scene animation is available.' },
   overviewHint: { zh: '場景時間', en: 'Scene time' },
   time: { zh: '時間', en: 'Time' },
   dawn: { zh: '清晨', en: 'Morning' },
   day: { zh: '白天', en: 'Day' },
   dusk: { zh: '黃昏', en: 'Dusk' },
   night: { zh: '夜讀', en: 'Night' },
-  names: { zh: '名牌', en: 'Name badges' },
-  walkers: { zh: '搬運', en: 'Walkers' },
-  flows: { zh: '連線', en: 'Connections' },
+  names: { zh: '閱讀者提示', en: 'Reader labels' },
+  walkers: { zh: '顯示閱讀夥伴', en: 'Show reading companions' },
+  flows: { zh: '觀點關聯', en: 'Perspective links' },
   paused: { zh: '暫停', en: 'Pause' },
   resume: { zh: '繼續', en: 'Resume' },
   birdseye: { zh: '鳥瞰', en: 'Bird’s-eye view' },
-  journalToggle: { zh: '日誌', en: 'Journal' },
-  helpTitle: { zh: '三步開始探索', en: 'Three steps to explore' },
-  helpStepOne: { zh: '選一座主題島，再挑一個文章落點。', en: 'Choose a theme island, then select an article placement.' },
-  helpStepTwo: { zh: '閱讀落點顯示原刊資料。按「閱讀全文」可開啟原文。', en: 'Article placements show publication details. Choose “Read article” to open the original.' },
-  helpStepThree: { zh: '跟隨閱讀連線探索文章間的策展讀序。', en: 'Follow reading connections to explore the curated reading order.' },
-  helpNote: { zh: '策展導讀由本網站提供，原刊標題、作者與內容保留原文。', en: 'Curator guides come from this site. Original titles, authors, and article text remain in their source language.' },
+  journalToggle: { zh: '場景紀錄', en: 'Scene log' },
+  helpTitle: { zh: '自由探索地圖', en: 'Explore the map' },
+  helpStepOne: { zh: '在「自由探索」清單中選擇主題或文章。', en: 'Choose a theme or article from “Explore freely”.' },
+  helpStepTwo: { zh: '文章資訊會顯示原刊來源與網站導讀；按「閱讀全文」可讀原文。', en: 'Article details show the original source and this site’s guide. Choose “Read article” to open the original.' },
+  helpStepThree: { zh: '選擇「觀點關聯」查看相關原文與策展比較理由。這是延伸閱讀，不代表因果。', en: 'Choose “Related perspectives” to see connected source articles and the curator’s comparison. These are reading suggestions, not evidence of causation.' },
+  helpNote: { zh: '網站策展導讀與關聯是閱讀建議；原刊標題、作者、內容與 PDF 可供查核。', en: 'This site’s guides and links are reading suggestions. Original titles, authors, text, and PDFs remain available for checking.' },
   fallbackTitle: { zh: '3D 場景目前無法使用', en: 'The 3D scene is unavailable' },
-  fallbackBody: { zh: '以下提供相同資料的可操作主題地圖。閱讀者動畫與模擬日誌已停用。', en: 'Use this interactive theme map with the same data. Walker animation and the simulated journal are unavailable.' },
+  fallbackBody: { zh: '以下提供相同資料的可操作主題地圖。閱讀夥伴動畫與場景紀錄已停用。', en: 'Use this interactive theme map with the same data. Reading companion animations and the scene log are unavailable.' },
   fallbackUnavailable: { zh: '場景模擬不可用', en: 'Simulation unavailable' },
-  simulationLog: { zh: '場景模擬日誌', en: 'Scene simulation journal' },
-  simulationNote: { zh: '以下事件由場景模擬產生，不是其他使用者或實際合作紀錄。', en: 'These events come from the scene simulation. They do not describe other users or real partnerships.' },
-  live: { zh: 'LIVE', en: 'LIVE' },
+  simulationLog: { zh: '場景動畫紀錄', en: 'Scene animation log' },
+  simulationNote: { zh: '這些事件由場景動畫產生，並非真實讀者或實際合作紀錄。', en: 'These events come from scene animations, not real readers or actual partnerships.' },
+  live: { zh: '模擬', en: 'SIM' },
   pausedStatus: { zh: '已暫停', en: 'Paused' },
-  filterConnection: { zh: '依連線篩選日誌', en: 'Filter journal by connection' },
-  allConnections: { zh: '全部連線', en: 'All connections' },
+  filterConnection: { zh: '依觀點關聯篩選紀錄', en: 'Filter log by perspective link' },
+  allConnections: { zh: '全部觀點關聯', en: 'All perspective links' },
   noEvents: { zh: '尚無場景模擬事件。', en: 'No scene simulation events yet.' },
-  depart: { zh: '啟程', en: 'Depart' },
+  depart: { zh: '開始移動', en: 'Start moving' },
   arrive: { zh: '抵達', en: 'Arrive' },
-  handoff: { zh: '交接', en: 'Handoff' },
+  handoff: { zh: '前往下一段', en: 'Move to next step' },
   eventAt: { zh: '在', en: 'at' },
   readSource: { zh: '開啟原文', en: 'Open article' },
   available: { zh: '可探索', en: 'Available' },
@@ -131,10 +133,10 @@ const CHAPTER_KEYS: Record<Chapter, CopyKey> = {
 };
 
 const CARGO = {
-  book: { zh: '書本', en: 'Book' },
+  book: { zh: '原文', en: 'Source article' },
   idea: { zh: '想法', en: 'Idea' },
   memory: { zh: '記憶', en: 'Memory' },
-  data: { zh: '資料', en: 'Data' },
+  data: { zh: '資料', en: 'Information' },
 } as const;
 
 const EVIDENCE_KEYS: Record<FlowEvidence['kind'], CopyKey> = {
@@ -149,7 +151,6 @@ const MODEL_SHAPES: Record<ModelKind, string> = {
   globe: 'globe', workshop: 'workshop', lighthouse: 'lighthouse',
 };
 
-const ONBOARDING_KEY = 'decision-islands-explorer-help-v1';
 const EVENT_LIMIT = 100;
 const PRESETS = [
   { minute: 360, label: 'dawn' as const, icon: '◒' },
@@ -196,22 +197,6 @@ function focusableTarget(target: EventTarget | null): target is HTMLElement {
   return target instanceof HTMLElement;
 }
 
-function readHelpSeen(): boolean {
-  try {
-    return localStorage.getItem(ONBOARDING_KEY) === 'seen';
-  } catch {
-    return false;
-  }
-}
-
-function markHelpSeen(): void {
-  try {
-    localStorage.setItem(ONBOARDING_KEY, 'seen');
-  } catch {
-    return;
-  }
-}
-
 export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, callbacks: ExplorerUICallbacks): ExplorerUI {
   let data = initialData;
   let state: Readonly<ExplorerState> | null = null;
@@ -225,7 +210,8 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
   let fallbackKey = '';
   let chromeLanguage: 'zh' | 'en' | null = null;
   let appliedSeason: ExplorerState['season'] | null = null;
-  let helpOpen = !readHelpSeen();
+  let moreToolsOpen = false;
+  let helpOpen = false;
   let mobileTimeOpen = false;
   let events: ExplorerEvent[] = [];
   let eventRevision = 0;
@@ -246,13 +232,26 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
   const toolbar = node('nav', 'explorer-toolbar');
   toolbar.setAttribute('aria-label', '決策群島探索工具列');
   const overviewButton = button('⌖', 'explorer-tool-button', COPY.overview.zh, () => callbacks.onCommand({ type: 'overview' }));
+  const overviewLabel = node('span', 'explorer-toolbar-label', COPY.overview.zh);
+  overviewButton.append(overviewLabel);
   const listButton = button('☷', 'explorer-tool-button', COPY.themes.zh, () => {
     if (!state) return;
     listTrigger = listButton;
     callbacks.onCommand({ type: 'panel', panel: 'list', open: !state.listOpen });
   });
+  const listLabel = node('span', 'explorer-toolbar-label', COPY.themes.zh);
+  listButton.append(listLabel);
+  const moreToolsButton = button('⋯', 'explorer-tool-button explorer-more-tools', COPY.moreTools.zh, () => setMoreToolsOpen(!moreToolsOpen));
+  const moreToolsLabel = node('span', 'explorer-toolbar-label', COPY.moreTools.zh);
+  moreToolsButton.append(moreToolsLabel);
+  moreToolsButton.setAttribute('aria-expanded', 'false');
+  moreToolsButton.setAttribute('aria-controls', 'explorer-hud explorer-help-trigger');
   const helpButton = button('?', 'explorer-tool-button explorer-help-trigger', COPY.help.zh, () => setHelpOpen(!helpOpen));
-  toolbar.append(overviewButton, listButton, helpButton);
+  helpButton.id = 'explorer-help-trigger';
+  helpButton.hidden = true;
+  helpButton.setAttribute('aria-expanded', 'false');
+  helpButton.setAttribute('aria-controls', 'explorer-help');
+  toolbar.append(overviewButton, listButton, moreToolsButton, helpButton);
 
   const detailPanel = node('aside', 'explorer-panel explorer-detail');
   detailPanel.setAttribute('aria-label', COPY.detail.zh);
@@ -328,6 +327,9 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
   tabList.append(themesTab, connectionsTab);
 
   const hud = node('nav', 'explorer-hud');
+  hud.id = 'explorer-hud';
+  hud.hidden = true;
+  hud.inert = true;
   hud.setAttribute('aria-label', '探索控制');
   const mobileTimeButton = button('◷', 'explorer-time-mobile', COPY.time.zh, () => {
     mobileTimeOpen = !mobileTimeOpen;
@@ -370,6 +372,8 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
   hud.append(mobileTimeButton, timeControls, toggleControls, hudTime);
 
   const journalPanel = node('aside', 'explorer-panel explorer-journal');
+  journalPanel.hidden = true;
+  journalPanel.inert = true;
   journalPanel.setAttribute('aria-labelledby', 'explorer-journal-title');
   const journalHead = node('div', 'explorer-journal-head');
   const journalTitleGroup = node('div', '');
@@ -390,9 +394,15 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
   journalPanel.append(journalHead, journalFilter, journalContent);
 
   const helpPanel = node('aside', 'explorer-help');
+  helpPanel.id = 'explorer-help';
+  helpPanel.hidden = true;
+  helpPanel.inert = true;
   helpPanel.setAttribute('role', 'note');
   helpPanel.setAttribute('aria-labelledby', 'explorer-help-title');
-  const helpClose = button('×', 'explorer-close', COPY.close.zh, () => setHelpOpen(false));
+  const helpClose = button('×', 'explorer-close', COPY.close.zh, () => {
+    setHelpOpen(false);
+    helpButton.focus();
+  });
   const helpTitle = node('h2', '', COPY.helpTitle.zh);
   helpTitle.id = 'explorer-help-title';
   const helpSteps = node('ol', 'explorer-help-steps');
@@ -423,12 +433,21 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
   }
 
   function setHelpOpen(open: boolean): void {
-    helpOpen = open;
-    helpPanel.hidden = !open;
-    helpPanel.inert = !open || !active;
-    helpButton.setAttribute('aria-expanded', String(open));
-    if (!open) markHelpSeen();
-    if (open) renderHelp();
+    helpOpen = open && moreToolsOpen;
+    helpPanel.hidden = !helpOpen;
+    helpPanel.inert = !helpOpen || !active;
+    helpButton.setAttribute('aria-expanded', String(helpOpen));
+    if (helpOpen) renderHelp();
+  }
+
+  function setMoreToolsOpen(open: boolean): void {
+    moreToolsOpen = open;
+    moreToolsButton.setAttribute('aria-expanded', String(open));
+    hud.hidden = !open;
+    hud.inert = !open || !active;
+    helpButton.hidden = !open;
+    if (!open) setHelpOpen(false);
+    renderJournal();
   }
 
   function setSeasonVariables(): void {
@@ -483,8 +502,16 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
     root.setAttribute('aria-label', COPY.region[language]);
     toolbar.setAttribute('aria-label', language === 'zh' ? '決策群島探索工具列' : 'Decision Islands explorer toolbar');
     overviewButton.setAttribute('aria-label', COPY.overview[language]);
+    overviewButton.title = COPY.overview[language];
+    overviewLabel.textContent = COPY.overview[language];
     listButton.setAttribute('aria-label', COPY.themes[language]);
+    listButton.title = COPY.themes[language];
+    listLabel.textContent = COPY.themes[language];
+    moreToolsButton.setAttribute('aria-label', COPY.moreTools[language]);
+    moreToolsButton.title = COPY.moreTools[language];
+    moreToolsLabel.textContent = COPY.moreTools[language];
     helpButton.setAttribute('aria-label', COPY.help[language]);
+    helpButton.title = COPY.help[language];
     detailPanel.setAttribute('aria-label', COPY.detail[language]);
     detailClose.setAttribute('aria-label', COPY.closeDetail[language]);
     listPanel.setAttribute('aria-label', COPY.list[language]);
@@ -868,7 +895,8 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
     detailContent.replaceChildren();
     if (snapshot) {
       const role = data.roles.find(value => value.id === snapshot.role);
-      detailContent.append(node('p', 'explorer-walker-summary', `${localized(role?.title ?? { zh: snapshot.role, en: snapshot.role })} · ${localized(CARGO[snapshot.cargo])}`));
+      detailContent.append(node('p', 'explorer-walker-summary', `${tr('readerRole')}: ${localized(role?.title ?? { zh: snapshot.role, en: snapshot.role })} · ${tr('cargo')}: ${localized(CARGO[snapshot.cargo])}`));
+      detailContent.append(node('p', 'explorer-editorial-note', tr('walkerDisclosure')));
       const status = node('p', 'explorer-walker-status');
       const destination = node('p', 'explorer-destination');
       walkerLiveFields = { status, destination };
@@ -964,9 +992,9 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
 
   function renderJournal(): void {
     if (!state) return;
-    journalPanel.hidden = !state.journal || fallback;
-    journalPanel.inert = !state.journal || fallback || !active;
-    const key = [dataVersion, eventRevision, state.language, state.paused, state.reducedMotion, state.journal, state.journalFilter, fallback].join('|');
+    journalPanel.hidden = !moreToolsOpen || !state.journal || fallback;
+    journalPanel.inert = !moreToolsOpen || !state.journal || fallback || !active;
+    const key = [dataVersion, eventRevision, state.language, state.paused, state.reducedMotion, state.journal, state.journalFilter, moreToolsOpen, fallback].join('|');
     if (key === journalKey) return;
     journalKey = key;
     live.classList.toggle('is-paused', state.paused || state.reducedMotion || fallback);
@@ -1090,11 +1118,6 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
     }
     renderJournal();
     renderFallback();
-    if (helpOpen) {
-      helpPanel.hidden = false;
-      helpPanel.inert = !active;
-      helpButton.setAttribute('aria-expanded', 'true');
-    }
   }
 
   function closeWithFocus(panel: 'detail' | 'list'): void {
@@ -1162,17 +1185,25 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
   chapterSelect.addEventListener('change', () => callbacks.onCommand({ type: 'chapter', chapter: (chapterSelect.value || null) as ChapterFilter }), { signal: abort.signal });
   journalSelect.addEventListener('change', () => callbacks.onCommand({ type: 'journalFilter', flowId: journalSelect.value || null }), { signal: abort.signal });
   document.addEventListener('keydown', event => {
-    if (event.key !== 'Escape' || !active || document.querySelector('dialog[open]')) return;
+    if (event.key !== 'Escape' || event.defaultPrevented || !active || document.querySelector('dialog[open]')) return;
+    if (helpOpen) {
+      event.preventDefault();
+      event.stopPropagation();
+      setHelpOpen(false);
+      helpButton.focus();
+      return;
+    }
     if (state?.detailOpen) {
       event.preventDefault();
       event.stopPropagation();
       closeWithFocus('detail');
       return;
     }
-    if (helpOpen) {
+    if (moreToolsOpen) {
       event.preventDefault();
-      setHelpOpen(false);
-      helpButton.focus();
+      event.stopPropagation();
+      setMoreToolsOpen(false);
+      moreToolsButton.focus();
       return;
     }
     if (state?.selection) {
@@ -1184,11 +1215,6 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
   addSheetBehavior(detailHandle, detailPanel);
   listHandle.setAttribute('aria-label', COPY.list.zh);
   detailHandle.setAttribute('aria-label', COPY.detail.zh);
-
-  if (helpOpen) {
-    setHelpOpen(true);
-    markHelpSeen();
-  }
 
   const ui: ExplorerUI = {
     setData(nextData) {
@@ -1231,6 +1257,8 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
       active = nextActive;
       root.hidden = !active;
       root.inert = !active;
+      hud.inert = !moreToolsOpen || !active;
+      helpPanel.inert = !helpOpen || !active;
       if (state) {
         updatePanelVisibility();
         renderJournal();

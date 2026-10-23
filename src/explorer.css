@@ -105,6 +105,16 @@
   transform: translateY(-1px);
 }
 
+.explorer-more-tools[aria-expanded="true"] {
+  background: var(--holiday-glow, #fcea8b);
+}
+
+.explorer-toolbar-label {
+  font-size: 12px;
+  margin-left: 5px;
+  white-space: nowrap;
+}
+
 .explorer-tool-button:active,
 .explorer-close:active,
 .explorer-time-mobile:active {
@@ -1657,6 +1667,18 @@
   .explorer-toolbar {
     right: 8px;
     top: 110px;
+  }
+
+  .explorer-toolbar-label {
+    display: none;
+  }
+
+  .explorer-more-tools .explorer-toolbar-label {
+    display: inline;
+  }
+
+  .explorer-more-tools {
+    padding: 0 8px;
   }
 
   .explorer-journal {
