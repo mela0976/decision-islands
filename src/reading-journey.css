@@ -12,6 +12,8 @@
 
 .reading-journey-ui,
 #journey-picker {
+  --journey-secondary-ink: color-mix(in srgb, var(--holiday-secondary, #58775c) 20%, var(--holiday-ink, #203c35));
+  --journey-accent-ink: color-mix(in srgb, var(--holiday-accent, #b84338) 70%, var(--holiday-ink, #203c35));
   --journey-border: color-mix(in srgb, var(--holiday-ink, #203c35) 13%, transparent);
   --journey-muted: color-mix(in srgb, var(--holiday-ink, #203c35) 66%, transparent);
 }
@@ -125,7 +127,7 @@
 }
 
 .journey-rail-action {
-  color: var(--holiday-secondary, #58775c) !important;
+  color: var(--journey-secondary-ink) !important;
   font-size: 11px !important;
   font-weight: 700 !important;
   white-space: nowrap;
@@ -194,7 +196,7 @@
 
 .journey-step-marker.is-complete:not(.is-current) {
   background: color-mix(in srgb, var(--holiday-secondary, #58775c) 12%, white) !important;
-  color: var(--holiday-secondary, #58775c) !important;
+  color: var(--journey-secondary-ink) !important;
 }
 
 .journey-step-number {
@@ -246,7 +248,7 @@
 }
 
 .journey-connection > span {
-  color: var(--holiday-secondary, #58775c);
+  color: var(--journey-secondary-ink);
   display: block;
   font-size: 10px;
   font-weight: 800;
@@ -310,7 +312,7 @@
 }
 
 .journey-other-views > summary {
-  color: var(--holiday-secondary, #58775c);
+  color: var(--journey-secondary-ink);
   cursor: pointer;
   font-size: 11px;
   font-weight: 750;
@@ -335,7 +337,7 @@
 }
 
 .journey-other-view > span {
-  color: var(--holiday-secondary, #58775c);
+  color: var(--journey-secondary-ink);
   font-size: 9px;
   font-weight: 800;
 }
@@ -352,7 +354,7 @@
 }
 
 .journey-other-view small + small {
-  color: var(--holiday-secondary, #58775c);
+  color: var(--journey-secondary-ink);
   font-weight: 700;
 }
 
@@ -414,7 +416,7 @@
 
 .journey-next-button {
   background: color-mix(in srgb, var(--holiday-secondary, #58775c) 12%, white) !important;
-  color: var(--holiday-secondary, #58775c) !important;
+  color: var(--journey-secondary-ink) !important;
 }
 
 .journey-last-step {
@@ -502,7 +504,7 @@
 
 .journey-back-button {
   background: transparent !important;
-  color: var(--holiday-secondary, #58775c) !important;
+  color: var(--journey-secondary-ink) !important;
   flex: 0 0 auto;
   font-size: 11px !important;
   font-weight: 750 !important;
@@ -561,7 +563,7 @@
   align-items: center;
   background: color-mix(in srgb, var(--holiday-secondary, #58775c) 13%, white);
   border-radius: 14px;
-  color: var(--holiday-secondary, #58775c);
+  color: var(--journey-secondary-ink);
   display: inline-flex;
   flex: 0 0 46px;
   font-size: 23px;
@@ -612,7 +614,7 @@
   align-items: center;
   background: color-mix(in srgb, var(--holiday-secondary, #58775c) 13%, white);
   border-radius: 12px;
-  color: var(--holiday-secondary, #58775c);
+  color: var(--journey-secondary-ink);
   display: inline-flex;
   flex: 0 0 39px;
   font-size: 20px;
@@ -672,7 +674,7 @@
 
 .journey-role-group {
   align-items: center;
-  color: var(--holiday-secondary, #58775c);
+  color: var(--journey-secondary-ink);
   display: inline-flex;
   font-size: 11px;
   gap: 8px;
@@ -736,7 +738,7 @@
 }
 
 .journey-question-choice > small {
-  color: var(--holiday-secondary, #58775c);
+  color: var(--journey-secondary-ink);
   font-size: 10px;
   font-weight: 750;
   margin-top: auto;
@@ -772,7 +774,7 @@
 
 .journey-picker-explore {
   background: transparent !important;
-  color: var(--holiday-secondary, #58775c) !important;
+  color: var(--journey-secondary-ink) !important;
 }
 
 .journey-picker-browse {
@@ -805,7 +807,7 @@
 
 .journey-secondary-button {
   background: color-mix(in srgb, var(--holiday-secondary, #58775c) 12%, white) !important;
-  color: var(--holiday-secondary, #58775c) !important;
+  color: var(--journey-secondary-ink) !important;
 }
 
 .journey-search {
@@ -852,7 +854,7 @@
 }
 
 .journey-search-result-meta {
-  color: var(--holiday-secondary, #58775c);
+  color: var(--journey-secondary-ink);
   display: flex;
   font-size: 9px;
   font-weight: 750;

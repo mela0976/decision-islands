@@ -9,12 +9,13 @@ try {
  const page=await browser.newPage({viewport:{width:1280,height:900}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto(base);await page.locator('.article-row').first().waitFor({state:'attached'});
  await page.locator('#enter').click();await page.waitForFunction(()=>document.body.classList.contains('exploring'));
- await page.locator('.explorer-help .explorer-close').click();
+ await page.locator('#journey-picker [data-free-explore]').click();
+ await page.locator('.explorer-more-tools').click();
  const before=await page.locator('.explorer-clock').innerText();
  await page.waitForTimeout(1500);assert.notEqual(await page.locator('.explorer-clock').innerText(),before,'world RAF advances clock');
  await page.emulateMedia({reducedMotion:'reduce'});await page.waitForTimeout(200);
  const frozen=await page.locator('.explorer-clock').innerText();await page.waitForTimeout(400);assert.equal(await page.locator('.explorer-clock').innerText(),frozen);
- await page.locator('.explorer-toolbar button').nth(1).click();
+
  assert.equal(await page.locator('.explorer-theme').count(),12);
  assert.equal(await page.locator('.explorer-list [data-item-id]').count(),48);
  await page.locator('.explorer-list [data-island-id]').first().click();
@@ -27,7 +28,9 @@ try {
  await page.locator('.explorer-detail .explorer-primary-button').click();await page.locator('#reader[open]').waitFor();await page.keyboard.press('Escape');
  await page.locator('.island-world canvas').focus();await page.keyboard.press('Escape');assert.equal(await page.locator('.explorer-detail:not([hidden])').count(),0);
  await page.locator('#explorer-tab-connections').click();assert.equal(await page.locator('.explorer-list .explorer-flow-select').count(),10);
- await page.locator('.explorer-list .explorer-flow-select').first().click();assert.ok((await page.locator('.explorer-detail').innerText()).includes('來源'));
+ await page.locator('.explorer-list .explorer-flow-select').first().click();assert.match(await page.locator('.explorer-detail .explorer-flow-facts').innerText(),/原刊順序/);assert.ok(await page.locator('.explorer-detail .explorer-source-link').count()>0);
+ await page.locator('[data-toggle="walkers"]').click();assert.equal(await page.locator('[data-toggle="walkers"]').getAttribute('aria-pressed'),'true');
+ await page.locator('[data-toggle="names"]').click();
  await page.locator('[data-toggle="flows"]').click();assert.equal(await page.locator('[data-toggle="flows"]').getAttribute('aria-pressed'),'true');
  await page.locator('[data-minute="1080"]').click();assert.equal(await page.locator('.explorer-clock').innerText(),'18:00');
  await page.locator('#season').selectOption('easter');assert.equal(await page.locator('.explorer-clock').innerText(),'18:00');

@@ -27,7 +27,7 @@ test('explorer scene renders, freezes, rebuilds, restores thumbnail state and di
       const data = buildExplorerData(DATA, edition), canvas = document.querySelector('canvas'), labelHost = document.querySelector('#labels');
       const selections = [], minutes = [], events = []; let invalidations = 0;
       const engine = createExplorerEngine({ data, canvas, labelHost, invalidate() { invalidations++; }, onSelection(s) { selections.push(s); }, onMinute(m) { minutes.push(m); }, onEvents(e) { events.push(...e); } });
-      const state = initialExplorerState();
+      const state = { ...initialExplorerState(), walkers: true };
       engine.resize(1280, 800); engine.setState(state);
       let scene, camera;
       const inspect = { toneMappingExposure: 0, render(s, c) { scene = s; camera = c; } };
@@ -71,7 +71,9 @@ test('explorer scene renders, freezes, rebuilds, restores thumbnail state and di
       renderer.setRenderTarget(null); renderer.setScissorTest(false); engine.render(renderer);
       const renderInfo={...renderer.info.render};
       const excluded=[scene.getObjectByName('explorer-environment'),scene.getObjectByName('explorer-walkers'),...flows];
-      const visibility=excluded.map(o=>o.visible);excluded.forEach(o=>o.visible=false);renderer.shadowMap.enabled=false;engine.render(renderer);const staticCalls=renderer.info.render.calls;excluded.forEach((o,i)=>o.visible=visibility[i]);renderer.shadowMap.enabled=true;
+      const visibility=excluded.map(o=>o.visible);excluded.forEach(o=>o.visible=false);renderer.shadowMap.enabled=false;engine.render(renderer);const staticCalls=renderer.info.render.calls;
+      engine.setState({...state,minute:exactMinute,paused:true,birdseye:false});engine.setSelection({kind:'island',islandId:data.islands[0].id});excluded.forEach(o=>o.visible=false);scene.traverse(o=>{if(o.userData.pinIsland)o.visible=false});engine.render(renderer);const nearStaticCalls=renderer.info.render.calls;
+      excluded.forEach((o,i)=>o.visible=visibility[i]);renderer.shadowMap.enabled=true;
       const pngImage = new Image(); pngImage.src = thumbnail ?? ''; if (thumbnail) await pngImage.decode();
       const sample = document.createElement('canvas'); sample.width = sample.height = 160; const sampleContext = sample.getContext('2d'); sampleContext.drawImage(pngImage, 0, 0); const pixelData = sampleContext.getImageData(0, 0, 160, 160).data; const colors = new Set(); for (let i = 0; i < pixelData.length; i += 4) colors.add(`${pixelData[i]},${pixelData[i + 1]},${pixelData[i + 2]}`); const thumbnailColorCount = colors.size;
       const newEdition = { ...edition, year: 2031, articles: [{ ...edition.articles[0], id: '2031-custom', year: 2031, order: 98 }] };
@@ -82,7 +84,7 @@ test('explorer scene renders, freezes, rebuilds, restores thumbnail state and di
       const atomic = labelHost.querySelectorAll('.explorer-scene-label--island').length === replacement.islands.length;
       engine.setActive(false); const inactive = engine.update(10); engine.render(inspect);
       engine.dispose(); engine.dispose(); rt.dispose(); renderer.dispose();
-      return { staticCalls, renderInfo, keyboardMoves, inputUntouched, clickWithinThreshold, dragIgnored, farFurnitureHidden, nearFurnitureShown, thumbnailColorCount, slowFrameMinute, reducedFrozen, reducedResult, birdHeight, inactiveRender, islandLabels, surfaceBatchCount, topHeights, flowsInitiallyHidden, exactMinute, frozenMatch, idle, relatedFlowCount, silentSelection, labelSelection, thumbnail: thumbnail?.startsWith('data:image/png'), thumbnailSize: [pngImage.width, pngImage.height], restored, rebuilt, atomic, rejected, inactive, disposedLabels: labelHost.childElementCount, invalidations, moved };
+      return { nearStaticCalls, staticCalls, renderInfo, keyboardMoves, inputUntouched, clickWithinThreshold, dragIgnored, farFurnitureHidden, nearFurnitureShown, thumbnailColorCount, slowFrameMinute, reducedFrozen, reducedResult, birdHeight, inactiveRender, islandLabels, surfaceBatchCount, topHeights, flowsInitiallyHidden, exactMinute, frozenMatch, idle, relatedFlowCount, silentSelection, labelSelection, thumbnail: thumbnail?.startsWith('data:image/png'), thumbnailSize: [pngImage.width, pngImage.height], restored, rebuilt, atomic, rejected, inactive, disposedLabels: labelHost.childElementCount, invalidations, moved };
     });
     assert.equal(result.inactiveRender, true); assert.equal(result.islandLabels, 12); assert.equal(result.surfaceBatchCount, 3); assert.equal(result.topHeights.length, 96); assert.ok(result.topHeights.every(y => Math.abs(y - .652) < 1e-6));
     assert.equal(result.flowsInitiallyHidden, true); assert.ok(Math.abs(result.exactMinute - 601.37) < 1e-8); assert.equal(result.frozenMatch, true); assert.equal(result.idle.continuous, false);
@@ -92,8 +94,8 @@ test('explorer scene renders, freezes, rebuilds, restores thumbnail state and di
     assert.equal(result.keyboardMoves, true); assert.equal(result.inputUntouched, true); assert.equal(result.clickWithinThreshold, true); assert.equal(result.dragIgnored, true);
     assert.equal(result.farFurnitureHidden, true); assert.equal(result.nearFurnitureShown, true); assert.ok(result.thumbnailColorCount > 20, 'thumbnail contains a shaded model');
     assert.equal(result.thumbnail, true); assert.deepEqual(result.thumbnailSize, [160, 160]); assert.equal(result.restored, true); assert.equal(result.rebuilt, true); assert.equal(result.rejected, true); assert.equal(result.atomic, true); assert.equal(result.inactive.continuous, false); assert.equal(result.disposedLabels, 0); assert.ok(result.invalidations > 0); assert.equal(result.moved, true);
-    assert.ok(result.staticCalls >= 20 && result.staticCalls <= 30, 'static island/model batches meet the planned range');
-    console.log('scene render profile:', JSON.stringify({total:result.renderInfo,staticCalls:result.staticCalls}));
+    assert.ok(result.staticCalls >= 20 && result.staticCalls <= 30 && result.nearStaticCalls >= 20 && result.nearStaticCalls <= 30, 'static island/model/furniture batches meet the planned range, excluding selection overlay lines');
+    console.log('scene render profile:', JSON.stringify({total:result.renderInfo,staticCalls:result.staticCalls,nearStaticCalls:result.nearStaticCalls}));
     assert.deepEqual(errors, []);
   } finally { await browser?.close(); server.kill('SIGTERM'); }
 });

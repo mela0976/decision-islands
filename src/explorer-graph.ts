@@ -6,7 +6,6 @@ export function buildPathGraph(data: ExplorerData): PathGraph {
     const ringRadius = 1.8;
     for (const island of data.islands) {
         const [x, , z] = axialToWorld(...island.axial, data.layout.spacing);
-        // Even indices are hex vertices. Odd indices are exact edge midpoints.
         for (let k = 0; k < 12; k++) {
             const angle = -Math.PI / 2 + k * Math.PI / 6, radius = k % 2 ? ringRadius * Math.cos(Math.PI / 6) : ringRadius;
             nodes.push({ id: `${island.id}:${k}`, islandId: island.id, position: [x + Math.cos(angle) * radius, data.layout.top + .025, z + Math.sin(angle) * radius] });

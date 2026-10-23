@@ -253,3 +253,19 @@
 | H06 | 手機、鍵盤及英文季節名稱可用 | 390px/鍵盤/en實測 | 未驗證 |
 | H07 | 減少動態及暫停仍停止動畫，不妨礙季節單張更新 | 動畫暫停與季節畫面變化 | 未驗證 |
 | H08 | 不新增外部圖片/模型/字型且原內容與自然材質保留 | 工件與網路來源檢查及原閱讀回歸 | 未驗證 |
+
+
+## 2026-10-24 最終驗收判定
+
+本節取代初始「全部未驗證」，細節與實際命令見EXPLORER-RUN.md。R0–R9的數值/材質/幾何/權責由來源對照和32項模組測試核對；可操作行為另以production preview瀏覽器測試核對。來源核對不等同每個數值都有獨立像素測量。
+
+| 範圍 | 判定與證據 |
+| --- | --- |
+| R0、R1，真實內容與資料邊界 | 已驗證：core/journey資料測試、Python13項、check_public、book-boundaries-browser。新書策展必須精確匹配書名與年度。 |
+| R2–R6，布局/相機/環境/模型/模擬 | 來源與模組驗證通過；scene WebGL probe核對實際render、LOD、縮圖、資源回收；Dijkstra與時間步進測試通過。全景28/近景29靜態批次符合子集目標，不等於全場景30 calls。 |
+| R7–R8，標籤與互動 | explorer-browser/mobile-browser與journey-browser通過。最新使用者指示取代主題先行、工具攤開、人物/日誌預設顯示和搬運文案；角色問題為主入口，地圖/動畫為可選進階功能。 |
+| R9，生命週期/失敗保護 | 模組資源dispose、實際context loss、模組失敗、禁用storage、未知/失敗新書、即時減少動態與暫停均通過。真實硬體FPS未驗證。 |
+| R10，交付 | 最終Vite/TypeScript原始碼、build、改寫指令與本矩陣完成。未提供五個各自發布的中間demo；正式部署結果見RUN。 |
+| P01–P08，既有閱讀保護 | 原閱讀e2e7組通過，入口與書樹另以visual-motion測試記錄。 |
+| H01–H08，節慶 | holidays-browser通過桌面/手機三季、保存、英文與storage拒絕；季節對燈光/裝飾的覆寫是明確追加需求。 |
+| J01–J10，兩大類與細分角色 | journey-browser與book-boundaries-browser通過，詳見ROLE-READING.md。尚無真實使用者理解率實驗。 |

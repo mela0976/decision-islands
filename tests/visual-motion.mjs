@@ -24,7 +24,7 @@ assert.deepEqual(paused, await canvas.screenshot(), 'pause holds the rendered sc
 await page.locator('#motion').click();
 await page.waitForTimeout(2000);
 assert.notDeepEqual(paused, await canvas.screenshot(), 'motion resumes');
-await page.getByRole('button', { name: '啟程，探索 2026' }).click();
+await page.locator('#enter').click();
 await page.getByRole('button', { name: '略過轉場' }).click();
 await page.waitForFunction(() => document.body.classList.contains('exploring'));
 assert.equal(await page.locator('.island-world').getAttribute('data-phase'), 'islands');
@@ -37,7 +37,7 @@ await slowPage.addInitScript(() => {
   window.requestAnimationFrame = callback => nativeFrame(() => setTimeout(() => callback(performance.now()), 220));
 });
 await slowPage.goto(base);
-await slowPage.getByRole('button', { name: '啟程，探索 2026' }).click();
+await slowPage.locator('#enter').click();
 await slowPage.waitForFunction(() => document.body.classList.contains('exploring'), undefined, { timeout: 12000 });
 assert.equal(await slowPage.locator('.island-world').getAttribute('data-phase'), 'islands');
 assert.deepEqual(errors, []);

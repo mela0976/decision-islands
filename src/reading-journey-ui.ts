@@ -72,7 +72,7 @@ const copy = {
   complement: { zh: '互補觀點', en: 'Complement' },
   tradeoff: { zh: '取捨觀點', en: 'Trade-off' },
   context: { zh: '脈絡觀點', en: 'Context' },
-  emptyTitle: { zh: '這一年還沒有角色導讀', en: 'Role-based reading is not available for this edition yet' },
+  emptyTitle: { zh: '這本書還沒有角色導讀', en: 'Role-based reading is not available for this edition yet' },
   emptyNotice: { zh: '這本書的角色導讀尚未編排。你仍可搜尋已收錄的文章，或回到目錄自由閱讀。', en: 'Role-based journeys have not been curated for this edition. Search the available articles or return to the directory to explore.' },
   noData: { zh: '文章資料尚未載入。你可以回到目錄檢視已收錄的篇目。', en: 'Article data has not loaded yet. Return to the directory to see available articles.' },
   browseArticles: { zh: '瀏覽文章目錄', en: 'Browse the article directory' },

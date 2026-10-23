@@ -1,6 +1,6 @@
 # 決策群島
 
-《2026 決策智慧》的互動閱讀網站。首頁以首爾星空圖書館為靈感，中央是由書本堆疊成的聖誕樹書塔。鏡頭靠近書塔，穿過宇宙螺旋，抵達閱讀群島。讀者可依原刊章節或策展路線閱讀。現在收錄 2026，歷年刊物取得後可沿用匯入管線加入。
+《2026 決策智慧》的互動閱讀網站。首頁以首爾星空圖書館為靈感，中央是由書本堆疊成的聖誕樹書塔。鏡頭靠近書塔，穿過宇宙螺旋，抵達閱讀群島。進入後先選「行銷工作」或「日常生活」，再選細分角色與在意的問題。導讀先呈現一篇真實文章的摘要，再提供兩個可自由跳讀的延伸角度。主題地圖與原刊章節目錄仍可自由探索。現在收錄 2026，歷年刊物取得後可沿用匯入管線加入。
 
 ## 在本機使用
 
@@ -11,21 +11,34 @@ npm ci
 npm run dev
 ```
 
-開啟終端機顯示的本機網址。點「啟程」觀看進場，或點「直接開始閱讀」。搜尋支援標題、作者、摘要與全文。讀者可收藏文章、調整字級、標記讀完。這些資料只留在該瀏覽器，清除瀏覽器資料後會消失。
+開啟終端機顯示的本機網址。點「找到我的閱讀起點」觀看進場並選擇角色，或點「直接開始閱讀」開啟目錄。搜尋支援標題、作者、摘要與全文。讀者可收藏文章、調整字級、標記讀完。這些資料只留在該瀏覽器，清除瀏覽器資料後會消失。
 
 每篇都有獨立 HTML 閱讀頁與原刊 PDF。瀏覽器不支援 WebGL 時仍可使用目錄。停用 JavaScript 時可開啟 `read/2026/index.html`。系統設定減少動態時不播放書塔轉場。
 
 ## 驗證及建置
 
 ```sh
+npx playwright install chromium
 npm test
 npm run build
-npm run dev -- --port 4173
+npm run preview -- --port 4174
 ```
 
-另開終端機執行 `npm run test:e2e`。瀏覽器測試需要 Playwright Chromium，首次可執行 `npx playwright install chromium`。產物在 `dist`。GitHub Actions 在 main 更新時建置並發布 GitHub Pages。
+另開終端機執行下列驗證。測試會操作真實 Chromium，依序執行可避免軟體 GPU 同時負載。產物在 `dist`，畫面與結果在 `test-results`。GitHub Actions 在 main 更新時建置並發布 GitHub Pages。
 
-執行 `node tests/visual-motion.mjs`，驗證首頁閒置後持續慢轉、暫停、恢復、略過轉場，以及慢畫格仍能完成進場。兩個瀏覽器腳本均接受 `TEST_URL` 環境變數，可驗證正式網站。首頁書樹每150秒旋轉一圈，進場約6.5秒；系統減少動態與畫面上的動態按鈕可停止動畫。
+```sh
+TEST_URL=http://127.0.0.1:4174/ npm run test:e2e
+TEST_URL=http://127.0.0.1:4174/ node tests/journey-browser.mjs
+TEST_URL=http://127.0.0.1:4174/ node tests/book-boundaries-browser.mjs
+TEST_URL=http://127.0.0.1:4174/ node tests/explorer-browser.mjs
+TEST_URL=http://127.0.0.1:4174/ node tests/explorer-mobile-browser.mjs
+TEST_URL=http://127.0.0.1:4174/ node tests/holidays-browser.mjs
+TEST_URL=http://127.0.0.1:4174/ node tests/visual-motion.mjs
+```
+
+執行 `node tests/visual-motion.mjs`，驗證首頁閒置後持續慢轉、暫停、恢復、略過轉場，以及慢畫格仍能完成進場。瀏覽器腳本均接受 `TEST_URL` 環境變數，可驗證正式網站。首頁書樹每150秒旋轉一圈，進場約6.5秒；系統減少動態與畫面上的動態按鈕可停止動畫。
+
+全站共用聖誕、萬聖、復活三種節慶。首次預設聖誕，瀏覽器會保存選擇。「更多探索工具」提供日夜、閱讀夥伴與觀點關聯，預設收合。角色導讀與每本書的設定見 [角色閱讀說明](docs/ROLE-READING.md)。
 
 ## 內容與出處
 
@@ -53,3 +66,5 @@ python3 -m venv .venv
 ```
 
 範例命令重建本次2026內容，需要使用者提供的來源目錄。GitHub上的產物已經生成，不必取得來源即可建置網站。新年度可使用PDF及manifest內的metadata，不要求另外提供Excel或InDesign。匯入不會替你判斷公開權限或自動完成內容校對。
+
+角色導讀與地圖策展都綁定書名及年度。未編排的新書使用中性閱讀區與真實文章目錄，不套用2026的主題、關聯或策展路線。年度 JSON 可另外加入經校對的 `journeys` 設定。

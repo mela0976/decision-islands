@@ -11,8 +11,8 @@
 - [x] Read the Principles section of the poteto-mode skill.
 - [x] Phase A: Frame. 已讀原文及目前來源，固定真實內容與入口不變條件。
 - [x] Phase B: Design the workflow. 已比較共用場景與獨立Explorer Scene，採後者且共享單一renderer/RAF。
-- [ ] Phase C: Run the loop. 依下列單位實作、驗證、保留或修正。
-- [ ] Phase D: Keep the audit trail. 逐階段更新本檔與需求矩陣，未驗不得寫通過。
+- [x] Phase C: Run the loop. 依下列單位實作、驗證、保留或修正。
+- [x] Phase D: Keep the audit trail. 逐階段更新本檔與需求矩陣，未驗不得寫通過。
 - [ ] Phase E: Verify and hand back. 全部需求須有對應現行工件及執行證據，正式網址讀回後才完成goal。
 
 1. 固定types、改寫指令與驗收矩陣，建置保持原網站可用。
@@ -59,3 +59,29 @@ src/explorer-types.ts為凍結契約。純模組維持domain資料，不含DOM/T
 - Throughput checkpoint。先固定每書persona/question/step/articleId資料形狀與多書回退，再並行製作角色入口/導讀rail和進階UI減法；main唯一整合者連結書籍、閱讀、地圖、完成狀態及節慶。每檔一位owner，最多先兩個代理。
 - 最小可驗證單位。資料與真實來源對帳；角色/問題/第一篇keyboard旅程；三步內容與關聯可開原文；切角色與切年度；舊目錄自由探索；三節慶與手機/減少動態保持可用；正式部署讀回。
 - 決策依據。採SOP B+C，沿用同goal已讀Notion即時規則。poteto Subtract Before You Add使工具退到進階；Redesign From First Principles使角色成為入口而非另加一個篩選器。未安裝的deslop/control-ui仍不宣稱執行，替以獨立審查與可重跑瀏覽器測試。
+
+2026-10-24後續澄清。使用者要求角色先分「行銷人員相關」與「一般人」，再依兩大類細分。入口更新為marketing/everyday兩大類，每類四角色，再選問題；先前六角色混列和最多兩次選擇由這次明確指示取代。JourneyAudience與persona.audienceId是唯一類別來源，UI不另寫角色ID分類表。未知書籍無策展資料時兩個陣列皆空，維持真實目錄回退。
+
+
+## 最終本機驗證（2026-10-24）
+
+固定 production preview 127.0.0.1:4174，Chromium/SwiftShader。下列為實際執行，非只讀程式碼：
+
+- `npm test`：32/32通過，含真實WebGL scene probe、三季圖書館資源回收、路網/日夜/步行與每書策展邊界。
+- `npm run build`：TypeScript及Vite通過；主bundle約805kB，仍有chunk大小提示。
+- 隔離Python環境：13/13測試通過；check_public核對22篇文章、22個PDF，findings為空。
+- `tests/browser.mjs`：7組舊閱讀旅程通過，包括原文/PDF/收藏/完成/字級/歷史/搜尋/無JS/無WebGL/第二年度。
+- `tests/journey-browser.mjs`：1280×900與390×844兩大類各四角色、問題略過、三步跳讀、原摘要、全文next/Back同步、自由探索、英文與fallback通過。
+- `tests/book-boundaries-browser.mjs`：未知2027書只有真實新文章與12個中性閱讀區、無舊連線；載入失敗保留當前書及節慶；同年度異書不帶舊路線；JS失敗仍有靜態入口。
+- `tests/explorer-browser.mjs`：12島/48落點/10連線、時鐘及即時減少動態、縮圖、鍵盤選取、進階開關、日夜與節慶、實際WebGL context loss回退通過。
+- `tests/explorer-mobile-browser.mjs`：390×844 sheet的52%高度、四章節篩選、拖曳展開/收合、焦點與inert、無橫向溢出通過。
+- `tests/holidays-browser.mjs`：1440×1000與390×844，預設聖誕、三種實際canvas、重載保存、閱讀器/探索器同步、英文與storage拒絕通過。
+- 上述測試結果JSON及實際截圖位於本機test-results（不納入公開內容）。
+
+Static islands/bridges/models/furniture在鳥瞰28 calls、近距離29 calls；排除環境、人物、連線及選取覆蓋線。完整示範畫面69 calls、510918 triangles。這是1280×800軟體WebGL的渲染計數，不是實體手機FPS或速度改善實驗。
+
+獨立審查修正：時鐘RAF重設、焦點恢復、即時reduced-motion、shadow回收、縮圖renderer狀態、房屋/教室原型、reader返回與路線同步、新書主題/角色策展滲漏。Comment Sicko清除3處無必要註解，無抑制註解及MUST KILL項目。未安裝的deslop/control-ui未宣稱執行；以獨立來源審查、diff和真實瀏覽器驗收替代。
+
+尚未驗證：真實手機硬體效能、一般讀者理解率、完整十年PDF（目前只有2026）、每個暫存整合commit可獨立展示。保留最終分模組交付與可重跑檢查，不能把中途commit冒稱五個已發布demo。正式部署另記下節。
+
+- `tests/visual-motion.mjs`：5項通過；13秒後仍慢轉、暫停畫面固定、恢復動畫、略過入口、220ms慢RAF下入口仍在12秒內完成。

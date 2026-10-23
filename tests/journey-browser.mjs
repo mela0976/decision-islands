@@ -1,0 +1,57 @@
+import {chromium} from '@playwright/test';
+import assert from 'node:assert/strict';
+import {mkdir,writeFile} from 'node:fs/promises';
+const base=process.env.TEST_URL||'http://127.0.0.1:4174/';
+await mkdir('test-results',{recursive:true});
+const browser=await chromium.launch({headless:true,args:['--disable-features=LocalNetworkAccessChecks']});
+const results=[];
+try{
+ for(const width of (process.env.TEST_WIDTH?[Number(process.env.TEST_WIDTH)]:[1280,390])){
+  const height=width===390?844:900;
+  const context=await browser.newContext({viewport:{width,height},reducedMotion:'reduce'});
+  const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.goto(base);await page.locator('.article-row').first().waitFor({state:'attached'});
+  await page.locator('#season').selectOption('halloween');await page.locator('#enter').click();
+  await page.locator('#journey-picker[open]').waitFor();
+  assert.equal(await page.locator('#journey-picker').evaluate(el=>el.matches(':modal')),true);
+  assert.equal(await page.locator('#journey-picker [data-audience]').count(),2);
+  await page.screenshot({path:`test-results/journey-picker-${width}.png`});
+  await page.locator('[data-audience="marketing"]').focus();await page.keyboard.press('Enter');
+  assert.equal(await page.locator('#journey-picker [data-role]').count(),4);
+  await page.locator('[data-role="marketer"]').click();assert.equal(await page.locator('#journey-picker [data-question]').count(),2);
+  await page.locator('[data-skip-question]').click();await page.locator('.journey-rail').waitFor();
+  assert.equal(await page.locator('.journey-article-card').getAttribute('data-article-id'),'2026-19');
+  const edition=await (await context.request.get(new URL('data/2026.json',base).href)).json();
+  assert.ok((await page.locator('.journey-insight').innerText()).includes(edition.articles.find(a=>a.id==='2026-19').summary.replace(/^【決策智慧 2026】/,'')));
+  const read=page.locator('.journey-rail [data-read-article]');const box=await read.boundingBox();assert.ok(box&&box.y>=0&&box.y+box.height<=height,'read CTA is visible without scroll');
+  assert.equal(await page.locator('.explorer-more-tools').getAttribute('aria-expanded'),'false');
+  assert.equal(await page.locator('.explorer-journal:visible').count(),0);
+  await page.locator('#season').selectOption('easter');assert.equal(await page.locator('.journey-article-card').getAttribute('data-article-id'),'2026-19');
+  await read.click();await page.locator('#reader[open]').waitFor();assert.match(await page.locator('.journey-reader-context').innerText(),/1\s*\/\s*3/);
+  await page.locator('#next-article').click();assert.match(new URL(page.url()).hash,/2026-09$/);
+  await page.goBack();await page.waitForFunction(()=>location.hash.endsWith('2026-19'));
+  await page.locator('#next-article').click();assert.match(new URL(page.url()).hash,/2026-09$/);
+  await page.keyboard.press('Escape');assert.equal(await page.locator('.journey-article-card').getAttribute('data-article-id'),'2026-09');
+  await page.locator('.journey-step-marker[data-step="2"]').click();assert.equal(await page.locator('.journey-article-card').getAttribute('data-article-id'),'2026-13');
+  assert.ok((await page.locator('.journey-connection').innerText()).length>20);
+  await page.locator('.journey-rail [data-read-article]').click();assert.equal(await page.locator('#next-article').count(),0);
+  await page.locator('#return-journey').click();assert.equal(await page.locator('#reader[open]').count(),0);
+  await page.locator('#my-reading').click();await page.locator('[data-audience="everyday"]').click();
+  assert.equal(await page.locator('#journey-picker [data-role]').count(),4);await page.locator('[data-role="family"]').click();
+  await page.locator('#journey-picker [data-question]').first().click();assert.equal(await page.locator('.journey-article-card').getAttribute('data-article-id'),'2026-11');
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+  await page.screenshot({path:`test-results/journey-${width}.png`});
+  await page.locator('#my-reading').click();await page.locator('#journey-picker [data-free-explore]').click();
+  assert.equal(await page.locator('.journey-rail:visible').count(),0);assert.equal(await page.locator('.explorer-list:visible').count(),1);
+  await page.locator('.explorer-more-tools').click();assert.equal(await page.locator('.explorer-more-tools').getAttribute('aria-expanded'),'true');
+  assert.deepEqual(errors,[]);results.push(`${width}px: two audiences, four roles each, questions/skip, real summary, visible CTA, route/history synchronization, unrestricted angles, holiday retention, free exploration`);
+  await context.close();
+ }
+ const fallback=await browser.newContext({viewport:{width:1000,height:800},reducedMotion:'reduce'});
+ await fallback.addInitScript(()=>{const get=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type,...args){return String(type).includes('webgl')?null:get.call(this,type,...args)}});
+ const fp=await fallback.newPage();await fp.goto(new URL('?lang=en',base).href);await fp.locator('.article-row').first().waitFor({state:'attached'});await fp.locator('#enter').click();
+ await fp.locator('[data-audience="everyday"]').click();await fp.locator('[data-role="newcomer"]').click();await fp.locator('[data-skip-question]').click();
+ await fp.locator('.journey-rail [data-read-article]').click();await fp.locator('#reader[open]').waitFor();assert.ok((await fp.locator('.article-body').innerText()).length>500);
+ results.push('English role journey and original article reading work without WebGL');await fallback.close();
+ await writeFile('test-results/journey-results.json',JSON.stringify({base,results},null,2));console.log(results.join('\n'));
+}finally{await browser.close()}

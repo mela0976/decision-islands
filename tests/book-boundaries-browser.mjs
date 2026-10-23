@@ -1,0 +1,28 @@
+import {chromium} from '@playwright/test';
+import assert from 'node:assert/strict';
+import {mkdir,writeFile} from 'node:fs/promises';
+const base=process.env.TEST_URL||'http://127.0.0.1:4174/';
+await mkdir('test-results',{recursive:true});const browser=await chromium.launch({headless:true});const results=[];
+try{
+ const context=await browser.newContext({reducedMotion:'reduce',viewport:{width:1000,height:800}});
+ await context.addInitScript(()=>{const get=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type,...args){return String(type).includes('webgl')?null:get.call(this,type,...args)}});
+ const catalog=await (await context.request.get(new URL('data/catalog.json',base).href)).json();
+ const edition=await (await context.request.get(new URL('data/2026.json',base).href)).json();
+ const next={...edition,year:2027,title:'Synthetic other book',articles:edition.articles.slice(0,6).map(a=>({...a,id:a.id.replace('2026-','2027-'),year:2027,title:`NEXT ${a.title}`}))};
+ await context.route('**/data/catalog.json',r=>r.fulfill({json:{...catalog,years:[...catalog.years,{...catalog.years[0],year:2027,title:next.title,dataUrl:'data/2027.json'},{...catalog.years[0],year:2028,title:'Unavailable book',dataUrl:'data/2028.json'}]}}));
+ await context.route('**/data/2027.json',r=>r.fulfill({json:next}));await context.route('**/data/2028.json',r=>r.fulfill({status:503,body:'unavailable'}));
+ const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(base);await page.locator('.article-row').first().waitFor({state:'attached'});
+ await page.locator('#season').selectOption('halloween');await page.locator('#skip-intro').click();await page.locator('#year').selectOption('2027');await page.waitForFunction(()=>document.querySelector('#edition-stats').textContent.startsWith('2027'));
+ assert.equal(await page.locator('.article-row').count(),6);assert.equal(await page.locator('#season').inputValue(),'halloween');
+ await page.locator('#my-reading').click();await page.locator('#journey-picker[open]').waitFor();assert.equal(await page.locator('#journey-picker [data-audience]').count(),0);assert.equal(await page.locator('#journey-picker [data-role]').count(),0);
+ assert.match(await page.locator('#journey-picker').innerText(),/尚未編排|還沒有角色導讀/);
+ await page.locator('#journey-search-input').fill('NEXT');await page.locator('.journey-search-result').first().waitFor();
+ const ids=await page.locator('.journey-search-result').evaluateAll(nodes=>nodes.map(n=>n.dataset.article));assert.equal(ids.length,6);assert.ok(ids.every(id=>id.startsWith('2027-')));
+ await page.locator('.journey-search-result').first().click();await page.locator('#reader[open]').waitFor();assert.match(await page.locator('#reader-title').innerText(),/^NEXT /);assert.equal(await page.locator('.journey-reader-context').count(),0);await page.keyboard.press('Escape');
+ await page.locator('.explorer-toolbar button').nth(1).click();assert.equal(await page.locator('.explorer-list [data-item-id]').count(),6);assert.equal(await page.locator('.explorer-list .explorer-flow-select').count(),0);assert.ok((await page.locator('.explorer-theme-title strong').allTextContents()).every(title=>/閱讀區/.test(title)));
+ await page.locator('#toggle-library').click();await page.locator('#year').selectOption('2028');await page.waitForFunction(()=>document.querySelector('#year').value==='2027');assert.match(await page.locator('#edition-stats').innerText(),/^2027/);assert.equal(await page.locator('#season').inputValue(),'halloween');assert.deepEqual(errors,[]);
+ results.push('unknown book has no old role recommendations, exposes only six current articles; failed year load restores current selection/content and keeps holiday');await context.close();
+ const sameYear=await browser.newContext({reducedMotion:'reduce'});await sameYear.addInitScript(()=>{const get=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type,...args){return String(type).includes('webgl')?null:get.call(this,type,...args)}});await sameYear.route('**/data/2026.json',r=>r.fulfill({json:{...edition,title:'Other 2026 book'}}));const sp=await sameYear.newPage();await sp.goto(base);await sp.locator('.article-row').first().waitFor({state:'attached'});await sp.locator('#skip-intro').click();await sp.locator('#tab-paths').click();assert.equal(await sp.locator('[data-path]').count(),0);results.push('another book in the same year does not inherit the original curated reading paths');await sameYear.close();
+ const broken=await browser.newContext();await broken.route(/\/assets\/.*\.js$/,r=>r.abort());const bp=await broken.newPage();await bp.goto(base);assert.equal(await bp.getByRole('link',{name:'開啟無動畫閱讀目錄'}).count(),1);results.push('module load failure retains the initial HTML reading link');await broken.close();
+ await writeFile('test-results/book-boundaries-results.json',JSON.stringify({base,results},null,2));console.log(results.join('\n'));
+}finally{await browser.close()}

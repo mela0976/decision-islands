@@ -57,9 +57,9 @@ export const DATA: ExplorerConfig = {
             string
         ];
         return { id, from, to, articleOrders, cargo, role, walkerCount: 4 + index % 11, evidence: { kind, rationale: kind === 'source'
-                    ? text('來源串讀：同刊文章的讀序與頁碼可核對；不代表官方認證、合作或因果證據。', 'Source sequence: verify reading order and pages in the collected edition; no official endorsement, partnership or causal evidence.')
+                    ? text('原刊順序：依同一本刊物的讀序與頁碼，把相鄰觀點放在一起理解。', 'Publication sequence: compare adjacent perspectives using the book’s reading order and page references.')
                     : kind === 'pending' ? text('待探索：這兩篇可如何互相比較？這是網站提問，不是既定事實或官方合作。', 'Open question: how might these articles compare? A curator question, not an established fact or official partnership.')
-                        : text('策展主題：本站建議比較這兩篇原文的閱讀角度，不表示官方合作或因果關係。', 'Curated theme: this site suggests comparing these original readings; no official partnership or causal claim.') } };
+                        : text('網站策展比較：這兩篇提供不同閱讀角度，建議一起對照；這是本站導讀。', 'Editorial comparison: these articles offer different perspectives to consider together. This connection is a site reading guide.') } };
     }),
     daySegments: [
         ['midnight', '午夜', 'Midnight', 0, 360, ['trust']], ['dawn', '清晨', 'Dawn', 360, 480, ['growth']],
@@ -199,5 +199,5 @@ export function buildExplorerData(config: ExplorerConfig, edition: Edition): Exp
     return { schemaVersion: 1, year: edition.year, title: config.title, seed: config.seed + edition.year - 2026, layout: { ...config.layout }, articles: [...edition.articles], islands, items, flows, roles: config.roles, daySegments, dayKeyframes: config.dayKeyframes };
 }
 export function initialExplorerState(language: 'zh' | 'en' = 'zh', reducedMotion = false): ExplorerState {
-    return { selection: null, language, season: 'christmas', query: '', tab: 'themes', minute: 600, paused: false, reducedMotion, names: false, walkers: true, flows: false, journal: true, journalFilter: null, birdseye: false, listOpen: false, detailOpen: false, chapter: null, completedArticleIds: [], bookmarkedArticleIds: [] };
+    return { selection: null, language, season: 'christmas', query: '', tab: 'themes', minute: 600, paused: false, reducedMotion, names: false, walkers: false, flows: false, journal: false, journalFilter: null, birdseye: false, listOpen: false, detailOpen: false, chapter: null, completedArticleIds: [], bookmarkedArticleIds: [] };
 }

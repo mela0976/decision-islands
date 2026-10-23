@@ -23,6 +23,7 @@ try {
   await page.reload();await page.locator('.article-row').first().waitFor({state:'attached'});
   assert.equal(await page.locator('#season').inputValue(),'easter');
   await page.locator('#enter').click();await page.waitForFunction(()=>document.body.classList.contains('exploring'));
+  await page.locator('#journey-picker [data-free-explore]').click();
   assert.equal(await page.locator('.explorer-ui').getAttribute('data-season'),'easter');
   for(const season of ['halloween','christmas','easter']) {
    await page.locator('#season').selectOption(season);

@@ -202,6 +202,7 @@ export function createExplorerEngine(options: ExplorerEngineOptions): ExplorerEn
       const matrix = new T.Matrix4(), object = new T.Object3D(), rootMatrix = new T.Matrix4(), localMatrix = new T.Matrix4(), q = new T.Quaternion(), scale = new T.Vector3();
       function updateWalkers(snapshot: readonly WalkerSnapshot[], _animate: boolean) {
         walkerGroup.visible = state.walkers;
+        if (!state.walkers) return;
         const seasonalAccent = new T.Color(HOLIDAYS[state.season].accent), seasonalSecondary = new T.Color(HOLIDAYS[state.season].secondary);
         snapshot.forEach((w, index) => {
           const role = data.roles.find(r => r.id === w.role)!, distance = camera.position.distanceTo(v3(w.position)), size = T.MathUtils.clamp(distance / 20, 1, 1.45), phase = w.phase * 20, bob = w.status === 'moving' ? Math.abs(Math.sin(phase)) * .012 : 0;
@@ -217,7 +218,7 @@ export function createExplorerEngine(options: ExplorerEngineOptions): ExplorerEn
           object.position.copy(v3(w.position)).add(new T.Vector3(0, .006, 0)); object.rotation.set(0, 0, 0); object.scale.setScalar(size); object.updateMatrix(); shadow.setMatrixAt(index, object.matrix);
           sprites[index].position.copy(v3(w.position)).add(new T.Vector3(0, .49, 0)); sprites[index].visible = distance < 16;
           const label = dom.find(l => l.type === 'walker' && l.owner === w.id)!; label.object.position.copy(v3(w.position)).add(new T.Vector3(0, .68, 0));
-          const cargo = { book: ['書本', 'books'], idea: ['想法', 'ideas'], memory: ['記憶', 'memories'], data: ['資料', 'data'] }[w.cargo]; label.full = state.language === 'en' ? `Carrying ${cargo[1]}` : `正在搬${cargo[0]}`;
+          const cargo = { book: ['書本', 'books'], idea: ['想法', 'ideas'], memory: ['記憶', 'memories'], data: ['資料', 'data'] }[w.cargo]; label.full = state.language === 'en' ? `Reading companion · ${cargo[1]}` : `閱讀夥伴 · ${cargo[0]}`;
         });
         for (const part of parts) { part.mesh.instanceMatrix.needsUpdate = true; part.mesh.boundingSphere = null; if (part.mesh.instanceColor) part.mesh.instanceColor.needsUpdate = true; } shadow.instanceMatrix.needsUpdate = true;
       }
