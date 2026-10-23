@@ -19,6 +19,7 @@ import type {
 
 type CopyKey = keyof typeof COPY;
 type ChapterFilter = Chapter | null;
+type ListFocusKey = { attribute: 'data-item-id' | 'data-island-id' | 'data-flow-id' | 'data-article-id'; value: string };
 
 const COPY = {
   region: { zh: '決策群島探索介面', en: 'Decision Islands explorer interface' },
@@ -70,6 +71,10 @@ const COPY = {
   from: { zh: '起點', en: 'From' },
   to: { zh: '目的地', en: 'To' },
   destination: { zh: '目前目的地', en: 'Current destination' },
+  walkerStatus: { zh: '閱讀者狀態', en: 'Walker status' },
+  walkerMoving: { zh: '移動中', en: 'Moving' },
+  walkerWaiting: { zh: '交接中', en: 'Handing off' },
+  walkerStatusUnavailable: { zh: '狀態無法取得', en: 'Status unavailable' },
   evidence: { zh: '閱讀依據', en: 'Reading basis' },
   cargo: { zh: '搬運內容', en: 'Carried item' },
   readerRole: { zh: '閱讀者角色', en: 'Reader role' },
@@ -230,6 +235,7 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
   let detailTrigger: HTMLElement | null = null;
   let listWasOpen = false;
   let detailWasOpen = false;
+  let walkerLiveFields: { status: HTMLElement; destination: HTMLElement } | null = null;
 
   const root = node('div', 'explorer-ui');
   root.setAttribute('role', 'region');
@@ -242,7 +248,7 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
   const overviewButton = button('⌖', 'explorer-tool-button', COPY.overview.zh, () => callbacks.onCommand({ type: 'overview' }));
   const listButton = button('☷', 'explorer-tool-button', COPY.themes.zh, () => {
     if (!state) return;
-    listTrigger = toolbar;
+    listTrigger = listButton;
     callbacks.onCommand({ type: 'panel', panel: 'list', open: !state.listOpen });
   });
   const helpButton = button('?', 'explorer-tool-button explorer-help-trigger', COPY.help.zh, () => setHelpOpen(!helpOpen));
@@ -404,6 +410,7 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
   fallbackHeader.firstElementChild?.append(fallbackTitle, fallbackText);
   fallbackPanel.append(fallbackHeader, fallbackMap);
 
+  for (const panel of [toolbar, detailPanel, listPanel, hud, journalPanel, helpPanel, fallbackPanel]) panel.dataset.explorerPanel = '';
   root.append(toolbar, detailPanel, listPanel, hud, journalPanel, helpPanel, fallbackPanel);
   host.append(root);
 
@@ -570,6 +577,16 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
     callbacks.onSelection(selection);
   }
 
+  function listFocusKey(target: EventTarget | null): ListFocusKey | null {
+    if (!(target instanceof HTMLElement) || !listContent.contains(target)) return null;
+    for (const attribute of ['data-item-id', 'data-island-id', 'data-flow-id', 'data-article-id'] as const) {
+      const owner = target.closest<HTMLElement>(`[${attribute}]`);
+      const value = owner?.getAttribute(attribute);
+      if (owner && listContent.contains(owner) && value) return { attribute, value };
+    }
+    return null;
+  }
+
   function makeArticleButton(article: Article, placement?: ExplorerItem, compact = false): HTMLButtonElement {
     const value = button('', `explorer-article-link${compact ? ' is-compact' : ''}`, `${article.title} · ${article.authors}`, () => {
       if (placement) emitSelection({ kind: 'item', itemId: placement.id });
@@ -607,6 +624,7 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
     group.setAttribute('aria-label', tr('relatedArticles'));
     for (const article of flowArticles(flow)) {
       const read = button('↗', 'explorer-source-link', `${tr('readSource')}: ${article.title}`, () => callbacks.onReadArticle(article.id));
+      read.dataset.articleId = article.id;
       read.append(node('span', '', article.title));
       group.append(read);
     }
@@ -616,6 +634,9 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
 
   function rebuildList(): void {
     if (!state) return;
+    const restoreFocus = listContent.contains(document.activeElement);
+    const focusKey = listFocusKey(document.activeElement);
+    const scrollTop = listContent.scrollTop;
     const language = state.language;
     const uniqueArticleCount = new Set(data.articles.map(article => article.id)).size;
     setText(listCount, `${uniqueArticleCount} ${COPY.articles[language]} · ${data.islands.length} ${COPY.themesCount[language]} · ${data.items.length} ${COPY.placements[language]}`);
@@ -680,6 +701,8 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
           links.setAttribute('aria-label', tr('relatedConnections'));
           for (const flow of related) {
             const link = button(localized(flow.evidence.rationale).slice(0, 42), 'explorer-flow-chip', tr(EVIDENCE_KEYS[flow.evidence.kind]), () => emitSelection({ kind: 'flow', flowId: flow.id }));
+            link.dataset.flowId = flow.id;
+            link.setAttribute('aria-pressed', String(state.selection?.kind === 'flow' && state.selection.flowId === flow.id));
             link.setAttribute('aria-label', `${localized(flow.evidence.rationale)}. ${tr(EVIDENCE_KEYS[flow.evidence.kind])}`);
             links.append(link);
           }
@@ -700,6 +723,12 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
         card.append(makeFlowArticleLinks(flow));
         listContent.append(card);
       }
+    }
+    if (restoreFocus) {
+      listContent.scrollTop = scrollTop;
+      const target = focusKey && Array.from(listContent.querySelectorAll<HTMLElement>('[data-item-id], [data-island-id], [data-flow-id], [data-article-id]'))
+        .find(element => element.getAttribute(focusKey.attribute) === focusKey.value);
+      (target ?? listContent).focus({ preventScroll: true });
     }
   }
 
@@ -840,8 +869,10 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
     if (snapshot) {
       const role = data.roles.find(value => value.id === snapshot.role);
       detailContent.append(node('p', 'explorer-walker-summary', `${localized(role?.title ?? { zh: snapshot.role, en: snapshot.role })} · ${localized(CARGO[snapshot.cargo])}`));
-      const destination = snapshot.direction === 1 ? to : from;
-      detailContent.append(node('p', 'explorer-destination', `${tr('destination')}: ${localized(destination?.title ?? { zh: tr('noWalkerDestination'), en: tr('noWalkerDestination') })}`));
+      const status = node('p', 'explorer-walker-status');
+      const destination = node('p', 'explorer-destination');
+      walkerLiveFields = { status, destination };
+      detailContent.append(status, destination);
     }
     const route = node('dl', 'explorer-flow-facts');
     const facts: Array<[CopyKey, string]> = [
@@ -870,6 +901,7 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
 
   function renderDetail(): void {
     if (!state) return;
+    walkerLiveFields = null;
     const selection = state.selection;
     detailContent.replaceChildren();
     if (!selection) {
@@ -934,10 +966,10 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
     if (!state) return;
     journalPanel.hidden = !state.journal || fallback;
     journalPanel.inert = !state.journal || fallback || !active;
-    const key = [dataVersion, eventRevision, state.language, state.paused, state.journal, state.journalFilter, fallback].join('|');
+    const key = [dataVersion, eventRevision, state.language, state.paused, state.reducedMotion, state.journal, state.journalFilter, fallback].join('|');
     if (key === journalKey) return;
     journalKey = key;
-    live.classList.toggle('is-paused', state.paused || fallback);
+    live.classList.toggle('is-paused', state.paused || state.reducedMotion || fallback);
     live.classList.toggle('is-unavailable', fallback);
     const paused = state.paused || state.reducedMotion;
     live.querySelector('span:last-child')!.textContent = fallback ? tr('fallbackUnavailable') : paused ? tr('pausedStatus') : tr('live');
@@ -1021,6 +1053,18 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
     if (nextDetailKey !== detailKey) {
       detailKey = nextDetailKey;
       renderDetail();
+    }
+    if (state.selection?.kind === 'walker' && walkerLiveFields) {
+      const snapshot = resolveWalker(state.selection.walkerId);
+      const flow = snapshot && flowFor(snapshot.flowId);
+      if (snapshot && flow) {
+        const destination = snapshot.direction === 1 ? islandFor(flow.to) : islandFor(flow.from);
+        setText(walkerLiveFields.status, `${tr('walkerStatus')}: ${tr(snapshot.status === 'moving' ? 'walkerMoving' : 'walkerWaiting')}`);
+        setText(walkerLiveFields.destination, `${tr('destination')}: ${localized(destination?.title ?? { zh: tr('noWalkerDestination'), en: tr('noWalkerDestination') })}`);
+      } else {
+        setText(walkerLiveFields.status, `${tr('walkerStatus')}: ${tr('walkerStatusUnavailable')}`);
+        setText(walkerLiveFields.destination, `${tr('destination')}: ${tr('noWalkerDestination')}`);
+      }
     }
     setText(hudTime, minuteLabel(state.minute));
     for (const preset of PRESETS) {
@@ -1117,8 +1161,8 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
   searchInput.addEventListener('input', () => callbacks.onCommand({ type: 'query', query: searchInput.value }), { signal: abort.signal });
   chapterSelect.addEventListener('change', () => callbacks.onCommand({ type: 'chapter', chapter: (chapterSelect.value || null) as ChapterFilter }), { signal: abort.signal });
   journalSelect.addEventListener('change', () => callbacks.onCommand({ type: 'journalFilter', flowId: journalSelect.value || null }), { signal: abort.signal });
-  root.addEventListener('keydown', event => {
-    if (event.key !== 'Escape' || !active) return;
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape' || !active || document.querySelector('dialog[open]')) return;
     if (state?.detailOpen) {
       event.preventDefault();
       event.stopPropagation();

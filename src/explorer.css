@@ -203,6 +203,7 @@
 .explorer-curator-caption,
 .explorer-rationale,
 .explorer-walker-summary,
+.explorer-walker-status,
 .explorer-destination,
 .explorer-editorial-note,
 .explorer-original-note {
@@ -1535,6 +1536,10 @@
   }
 
   .explorer-list-head {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     padding: 10px 14px 11px;
   }
 
