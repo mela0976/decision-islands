@@ -25,7 +25,7 @@ npm run dev -- --port 4173
 
 另開終端機執行 `npm run test:e2e`。瀏覽器測試需要 Playwright Chromium，首次可執行 `npx playwright install chromium`。產物在 `dist`。GitHub Actions 在 main 更新時建置並發布 GitHub Pages。
 
-執行 `node tests/visual-motion.mjs`，驗證首頁閒置後持續慢轉、暫停、恢復及略過轉場。兩個瀏覽器腳本均接受 `TEST_URL` 環境變數，可驗證正式網站。首頁書樹每150秒旋轉一圈，進場約6.5秒；系統減少動態與畫面上的動態按鈕可停止動畫。
+執行 `node tests/visual-motion.mjs`，驗證首頁閒置後持續慢轉、暫停、恢復、略過轉場，以及慢畫格仍能完成進場。兩個瀏覽器腳本均接受 `TEST_URL` 環境變數，可驗證正式網站。首頁書樹每150秒旋轉一圈，進場約6.5秒；系統減少動態與畫面上的動態按鈕可停止動畫。
 
 ## 內容與出處
 

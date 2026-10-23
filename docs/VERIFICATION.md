@@ -56,3 +56,11 @@ reviewed by gpt-6-astra。
 - 正式網址 https://mela0976.github.io/decision-islands/ 重跑7組瀏覽器情境與4項動態檢查全部通過，沒有page errors。
 - 正式HTML、JavaScript與CSS均與本機dist逐位元相同。index.html SHA256為 `f5afb55803ae2a951d1ae3c27acab8be47bbddbc4b736cf1a836d5b070a50ea6`。
 - 正式瀏覽器畫面與檢查結果保留在本機test-results。這份發布讀回為docs-only提交，未改變網站工件。
+
+## 書牆、材質與自然採光調整
+
+2026-10-23追加需求。改為連續圓弧層板及木立板；書籍使用獨立封皮與內頁體積、不同尺寸與成群排列。新增同UV的色彩、凹凸與粗糙度圖集，暖木色與紙白書本取代原本一致金邊圖樣。環境反射與日光只用於圖書館，離開後恢復群島曝光。
+
+獨立Astra檢查貼圖色彩空間、UV、索引、法線、旋轉及資源釋放通過；Sol以101組輸入檢查刪除共面書皮後的可見屬性一致。這些檢查不代表實體GPU效能或攝影級外觀。後製AO試作未通過入口驗收，已移除；最終版使用原生渲染。前景時間不再截斷為每幀0.1秒，避免慢畫格延長轉場，背景與暫停仍重設時間基準。
+
+最終本機 `npm test` 10項、`npm run build`、`npm run test:e2e` 7組情境，以及 `node tests/visual-motion.mjs` 5項均通過。慢畫格情境以220毫秒延後animation callbacks，仍須在12秒驗收上限內抵達群島。這是入口行為回歸，不是FPS基準測試。桌面1440×1000與手機390×844尺寸已檢查，沒有page errors；實體手機及其他瀏覽器未驗證。

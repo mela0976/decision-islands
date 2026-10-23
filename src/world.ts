@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import './world.css';
 import { createLibraryScene } from './library-scene';
 import { ENTRANCE_DURATION_MS, sampleEntrance } from './entrance';
@@ -30,6 +31,7 @@ export function createWorld(container: HTMLElement, options: Options) {
   let finishEnter: (() => void) | undefined;
   let enterPromise: Promise<void> | undefined;
   let renderer: THREE.WebGLRenderer | undefined;
+  let libraryEnvironment: THREE.WebGLRenderTarget | undefined;
   let dragging = false;
   let dragX = 0;
   let angle = 0;
@@ -336,12 +338,15 @@ export function createWorld(container: HTMLElement, options: Options) {
   const render = () => {
     if (phase === 'disposed') return;
     positionLabels();
+    scene.environment = library.visible ? libraryEnvironment?.texture ?? null : null;
+    scene.environmentIntensity = .18;
+    if (renderer) renderer.toneMappingExposure = library.visible ? 1 : 1.12;
     renderer?.render(scene, activeCamera);
   };
   const tick = (now: number) => {
     frame = 0;
     if (phase === 'disposed' || document.hidden || !visible) return;
-    const delta = lastTick ? Math.min(.1, Math.max(0, (now - lastTick) / 1000)) : 0;
+    const delta = lastTick ? Math.max(0, (now - lastTick) / 1000) : 0;
     lastTick = now;
     if (enabled && library.visible) libraryScene.update(delta);
     if (phase === 'transition') {
@@ -422,10 +427,16 @@ export function createWorld(container: HTMLElement, options: Options) {
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'low-power' });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.7));
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.12;
+    const environment = new RoomEnvironment();
+    const environmentGenerator = new THREE.PMREMGenerator(renderer);
+    libraryEnvironment = environmentGenerator.fromScene(environment, .04);
+    environment.traverse(object => { if (object instanceof THREE.InstancedMesh) object.dispose(); });
+    environment.dispose();
+    environmentGenerator.dispose();
     renderer.domElement.setAttribute('aria-hidden', 'true');
     root.prepend(renderer.domElement);
     renderer.domElement.addEventListener('pointerdown', pointerDown);
@@ -525,6 +536,7 @@ export function createWorld(container: HTMLElement, options: Options) {
       for (const mat of mats.values()) mat.dispose();
       linkMaterial.dispose(); rippleMaterial.dispose();
       (stars.material as THREE.Material).dispose(); sailMesh.material.dispose();
+      libraryEnvironment?.dispose();
       renderer?.dispose();
       root.remove();
       finishEnter?.();

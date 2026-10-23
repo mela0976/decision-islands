@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { treeRotationForElapsed } from './entrance';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { createLibraryTextures } from './library-materials';
 
 type BookPlacement = {
   x: number;
@@ -33,26 +35,11 @@ type BoxPlacement = {
   scale: THREE.Vector3;
 };
 type Beam = { start: THREE.Vector3; end: THREE.Vector3; width: number; height: number };
-type GeometryBuffers = {
-  positions: Float32Array;
-  normals: Float32Array;
-  uvs: Float32Array;
-  colors: Float32Array;
-  indices: Uint32Array;
-};
-
 const ATLAS_COLUMNS = 8;
 const ATLAS_ROWS = 8;
 const ATLAS_COVER_START = 0;
 const ATLAS_SPINE_START = 32;
 const ATLAS_PAPER_START = 56;
-const BOOK_COLORS = [
-  '#a9442d', '#c2642d', '#d39646', '#62463a', '#566f58', '#3f5f60', '#753d44', '#d3c09a',
-  '#435c75', '#90784b', '#9c643b', '#597d78', '#b05a45', '#7f604c', '#c09a56', '#4d536a',
-  '#7b4633', '#bd783d', '#52664e', '#375566', '#a88159', '#6a4148', '#dfba70', '#65777a',
-  '#8c6f50', '#425143', '#a74635', '#586e86', '#c78350', '#77634a', '#45716b', '#d6c8ae',
-];
-
 export function createLibraryScene(): {
   group: THREE.Group;
   tree: THREE.Group;
@@ -68,7 +55,6 @@ export function createLibraryScene(): {
 
   const geometries = new Set<THREE.BufferGeometry>();
   const materials = new Set<THREE.Material>();
-  const textures = new Set<THREE.Texture>();
   const ownGeometry = <T extends THREE.BufferGeometry>(geometry: T): T => {
     geometries.add(geometry);
     return geometry;
@@ -77,130 +63,33 @@ export function createLibraryScene(): {
     materials.add(material);
     return material;
   };
-  const ownTexture = <T extends THREE.Texture>(texture: T): T => {
-    textures.add(texture);
-    return texture;
-  };
-  const makeTexture = (draw: (context: CanvasRenderingContext2D) => void): THREE.CanvasTexture => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 1024;
-    canvas.height = 1024;
-    const context = canvas.getContext('2d');
-    if (!context) throw new Error('Canvas texture creation is unavailable.');
-    draw(context);
-    const texture = ownTexture(new THREE.CanvasTexture(canvas));
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.anisotropy = 4;
-    return texture;
-  };
-  const woodTexture = makeTexture((context) => {
-    context.fillStyle = '#b76c35';
-    context.fillRect(0, 0, 1024, 1024);
-    const random = seededRandom(41);
-    for (let row = 0; row < 14; row++) {
-      const y = row * 74;
-      const tone = row % 3 === 0 ? '#c77a3c' : row % 3 === 1 ? '#aa5e30' : '#bd7138';
-      context.fillStyle = tone;
-      context.globalAlpha = 0.38;
-      context.fillRect(0, y, 1024, 72);
-      context.globalAlpha = 1;
-      context.strokeStyle = '#7f482b';
-      context.lineWidth = 2;
-      context.beginPath();
-      context.moveTo(0, y + 72);
-      context.lineTo(1024, y + 72);
-      context.stroke();
-    }
-    for (let line = 0; line < 240; line++) {
-      const x = random() * 1024;
-      const y = random() * 1024;
-      const length = 18 + random() * 220;
-      context.strokeStyle = random() > 0.5 ? '#e6a45a' : '#713f28';
-      context.globalAlpha = 0.08 + random() * 0.17;
-      context.lineWidth = 0.5 + random() * 2.2;
-      context.beginPath();
-      context.moveTo(x, y);
-      context.bezierCurveTo(x + 5, y + length * 0.28, x - 4, y + length * 0.72, x + 2, y + length);
-      context.stroke();
-    }
-    for (let knot = 0; knot < 7; knot++) {
-      const x = 45 + random() * 930;
-      const y = 40 + random() * 940;
-      context.strokeStyle = '#774329';
-      context.globalAlpha = 0.2;
-      context.lineWidth = 2;
-      context.beginPath();
-      context.ellipse(x, y, 5 + random() * 6, 15 + random() * 17, random() * 0.25, 0, Math.PI * 2);
-      context.stroke();
-    }
-    context.globalAlpha = 1;
-  });
-  woodTexture.wrapS = THREE.RepeatWrapping;
-  woodTexture.wrapT = THREE.RepeatWrapping;
-  woodTexture.repeat.set(2, 4);
-
-  const floorTexture = makeTexture((context) => {
-    const random = seededRandom(87);
-    context.fillStyle = '#ded2bd';
-    context.fillRect(0, 0, 1024, 1024);
-    for (let row = 0; row < 8; row++) {
-      for (let column = 0; column < 8; column++) {
-        const x = column * 128;
-        const y = row * 128;
-        const light = Math.round(157 + random() * 17);
-        context.fillStyle = `rgb(${light + 22}, ${light + 10}, ${light - 3})`;
-        context.fillRect(x + 2, y + 2, 124, 124);
-        context.strokeStyle = 'rgba(91, 76, 58, .075)';
-        context.lineWidth = 1;
-        context.strokeRect(x + 3, y + 3, 122, 122);
-      }
-    }
-    for (let fleck = 0; fleck < 1600; fleck++) {
-      const tone = random() > 0.5 ? 'rgba(255, 245, 225, .16)' : 'rgba(94, 77, 58, .055)';
-      context.fillStyle = tone;
-      context.fillRect(random() * 1024, random() * 1024, 1 + random() * 3, 1 + random() * 2);
-    }
-  });
-
-  const bookAtlas = makeTexture((context) => {
-    const cell = 128;
-    const random = seededRandom(2026);
-    for (let variant = 0; variant < 32; variant++) {
-      const x = (variant % ATLAS_COLUMNS) * cell;
-      const y = Math.floor(variant / ATLAS_COLUMNS) * cell;
-      drawCoverTile(context, x, y, cell, variant, random);
-    }
-    for (let variant = 0; variant < 24; variant++) {
-      const tile = ATLAS_SPINE_START + variant;
-      const x = (tile % ATLAS_COLUMNS) * cell;
-      const y = Math.floor(tile / ATLAS_COLUMNS) * cell;
-      drawSpineTile(context, x, y, cell, variant);
-    }
-    for (let variant = 0; variant < 8; variant++) {
-      const tile = ATLAS_PAPER_START + variant;
-      const x = (tile % ATLAS_COLUMNS) * cell;
-      const y = Math.floor(tile / ATLAS_COLUMNS) * cell;
-      drawPageTile(context, x, y, cell, variant);
-    }
-  });
+  const surfaceTextures = createLibraryTextures();
+  const woodTexture = surfaceTextures.wood;
+  const floorTexture = surfaceTextures.floor;
+  const bookAtlas = surfaceTextures.books;
 
   const woodMaterial = ownMaterial(new THREE.MeshStandardMaterial({
-    color: 0xd07b3d,
+    color: 0xd4ba95,
     map: woodTexture,
-    bumpMap: woodTexture,
-    bumpScale: 0.025,
+    bumpMap: surfaceTextures.woodBump,
+    bumpScale: 0.012,
     roughness: 0.68,
     metalness: 0.035,
   }));
   const shelfMaterial = ownMaterial(new THREE.MeshStandardMaterial({
-    color: 0xf0b366,
+    color: 0xe0c7a2,
     map: woodTexture,
-    roughness: 0.48,
-    metalness: 0.12,
+    bumpMap: surfaceTextures.woodBump,
+    bumpScale: 0.008,
+    roughness: 0.62,
+    metalness: 0.015,
   }));
   const bookMaterial = ownMaterial(new THREE.MeshStandardMaterial({
     color: 0xffffff,
     map: bookAtlas,
+    bumpMap: surfaceTextures.bookBump,
+    bumpScale: 0.008,
+    roughnessMap: surfaceTextures.bookRoughness,
     vertexColors: true,
     roughness: 0.78,
     metalness: 0.015,
@@ -208,6 +97,8 @@ export function createLibraryScene(): {
   const floorMaterial = ownMaterial(new THREE.MeshStandardMaterial({
     color: 0xf1e6d2,
     map: floorTexture,
+    bumpMap: surfaceTextures.floorBump,
+    bumpScale: 0.005,
     roughness: 0.58,
     metalness: 0.035,
   }));
@@ -265,17 +156,6 @@ export function createLibraryScene(): {
     roughness: 0.22,
     metalness: 0.48,
   }));
-  const figureMaterial = ownMaterial(new THREE.MeshStandardMaterial({
-    color: 0x263a3a,
-    roughness: 0.86,
-    metalness: 0.02,
-  }));
-  const skinMaterial = ownMaterial(new THREE.MeshStandardMaterial({
-    color: 0xd4a47d,
-    roughness: 0.82,
-    metalness: 0,
-  }));
-
   const floor = new THREE.Mesh(ownGeometry(new THREE.PlaneGeometry(50, 49)), floorMaterial);
   floor.name = 'polished-stone-floor';
   floor.rotation.x = -Math.PI / 2;
@@ -284,90 +164,124 @@ export function createLibraryScene(): {
   group.add(floor);
 
   const walls: BookWall[] = [
-    { x: -15.1, z: -5.2, halfWidth: 6.9, halfDepth: 9.6, radius: 4.55, height: 15.6, levels: 26, spacing: 0.29, seed: 112 },
-    { x: 15.1, z: -5.2, halfWidth: 6.9, halfDepth: 9.6, radius: 4.55, height: 15.6, levels: 26, spacing: 0.29, seed: 923 },
+    { x: -15.1, z: -5.4, halfWidth: 6.9, halfDepth: 9.6, radius: 4.55, height: 15.6, levels: 26, spacing: 0.145, seed: 112 },
+    { x: 15.4, z: -5.85, halfWidth: 7.05, halfDepth: 9.8, radius: 4.9, height: 15.45, levels: 26, spacing: 0.145, seed: 923 },
   ];
   const wallBookPlacements: BookPlacement[] = [];
-  const shelfPlacements: BoxPlacement[] = [];
   const structuralPlacements: BoxPlacement[] = [];
+  const shelfParts: THREE.BufferGeometry[] = [];
   for (const wall of walls) {
     const samples = roundedRectangleSamples(wall, wall.spacing);
     const random = seededRandom(wall.seed);
     const footprint = roundedRectangleShape(wall.halfWidth, wall.halfDepth, wall.radius);
     const bodyGeometry = ownGeometry(new THREE.ExtrudeGeometry(footprint, {
-      depth: wall.height,
-      bevelEnabled: false,
-      curveSegments: 12,
-      steps: 1,
+      depth: wall.height, bevelEnabled: false, curveSegments: 40, steps: 1,
     }));
     bodyGeometry.rotateX(-Math.PI / 2);
     bodyGeometry.translate(wall.x, 0, wall.z);
     const body = new THREE.Mesh(bodyGeometry, woodMaterial);
-    body.name = 'rounded-timber-bookwall-core';
+    body.name = 'continuous-timber-bookwall-backing';
     body.castShadow = true;
     body.receiveShadow = true;
     group.add(body);
 
-    for (let level = 0; level < wall.levels; level++) {
+    for (let level = 0; level <= wall.levels; level++) {
       const shelfY = 0.34 + level * 0.58;
+      const outer = roundedRectangleShape(wall.halfWidth + 0.56, wall.halfDepth + 0.56, wall.radius + 0.56);
+      const inner = roundedRectangleShape(wall.halfWidth - 0.02, wall.halfDepth - 0.02, wall.radius - 0.02);
+      outer.holes.push(inner);
+      const shelf = new THREE.ExtrudeGeometry(outer, {
+        depth: level === wall.levels ? 0.12 : 0.065,
+        bevelEnabled: true, bevelSegments: 1, bevelThickness: 0.008, bevelSize: 0.008,
+        curveSegments: 40, steps: 1,
+      });
+      shelf.rotateX(-Math.PI / 2);
+      shelf.translate(wall.x, shelfY - 0.065, wall.z);
+      shelfParts.push(shelf);
+      if (level === wall.levels) continue;
+      let clusterRemaining = 0;
+      let clusterVariant = 0;
+      let clusterHeight = 0.4;
       for (let index = 0; index < samples.length; index++) {
-        const sample = samples[(index + (level % 2 ? Math.floor(samples.length / 2) : 0)) % samples.length];
-        const variation = random();
-        const width = sample.spacing * (0.7 + random() * 0.28);
-        const height = 0.38 + random() * 0.15;
-        const depth = 0.3 + random() * 0.12;
+        const sample = samples[index];
+        const viewFacing = sample.nx * (-wall.x - sample.x) + sample.nz * (25 - wall.z - sample.z);
+        if (viewFacing < -0.5 || sample.nz < -0.02) continue;
+        if (clusterRemaining <= 0) {
+          clusterRemaining = 3 + Math.floor(random() * 8);
+          clusterVariant = Math.floor(random() * 32);
+          clusterHeight = 0.32 + random() * 0.16;
+        }
+        clusterRemaining--;
         const yaw = Math.atan2(sample.nx, sample.nz);
-        const radialOffset = depth * 0.47;
+        const inGap = (index + level * 7) % 43;
+        if (inGap >= 35 && level % 3 === 0) {
+          if (inGap === 37) {
+            for (let stack = 0; stack < 4; stack++) {
+              wallBookPlacements.push({
+                x: wall.x + sample.x + sample.nx * 0.24,
+                y: shelfY + 0.038 + stack * 0.072,
+                z: wall.z + sample.z + sample.nz * 0.24,
+                width: 0.39 + random() * 0.06, height: 0.064, depth: 0.28 + random() * 0.05,
+                yaw: yaw + (random() - 0.5) * 0.15, tiltX: 0, tiltZ: 0,
+                variant: Math.floor(random() * 32), tint: 0.88 + random() * 0.1,
+              });
+            }
+          }
+          continue;
+        }
+        if (inGap > 38 || random() < 0.025) continue;
+        const width = sample.spacing * (0.69 + random() * 0.25);
+        const height = Math.min(0.52, clusterHeight + (random() - 0.5) * 0.1);
+        const depth = 0.25 + random() * 0.16;
+        const leaning = clusterRemaining === 0 ? (random() > 0.5 ? 0.13 : -0.1) : (random() - 0.5) * 0.035;
+        const radialOffset = depth / 2 + 0.045 + random() * 0.07;
         wallBookPlacements.push({
           x: wall.x + sample.x + sample.nx * radialOffset,
-          y: shelfY + height / 2,
+          y: shelfY + height / 2 + Math.abs(Math.sin(leaning)) * width / 2,
           z: wall.z + sample.z + sample.nz * radialOffset,
-          width,
-          height,
-          depth,
-          yaw,
-          tiltX: (random() - 0.5) * 0.035,
-          tiltZ: (random() - 0.5) * 0.045,
-          variant: Math.floor(random() * 32),
-          tint: 0.93 + variation * 0.09,
+          width, height, depth, yaw,
+          tiltX: (random() - 0.5) * 0.035, tiltZ: leaning,
+          variant: random() < 0.7 ? clusterVariant : Math.floor(random() * 32),
+          tint: 0.82 + random() * 0.2,
         });
-        shelfPlacements.push({
-          position: new THREE.Vector3(wall.x + sample.x + sample.nx * 0.22, shelfY - 0.045, wall.z + sample.z + sample.nz * 0.22),
-          yaw,
-          scale: new THREE.Vector3(sample.spacing + 0.025, 0.075, 0.66),
-        });
+        if (inGap === 36 && level % 3 === 1) {
+          wallBookPlacements.push({
+            x: wall.x + sample.x + sample.nx * 0.39,
+            y: shelfY + 0.23, z: wall.z + sample.z + sample.nz * 0.39,
+            width: 0.055, height: 0.45, depth: 0.31, yaw: yaw + Math.PI / 2,
+            tiltX: -0.08, tiltZ: 0, variant: clusterVariant, tint: 0.94,
+          });
+        }
       }
     }
-
-    const ribFractions = [0.015, 0.255, 0.5, 0.745, 0.985];
-    for (const fraction of ribFractions) {
-      const sample = samples[Math.floor(fraction * (samples.length - 1))];
+    const dividerSamples = roundedRectangleSamples(wall, 1.65);
+    for (const sample of dividerSamples) {
       structuralPlacements.push({
-        position: new THREE.Vector3(wall.x + sample.x + sample.nx * 0.45, wall.height / 2, wall.z + sample.z + sample.nz * 0.45),
+        position: new THREE.Vector3(wall.x + sample.x + sample.nx * 0.26, wall.height / 2, wall.z + sample.z + sample.nz * 0.26),
         yaw: Math.atan2(sample.nx, sample.nz),
-        scale: new THREE.Vector3(0.095, wall.height, 0.11),
+        scale: new THREE.Vector3(0.065, wall.height, 0.52),
       });
     }
-    for (let index = 0; index < samples.length; index += 8) {
-      const sample = samples[index];
-      shelfPlacements.push({
-        position: new THREE.Vector3(wall.x + sample.x + sample.nx * 0.22, wall.height - 0.08, wall.z + sample.z + sample.nz * 0.22),
-        yaw: Math.atan2(sample.nx, sample.nz),
-        scale: new THREE.Vector3(sample.spacing * 7.8, 0.16, 0.76),
-      });
-    }
+  }
+  const shelfGeometry = mergeGeometries(shelfParts, false);
+  for (const part of shelfParts) part.dispose();
+  if (shelfGeometry) {
+    const shelves = new THREE.Mesh(ownGeometry(shelfGeometry), shelfMaterial);
+    shelves.name = 'continuous-smooth-curved-shelf-bands';
+    shelves.castShadow = true;
+    shelves.receiveShadow = true;
+    group.add(shelves);
   }
   const wallBooks = new THREE.Mesh(createBookGeometry(wallBookPlacements, ownGeometry), bookMaterial);
   wallBooks.name = 'individual-books-on-curved-walls';
   wallBooks.castShadow = true;
   wallBooks.receiveShadow = true;
   group.add(wallBooks);
-  addBoxInstances(group, shelfPlacements, ownGeometry(new THREE.BoxGeometry(1, 1, 1)), shelfMaterial, true);
-  addBoxInstances(group, structuralPlacements, ownGeometry(new THREE.BoxGeometry(1, 1, 1)), brassMaterial, true);
+  addBoxInstances(group, structuralPlacements, ownGeometry(new THREE.BoxGeometry(1, 1, 1)), shelfMaterial, true);
 
   addCentralAtrium(group, ownGeometry, ownMaterial, glassMaterial, roofGlassMaterial, metalMaterial, darkMetalMaterial, shelfMaterial);
   addEscalator(group, ownGeometry, ownMaterial, darkMetalMaterial, metalMaterial);
-  addReadingScaleFigures(group, ownGeometry, figureMaterial, skinMaterial);
+  addReadingFurniture(group, ownGeometry, ownMaterial, shelfMaterial, darkMetalMaterial);
 
   const plinth = new THREE.Mesh(ownGeometry(new THREE.CylinderGeometry(4.35, 4.48, 0.2, 96)), darkMetalMaterial);
   plinth.name = 'tree-display-plinth';
@@ -387,12 +301,12 @@ export function createLibraryScene(): {
   tree.add(treeBookMesh);
   addTreeDecorations(tree, ownGeometry, ownMaterial, ledMaterial, ornamentMaterial, starMaterial);
 
-  const sky = new THREE.HemisphereLight(0xfff8eb, 0x817361, 1.45);
+  const sky = new THREE.HemisphereLight(0xfff8eb, 0x827563, 0.65);
   sky.name = 'library-ambient-sky';
   group.add(sky);
-  const daylight = new THREE.DirectionalLight(0xfff7e8, 2.25);
+  const daylight = new THREE.DirectionalLight(0xfff3da, 3.1);
   daylight.name = 'library-glass-atrium-daylight';
-  daylight.position.set(-14, 24, -9);
+  daylight.position.set(-15, 23, 14);
   daylight.target.position.set(0, 6, 1);
   daylight.castShadow = true;
   daylight.shadow.mapSize.set(1536, 1536);
@@ -404,10 +318,10 @@ export function createLibraryScene(): {
   daylight.shadow.camera.far = 58;
   daylight.shadow.normalBias = 0.055;
   daylight.shadow.bias = -0.00018;
-  daylight.shadow.intensity = 0.24;
+  daylight.shadow.intensity = 0.65;
   daylight.shadow.radius = 5;
   group.add(daylight, daylight.target);
-  const frontFill = new THREE.DirectionalLight(0xf3f8f7, 1.25);
+  const frontFill = new THREE.DirectionalLight(0xe8f2fb, 0.3);
   frontFill.name = 'library-soft-front-fill';
   frontFill.position.set(9, 13, 26);
   group.add(frontFill);
@@ -437,10 +351,10 @@ export function createLibraryScene(): {
     group.clear();
     for (const geometry of geometries) geometry.dispose();
     for (const material of materials) material.dispose();
-    for (const texture of textures) texture.dispose();
+    surfaceTextures.dispose();
     geometries.clear();
     materials.clear();
-    textures.clear();
+
   };
   return { group, tree, update, dispose };
 }
@@ -456,98 +370,6 @@ function seededRandom(seed: number): () => number {
   };
 }
 
-function drawCoverTile(context: CanvasRenderingContext2D, x: number, y: number, cell: number, variant: number, random: () => number): void {
-  const color = BOOK_COLORS[variant];
-  const gold = variant % 3 === 0 ? '#ecd18d' : '#dcb974';
-  context.fillStyle = color;
-  context.fillRect(x, y, cell, cell);
-  context.strokeStyle = 'rgba(35, 25, 20, .42)';
-  context.lineWidth = 4;
-  context.strokeRect(x + 3, y + 3, cell - 6, cell - 6);
-  context.fillStyle = gold;
-  context.globalAlpha = 0.78;
-  context.fillRect(x + 15, y + 16, 98, 3);
-  context.fillRect(x + 15, y + 109, 98, 3);
-  context.globalAlpha = 1;
-  context.strokeStyle = `${gold}b8`;
-  context.lineWidth = 2;
-  context.strokeRect(x + 19, y + 26, 90, 75);
-  context.fillStyle = `${gold}d8`;
-  if (variant % 4 === 0) {
-    context.beginPath();
-    context.arc(x + 64, y + 61, 20 + random() * 7, 0, Math.PI * 2);
-    context.strokeStyle = gold;
-    context.stroke();
-    context.beginPath();
-    context.moveTo(x + 38, y + 82);
-    context.lineTo(x + 64, y + 41);
-    context.lineTo(x + 90, y + 82);
-    context.closePath();
-    context.fill();
-  } else if (variant % 4 === 1) {
-    for (let line = 0; line < 5; line++) context.fillRect(x + 31, y + 42 + line * 9, 66 - line * 3, 2);
-  } else if (variant % 4 === 2) {
-    context.fillRect(x + 39, y + 39, 50, 44);
-    context.clearRect(x + 46, y + 46, 36, 30);
-    context.strokeStyle = gold;
-    context.strokeRect(x + 46, y + 46, 36, 30);
-  } else {
-    context.beginPath();
-    context.moveTo(x + 64, y + 36);
-    context.lineTo(x + 89, y + 63);
-    context.lineTo(x + 64, y + 89);
-    context.lineTo(x + 39, y + 63);
-    context.closePath();
-    context.strokeStyle = gold;
-    context.stroke();
-  }
-  context.font = 'bold 9px Georgia, serif';
-  context.fillStyle = '#f4e6c8';
-  context.textAlign = 'center';
-  context.fillText(`VOL. ${String(variant + 1).padStart(2, '0')}`, x + 64, y + 99);
-}
-
-function drawSpineTile(context: CanvasRenderingContext2D, x: number, y: number, cell: number, variant: number): void {
-  const color = BOOK_COLORS[(variant * 5 + 3) % BOOK_COLORS.length];
-  const gold = variant % 2 === 0 ? '#f1d294' : '#e0b86e';
-  context.fillStyle = color;
-  context.fillRect(x, y, cell, cell);
-  context.fillStyle = 'rgba(28, 22, 20, .24)';
-  context.fillRect(x + 2, y + 2, 5, cell - 4);
-  context.fillStyle = gold;
-  context.fillRect(x + 13, y + 12, cell - 26, 3);
-  context.fillRect(x + 13, y + cell - 15, cell - 26, 3);
-  context.fillRect(x + 20, y + 21, cell - 40, 2);
-  context.fillRect(x + 20, y + cell - 23, cell - 40, 2);
-  context.save();
-  context.translate(x + cell / 2, y + cell / 2);
-  context.rotate(-Math.PI / 2);
-  context.fillStyle = '#f8e9c8';
-  context.textAlign = 'center';
-  context.textBaseline = 'middle';
-  context.font = 'bold 13px Georgia, serif';
-  context.fillText(`${['FOLIO', 'STUDY', 'ATLAS', 'NOTES'][variant % 4]} ${String(variant + 1).padStart(2, '0')}`, 0, 0);
-  context.restore();
-  for (let line = 0; line < 3; line++) {
-    context.fillStyle = line === 1 ? '#f4e5c4' : gold;
-    context.globalAlpha = 0.55;
-    context.fillRect(x + 27, y + 42 + line * 7, 74 - (line % 2) * 17, 1.6);
-  }
-  context.globalAlpha = 1;
-}
-
-function drawPageTile(context: CanvasRenderingContext2D, x: number, y: number, cell: number, variant: number): void {
-  context.fillStyle = ['#eadcc1', '#e7d6b9', '#f0e3ca', '#dcccae'][variant % 4];
-  context.fillRect(x, y, cell, cell);
-  context.fillStyle = 'rgba(139, 104, 68, .22)';
-  context.fillRect(x + 11, y + 7, 2, cell - 14);
-  context.fillStyle = 'rgba(112, 91, 72, .28)';
-  for (let line = 0; line < 14; line++) {
-    const width = 78 + ((line * 17 + variant * 11) % 33);
-    context.fillRect(x + 24, y + 12 + line * 8, width, 1.3);
-  }
-}
-
 function atlasUv(tile: number, u: number, v: number): [number, number] {
   const column = tile % ATLAS_COLUMNS;
   const row = Math.floor(tile / ATLAS_COLUMNS);
@@ -560,87 +382,66 @@ function atlasUv(tile: number, u: number, v: number): [number, number] {
 }
 
 function createBookGeometry(books: BookPlacement[], ownGeometry: <T extends THREE.BufferGeometry>(geometry: T) => T): THREE.BufferGeometry {
-  const vertexCount = books.length * 24;
+  const vertexCount = books.length * 68;
   const positions = new Float32Array(vertexCount * 3);
   const normals = new Float32Array(vertexCount * 3);
   const uvs = new Float32Array(vertexCount * 2);
   const colors = new Float32Array(vertexCount * 3);
-  const indices = new Uint32Array(books.length * 36);
-  const localX = new THREE.Vector3();
-  const localY = new THREE.Vector3();
-  const localZ = new THREE.Vector3();
-  const normal = new THREE.Vector3();
+  const indices = new Uint32Array(books.length * 102);
   const quaternion = new THREE.Quaternion();
+  const point = new THREE.Vector3();
+  const normal = new THREE.Vector3();
   let vertexOffset = 0;
   let indexOffset = 0;
-
-  const appendFace = (book: BookPlacement, corners: THREE.Vector3[], faceNormal: THREE.Vector3, tile: number) => {
-    normal.copy(faceNormal).applyQuaternion(quaternion).normalize();
-    const faceUvs = [[0, 0], [1, 0], [1, 1], [0, 1]] as const;
+  const appendFace = (book: BookPlacement, corners: number[][], faceNormal: number[], tile: number, shade = 1) => {
+    normal.set(faceNormal[0], faceNormal[1], faceNormal[2]).applyQuaternion(quaternion);
+    const faceUvs = [[0, 0], [1, 0], [1, 1], [0, 1]];
     for (let corner = 0; corner < 4; corner++) {
-      const point = corners[corner].clone().applyQuaternion(quaternion);
-      positions[(vertexOffset + corner) * 3] = book.x + point.x;
-      positions[(vertexOffset + corner) * 3 + 1] = book.y + point.y;
-      positions[(vertexOffset + corner) * 3 + 2] = book.z + point.z;
-      normals[(vertexOffset + corner) * 3] = normal.x;
-      normals[(vertexOffset + corner) * 3 + 1] = normal.y;
-      normals[(vertexOffset + corner) * 3 + 2] = normal.z;
-      const [u, v] = atlasUv(tile, faceUvs[corner][0], faceUvs[corner][1]);
-      uvs[(vertexOffset + corner) * 2] = u;
-      uvs[(vertexOffset + corner) * 2 + 1] = v;
-      colors[(vertexOffset + corner) * 3] = book.tint;
-      colors[(vertexOffset + corner) * 3 + 1] = book.tint;
-      colors[(vertexOffset + corner) * 3 + 2] = book.tint;
+      point.set(...corners[corner] as [number, number, number]).applyQuaternion(quaternion);
+      positions.set([book.x + point.x, book.y + point.y, book.z + point.z], (vertexOffset + corner) * 3);
+      normals.set([normal.x, normal.y, normal.z], (vertexOffset + corner) * 3);
+      uvs.set(atlasUv(tile, faceUvs[corner][0], faceUvs[corner][1]), (vertexOffset + corner) * 2);
+      const tone = book.tint * shade;
+      colors.set([tone, tone, tone], (vertexOffset + corner) * 3);
     }
-    indices.set([
-      vertexOffset, vertexOffset + 1, vertexOffset + 2,
-      vertexOffset, vertexOffset + 2, vertexOffset + 3,
-    ], indexOffset);
+    indices.set([vertexOffset, vertexOffset + 1, vertexOffset + 2, vertexOffset, vertexOffset + 2, vertexOffset + 3], indexOffset);
     vertexOffset += 4;
     indexOffset += 6;
   };
-
+  const box = (book: BookPlacement, cx: number, cy: number, cz: number, hx: number, hy: number, hz: number, tiles: number[], shade = 1, coveredFront = false) => {
+    const x0 = cx - hx, x1 = cx + hx, y0 = cy - hy, y1 = cy + hy, z0 = cz - hz, z1 = cz + hz;
+    if (!coveredFront) appendFace(book, [[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]], [0,0,1], tiles[0], shade);
+    appendFace(book, [[x1,y0,z0],[x0,y0,z0],[x0,y1,z0],[x1,y1,z0]], [0,0,-1], tiles[1], shade);
+    appendFace(book, [[x1,y0,z1],[x1,y0,z0],[x1,y1,z0],[x1,y1,z1]], [1,0,0], tiles[2], shade);
+    appendFace(book, [[x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0]], [-1,0,0], tiles[3], shade);
+    appendFace(book, [[x0,y1,z1],[x1,y1,z1],[x1,y1,z0],[x0,y1,z0]], [0,1,0], tiles[4], shade);
+    appendFace(book, [[x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1]], [0,-1,0], tiles[5], shade);
+  };
   for (const book of books) {
     quaternion.setFromEuler(new THREE.Euler(book.tiltX, book.yaw, book.tiltZ, 'YXZ'));
-    const hx = book.width / 2;
-    const hy = book.height / 2;
-    const hz = book.depth / 2;
-    localX.set(1, 0, 0);
-    localY.set(0, 1, 0);
-    localZ.set(0, 0, 1);
-    appendFace(book, [
-      new THREE.Vector3(-hx, -hy, hz), new THREE.Vector3(hx, -hy, hz),
-      new THREE.Vector3(hx, hy, hz), new THREE.Vector3(-hx, hy, hz),
-    ], localZ, ATLAS_SPINE_START + book.variant % 24);
-    appendFace(book, [
-      new THREE.Vector3(hx, -hy, -hz), new THREE.Vector3(-hx, -hy, -hz),
-      new THREE.Vector3(-hx, hy, -hz), new THREE.Vector3(hx, hy, -hz),
-    ], localZ.clone().negate(), ATLAS_COVER_START + (book.variant + 11) % 32);
-    appendFace(book, [
-      new THREE.Vector3(hx, -hy, hz), new THREE.Vector3(hx, -hy, -hz),
-      new THREE.Vector3(hx, hy, -hz), new THREE.Vector3(hx, hy, hz),
-    ], localX, ATLAS_PAPER_START + book.variant % 8);
-    appendFace(book, [
-      new THREE.Vector3(-hx, -hy, -hz), new THREE.Vector3(-hx, -hy, hz),
-      new THREE.Vector3(-hx, hy, hz), new THREE.Vector3(-hx, hy, -hz),
-    ], localX.clone().negate(), ATLAS_PAPER_START + (book.variant + 3) % 8);
-    appendFace(book, [
-      new THREE.Vector3(-hx, hy, hz), new THREE.Vector3(hx, hy, hz),
-      new THREE.Vector3(hx, hy, -hz), new THREE.Vector3(-hx, hy, -hz),
-    ], localY, ATLAS_COVER_START + book.variant % 32);
-    appendFace(book, [
-      new THREE.Vector3(-hx, -hy, -hz), new THREE.Vector3(hx, -hy, -hz),
-      new THREE.Vector3(hx, -hy, hz), new THREE.Vector3(-hx, -hy, hz),
-    ], localY.clone().negate(), ATLAS_COVER_START + (book.variant + 17) % 32);
+    const hx = book.width / 2, hy = book.height / 2, hz = book.depth / 2;
+    const cover = ATLAS_COVER_START + book.variant % 32;
+    const spine = ATLAS_SPINE_START + book.variant % 24;
+    const paper = ATLAS_PAPER_START + book.variant % 8;
+    const horizontal = book.width > book.height * 1.8;
+    const board = horizontal ? Math.min(0.012, book.height * 0.09) : Math.min(0.008, book.width * 0.14);
+    if (horizontal) {
+      box(book, 0, 0, -0.004, hx - 0.012, hy - board * 2, hz - 0.014, [paper,paper,paper,paper,paper,paper], 0.94);
+      box(book, 0, hy - board / 2, 0, hx, board / 2, hz, [cover,cover,cover,cover,cover,cover], 1, true);
+      box(book, 0, -hy + board / 2, 0, hx, board / 2, hz, [cover,cover,cover,cover,cover,cover], 1, true);
+    } else {
+      box(book, 0, 0, -0.005, Math.max(0.01, hx - board * 2), hy - 0.009, hz - 0.015, [paper,paper,paper,paper,paper,paper], 0.94);
+      box(book, hx - board / 2, 0, 0, board / 2, hy, hz, [cover,cover,cover,cover,cover,cover], 1, true);
+      box(book, -hx + board / 2, 0, 0, board / 2, hy, hz, [cover,cover,cover,cover,cover,cover], 1, true);
+    }
+    appendFace(book, [[-hx,-hy,hz],[hx,-hy,hz],[hx,hy,hz],[-hx,hy,hz]], [0,0,1], spine, 0.94);
   }
-
   const geometry = ownGeometry(new THREE.BufferGeometry());
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
   geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-  geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
   return geometry;
 }
@@ -649,13 +450,13 @@ function roundedRectangleShape(halfWidth: number, halfDepth: number, radius: num
   const shape = new THREE.Shape();
   shape.moveTo(-halfWidth + radius, halfDepth);
   shape.lineTo(halfWidth - radius, halfDepth);
-  shape.quadraticCurveTo(halfWidth, halfDepth, halfWidth, halfDepth - radius);
+  shape.absarc(halfWidth - radius, halfDepth - radius, radius, Math.PI / 2, 0, true);
   shape.lineTo(halfWidth, -halfDepth + radius);
-  shape.quadraticCurveTo(halfWidth, -halfDepth, halfWidth - radius, -halfDepth);
+  shape.absarc(halfWidth - radius, -halfDepth + radius, radius, 0, -Math.PI / 2, true);
   shape.lineTo(-halfWidth + radius, -halfDepth);
-  shape.quadraticCurveTo(-halfWidth, -halfDepth, -halfWidth, -halfDepth + radius);
+  shape.absarc(-halfWidth + radius, -halfDepth + radius, radius, -Math.PI / 2, -Math.PI, true);
   shape.lineTo(-halfWidth, halfDepth - radius);
-  shape.quadraticCurveTo(-halfWidth, halfDepth, -halfWidth + radius, halfDepth);
+  shape.absarc(-halfWidth + radius, halfDepth - radius, radius, Math.PI, Math.PI / 2, true);
   return shape;
 }
 
@@ -999,33 +800,41 @@ function addEscalator(
   group.add(warmPost);
 }
 
-function addReadingScaleFigures(
+function addReadingFurniture(
   group: THREE.Group,
   ownGeometry: <T extends THREE.BufferGeometry>(geometry: T) => T,
-  figureMaterial: THREE.Material,
-  skinMaterial: THREE.Material,
+  ownMaterial: <T extends THREE.Material>(material: T) => T,
+  timber: THREE.Material,
+  metal: THREE.Material,
 ): void {
-  const placements = [
-    { x: -8.9, y: 0, z: 10.2 }, { x: -6.8, y: 0, z: 11.8 }, { x: 7.6, y: 0, z: 10.7 },
-    { x: 9.5, y: 0, z: 8.8 }, { x: 5.6, y: 0, z: 13.2 }, { x: -4.7, y: 0, z: 14.2 },
-    { x: -6.0, y: 7.86, z: -12.4 }, { x: 5.2, y: 7.86, z: -13.0 },
-  ];
-  const bodies: BoxPlacement[] = [];
-  const heads: BoxPlacement[] = [];
-  for (const person of placements) {
-    bodies.push({
-      position: new THREE.Vector3(person.x, person.y + 0.78, person.z),
-      yaw: 0,
-      scale: new THREE.Vector3(0.27, 0.78, 0.22),
-    });
-    heads.push({
-      position: new THREE.Vector3(person.x, person.y + 1.3, person.z),
-      yaw: 0,
-      scale: new THREE.Vector3(0.24, 0.28, 0.24),
-    });
+  const wood: BoxPlacement[] = [];
+  const legs: BoxPlacement[] = [];
+  const upholstery: BoxPlacement[] = [];
+  const transform = (x: number, z: number, yaw: number, lx: number, y: number, lz: number) => new THREE.Vector3(
+    x + Math.cos(yaw) * lx + Math.sin(yaw) * lz, y,
+    z - Math.sin(yaw) * lx + Math.cos(yaw) * lz,
+  );
+  const tables = [{ x: -6.4, z: 11.5, yaw: 0.15 }, { x: 7.1, z: 8.9, yaw: -0.22 }, { x: 5.8, z: -7.4, yaw: 0.45 }];
+  for (const table of tables) {
+    wood.push({ position: transform(table.x, table.z, table.yaw, 0, 0.79, 0), yaw: table.yaw, scale: new THREE.Vector3(2.15, 0.085, 1.05) });
+    for (const x of [-0.86, 0.86]) for (const z of [-0.36, 0.36]) {
+      legs.push({ position: transform(table.x, table.z, table.yaw, x, 0.38, z), yaw: table.yaw, scale: new THREE.Vector3(0.055, 0.76, 0.055) });
+    }
+    for (const side of [-1, 1]) for (const offset of [-0.54, 0.54]) {
+      const cz = side * 1.02;
+      const chairYaw = table.yaw + (side === 1 ? Math.PI : 0);
+      wood.push({ position: transform(table.x, table.z, table.yaw, offset, 0.47, cz), yaw: chairYaw, scale: new THREE.Vector3(0.47, 0.06, 0.47) });
+      upholstery.push({ position: transform(table.x, table.z, table.yaw, offset, 0.515, cz), yaw: chairYaw, scale: new THREE.Vector3(0.42, 0.045, 0.41) });
+      wood.push({ position: transform(table.x, table.z, table.yaw, offset, 0.82, cz + side * 0.21), yaw: chairYaw, scale: new THREE.Vector3(0.47, 0.39, 0.055) });
+      for (const dx of [-0.18, 0.18]) for (const dz of [-0.18, 0.18]) {
+        legs.push({ position: transform(table.x, table.z, table.yaw, offset + dx, 0.23, cz + dz), yaw: chairYaw, scale: new THREE.Vector3(0.032, 0.46, 0.032) });
+      }
+    }
   }
-  addBoxInstances(group, bodies, ownGeometry(new THREE.CapsuleGeometry(0.13, 0.45, 3, 6)), figureMaterial, true);
-  addBoxInstances(group, heads, ownGeometry(new THREE.SphereGeometry(1, 8, 6)), skinMaterial, false);
+  const geometry = ownGeometry(new THREE.BoxGeometry(1, 1, 1));
+  addBoxInstances(group, wood, geometry, timber, true);
+  addBoxInstances(group, legs, geometry, metal, true);
+  addBoxInstances(group, upholstery, geometry, ownMaterial(new THREE.MeshStandardMaterial({ color: 0x69756b, roughness: 0.94 })), true);
 }
 
 function addBoxInstances(
