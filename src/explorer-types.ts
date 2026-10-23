@@ -1,5 +1,6 @@
 import type { Object3D, Group, InstancedMesh, WebGLRenderer } from 'three';
 import type { Article, Chapter, Edition } from './types';
+import type { Season } from './season';
 
 export type I18nText = { zh: string; en: string };
 export type Vec3 = readonly [number, number, number];
@@ -45,11 +46,13 @@ export interface ExplorerConfig {
 }
 export type ExplorerSelection = null | { kind: 'island'; islandId: string } | { kind: 'item'; itemId: string } | { kind: 'walker'; walkerId: string } | { kind: 'flow'; flowId: string };
 export type ExplorerCommand = { type: 'overview' } | { type: 'birdseye'; enabled: boolean } | { type: 'minute'; minute: number } | { type: 'paused'; paused: boolean }
+  | { type: 'season'; season: Season } | { type: 'chapter'; chapter: Chapter | null }
   | { type: 'toggle'; key: 'names' | 'walkers' | 'flows' | 'journal'; value: boolean }
   | { type: 'query'; query: string } | { type: 'tab'; tab: 'themes' | 'connections' }
   | { type: 'panel'; panel: 'list' | 'detail'; open: boolean } | { type: 'journalFilter'; flowId: string | null };
 export interface ExplorerState {
   selection: ExplorerSelection; language: 'zh' | 'en'; query: string; tab: 'themes' | 'connections';
+  season: Season;
   minute: number; paused: boolean; reducedMotion: boolean; names: boolean; walkers: boolean; flows: boolean;
   journal: boolean; journalFilter: string | null; birdseye: boolean; listOpen: boolean; detailOpen: boolean;
   chapter: Chapter | null; completedArticleIds: readonly string[]; bookmarkedArticleIds: readonly string[];
@@ -95,6 +98,7 @@ export interface ExplorerEngine {
 export interface ExplorerUICallbacks {
   onSelection(selection: ExplorerSelection): void; onReadArticle(articleId: string): void; onCommand(command: ExplorerCommand): void;
   onThumbnail(itemId: string): string | null;
+  onResolveWalker(walkerId: string): WalkerSnapshot | undefined;
 }
 export interface ExplorerUI {
   setData(data: ExplorerData): void; render(state: Readonly<ExplorerState>): void;
