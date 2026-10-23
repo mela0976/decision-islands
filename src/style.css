@@ -20,3 +20,22 @@ body:not(.exploring) .welcome-bottom{gap:18px;margin-top:26px}
 body:not(.exploring) .welcome .primary{padding:15px 18px;font-size:12px;text-shadow:none}
 body:not(.exploring) .welcome-note{color:#e0e5d9}
 @media(max-width:760px){body:not(.exploring) .masthead{right:18px}body:not(.exploring) .welcome{bottom:38px;left:26px;width:calc(100% - 52px)}body:not(.exploring) .welcome h1{font-size:31px;line-height:1.4;margin:12px 0}body:not(.exploring) .welcome-copy{font-size:12px}body:not(.exploring) .welcome-note{font-size:9px;margin-top:15px}body:not(.exploring) .welcome .edition-label{font-size:8px}body:not(.exploring) .welcome-bottom{margin-top:18px}}
+
+/* The reader drawer is explicit on every viewport; the map keeps the full canvas. */
+:root{--paper:var(--holiday-paper,#faf8f2);--ink:var(--holiday-ink,#263c3e);--rust:var(--holiday-accent,#b65b36)}
+.experience{height:100svh;min-height:0}#world,body:not(.exploring) #world{inset:0}
+.masthead,body:not(.exploring) .masthead{top:28px;left:30px;right:30px;pointer-events:none;z-index:12}
+.masthead .brand,.masthead .top-actions{pointer-events:auto}.brand{width:220px;min-height:104px}.brand-meta{display:block}
+.top-actions{align-items:center;flex-wrap:wrap;justify-content:flex-end;max-width:calc(100vw - 300px)}
+.season-picker{display:flex;align-items:center;gap:8px;padding:0 12px;min-height:44px;border-radius:6px;background:var(--paper);font-size:12px;box-shadow:0 4px 18px #254b3a10}
+.season-picker select{min-height:44px;max-width:140px;border:0;background:transparent;color:var(--ink);cursor:pointer}
+#toggle-library,#close-library{display:block}#close-library{position:absolute;right:16px;top:16px;font-size:24px;background:transparent;min-width:44px;min-height:44px}
+body .library,body:not(.exploring):not(.library-open) .library{transform:translateX(102%);visibility:hidden;pointer-events:none;z-index:20;transition:transform .25s,visibility .25s}
+body.library-open .library{transform:translateX(0);visibility:visible;pointer-events:auto}
+body.library-open #explorer-ui{visibility:hidden;pointer-events:none}
+.world-caption,.world-bottom{display:none!important}.welcome{width:min(560px,65vw)}
+#explorer-ui{position:absolute;inset:0;pointer-events:none;z-index:8}
+button,select,input[type=search],summary{min-height:44px}.reader-toolbar .icon-button{min-width:44px;min-height:44px}
+body[data-language=en] .brand-mark{font-size:23px}
+@media(max-width:900px){.masthead,body:not(.exploring) .masthead{left:18px;right:18px;top:18px}.brand{width:170px;min-height:96px;padding:15px}.brand-meta{display:none}.brand-mark{font-size:27px}.top-actions{max-width:calc(100vw - 220px);gap:5px}.season-picker{font-size:11px;padding:0 8px}.season-picker>span{display:none}.top-actions>.icon-button{font-size:11px;min-height:44px;padding:8px}.welcome{width:calc(100vw - 56px)}}
+@media(max-width:600px){.masthead,body:not(.exploring) .masthead{top:12px;left:12px;right:12px;gap:8px}.brand{width:130px;min-height:90px;padding:12px;gap:8px}.brand-mark{font-size:24px}.top-actions{max-width:calc(100vw - 158px);gap:4px}.season-picker{order:0;flex:1;justify-content:center}.season-picker select{font-size:11px;max-width:110px;width:100%}.top-actions>.icon-button{min-height:44px;font-size:10px;padding:7px 8px}#overview{display:none}.welcome{left:24px;width:calc(100vw - 48px);bottom:34px;top:auto}.welcome h1{font-size:clamp(29px,8vw,39px)}.library{width:min(94vw,390px)}.library-head{padding-top:30px}.library-footer select{min-height:44px}.reader-toolbar{padding:10px 8px;gap:4px}.reader-toolbar .text-button{font-size:11px}.reader-toolbar .icon-button{font-size:11px;padding:6px;min-width:44px}.reader-toolbar>div{gap:0}.reading-progress{top:65px}.reading-article{padding-left:22px;padding-right:22px}.about-dialog{padding:30px 24px}}

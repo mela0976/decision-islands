@@ -1,8 +1,22 @@
 import './style.css';
 import { createWorld } from './world';
+import { createExplorerUI } from './explorer-ui';
+import { DATA, buildExplorerData, initialExplorerState } from './explorer-data';
+import { applySeason, HOLIDAYS, readSeason, saveSeason } from './season';
+import type { Season } from './season';
+import type { ExplorerCommand, ExplorerData, ExplorerSelection, ExplorerUI, ExplorerUICallbacks } from './explorer-types';
 import { chapters, paths, findArticles, readState, saveState, escapeHtml as h } from './library';
-import type { Article, Catalog, Chapter, Edition, ReadingPath } from './types';
+import type { Catalog, Chapter, Edition, ReadingPath } from './types';
 
+const language = new URLSearchParams(location.search).get('lang') === 'en' ? 'en' : 'zh';
+const en = language === 'en';
+const t = (zh: string, english: string) => en ? english : zh;
+const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
+const explorerState = initialExplorerState(language, motionPreference.matches);
+explorerState.season = readSeason();
+applySeason(explorerState.season);
+document.documentElement.lang = en ? 'en' : 'zh-Hant';
+document.body.dataset.language = language;
 const base = import.meta.env.BASE_URL;
 const asset = (url: string) => base + url.replace(/^\//, '');
 const root = document.querySelector<HTMLDivElement>('#app')!;
@@ -14,7 +28,10 @@ let tab: 'articles' | 'paths' | 'saved' = 'articles';
 let entered = false;
 let activePath: ReadingPath | null = null;
 let state = readState();
-let motion = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+let motion = !motionPreference.matches;
+let explorerData: ExplorerData | undefined;
+let explorerUI: ExplorerUI | undefined;
+let editionRequest = 0;
 let world: ReturnType<typeof createWorld> | undefined;
 let lastFocus: HTMLElement | null = null;
 
@@ -24,7 +41,7 @@ root.innerHTML = `
     <div id="world" aria-label="決策群島互動場景"></div>
     <header class="masthead">
       <a class="brand" href="#" aria-label="決策群島首頁"><span class="brand-mark">決策<br>群島<span class="brand-dot">.</span></span><span class="brand-meta">決策智慧<br><b>2026</b></span></a>
-      <div class="top-actions"><button id="motion" class="icon-button" aria-pressed="${motion}">${motion ? '◌ 動態開啟' : '◌ 動態暫停'}</button><button id="overview" class="icon-button">⌖ 全景</button><button id="toggle-library" class="icon-button" aria-controls="library">☷ 目錄</button></div>
+      <div class="top-actions"><label class="season-picker"><span>${t('節慶', 'Season')}</span><select id="season" aria-label="${t('選擇節慶', 'Choose a season')}">${(Object.keys(HOLIDAYS) as Season[]).map(value => `<option value="${value}" ${value === explorerState.season ? 'selected' : ''}>${HOLIDAYS[value].title[language]}</option>`).join('')}</select></label><button id="motion" class="icon-button" aria-pressed="${motion}">${motion ? '◌ 動態開啟' : '◌ 動態暫停'}</button><button id="overview" class="icon-button">⌖ 全景</button><button id="toggle-library" class="icon-button" aria-controls="library">☷ 目錄</button></div>
     </header>
     <section class="welcome" aria-labelledby="welcome-title">
       <p class="edition-label">電通行銷傳播集團 · 決策智慧十週年</p>
@@ -35,6 +52,7 @@ root.innerHTML = `
     </section>
     <section class="world-caption" hidden><span class="small-line">2026 · Agentic 時代</span><h1>重塑品牌與人的<br>真實距離。</h1><p>點一座島，讓觀點連起來。</p></section>
     <div class="world-bottom" hidden><div class="chapter-legend">${Object.entries(chapters).map(([id,c]) => `<button data-chapter="${id}"><i style="background:${c.color}"></i>${c.title}</button>`).join('')}</div><span class="map-hint">拖曳旋轉 · 點選探索</span></div>
+    <div id="explorer-ui"></div>
     <aside id="library" class="library" aria-label="閱讀目錄" tabindex="-1">
       <div class="library-head"><span class="library-kicker">觀點在這裡相遇</span><button id="close-library" class="icon-button" aria-label="收起目錄">×</button><h2>把理解，連起來。</h2><p id="edition-stats">2026 決策智慧</p><label class="search-box"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="搜尋觀點、作者、關鍵字" aria-label="搜尋觀點、作者、關鍵字"><kbd>/</kbd></label><div class="tabs" role="tablist" aria-label="目錄類型"><button id="tab-articles" role="tab" aria-selected="true">全部觀點</button><button id="tab-paths" role="tab" aria-selected="false">策展路線</button><button id="tab-saved" role="tab" aria-selected="false">我的書籤</button></div></div>
       <div class="library-content" id="library-content" role="tabpanel" aria-label="觀點清單"></div>
@@ -55,18 +73,20 @@ $('.about-credit').before(disclosure);
 const mobileLayout = matchMedia('(max-width: 760px)');
 function setLibrary(open: boolean, focus = false) {
   document.body.classList.toggle('library-open', open);
-  $('#library').inert = (!entered && !open) || (mobileLayout.matches && !open);
+  $('#library').inert = !open;
+  $('#explorer-ui').inert = open;
+  if (open) { explorerState.listOpen = false; explorerState.detailOpen = false; syncExplorer(); }
   $('#toggle-library').setAttribute('aria-expanded',String(open));
   if (focus) (open ? $('#library') : $('#toggle-library')).focus();
 }
 mobileLayout.addEventListener('change',()=>setLibrary(document.body.classList.contains('library-open')));
 setLibrary(false);
-const storage = () => { if (!saveState(state)) toast('瀏覽器無法儲存，本次仍可閱讀。'); };
+const storage = () => { if (!saveState(state)) toast(t('瀏覽器無法儲存，本次仍可閱讀。', 'Your browser could not save progress. You can keep reading.')); };
 function toast(message: string) { $('#toast').textContent = message; $('#toast').classList.add('show'); setTimeout(() => $('#toast').classList.remove('show'), 3000); }
 
 function renderList() {
   if (!edition) return;
-  document.querySelectorAll('[role="tab"]').forEach(b => b.setAttribute('aria-selected', String(b.id === `tab-${tab}`)));
+  document.querySelectorAll('#library [role="tab"]').forEach(b => b.setAttribute('aria-selected', String(b.id === `tab-${tab}`)));
   const panel = $('#library-content');
   if (tab === 'paths' && !query) {
     const availablePaths = edition.year === 2026 ? paths : [];
@@ -79,15 +99,16 @@ function renderList() {
   panel.querySelectorAll<HTMLElement>('[data-article]').forEach(b => b.onclick = () => { activePath = null; openArticle(b.dataset.article!); });
   panel.querySelectorAll<HTMLElement>('[data-path]').forEach(b => b.onclick = () => { activePath = paths.find(p => p.id === b.dataset.path)!; openArticle(edition.articles.find(a => a.order === activePath!.orders[0])!.id); });
   panel.querySelector<HTMLElement>('[data-clear]')?.addEventListener('click', () => selectChapter(null));
-  panel.querySelector<HTMLElement>('[data-reset]')?.addEventListener('click', () => { query=''; chapter=null; tab='articles'; $<HTMLInputElement>('#search').value=''; world?.setChapter(null); renderList(); });
+  panel.querySelector<HTMLElement>('[data-reset]')?.addEventListener('click', () => { query=''; chapter=null; tab='articles'; $<HTMLInputElement>('#search').value=''; explorerState.chapter = null; syncExplorer(); renderList(); });
   const completed = edition.articles.filter(a => state.completed.includes(a.id)).length;
   $('#progress-text').textContent = `已讀 ${completed} / ${edition.articles.length} 篇`;
   $('#progress-fill').style.width = `${completed / edition.articles.length * 100}%`;
+  localizeChrome($('#library'));
 }
 
 function selectChapter(value: Chapter | null) {
   chapter = value; tab = 'articles'; query = ''; $<HTMLInputElement>('#search').value = '';
-  world?.setChapter(value); renderList();
+  explorerState.chapter = value; syncExplorer(); renderList();
   document.querySelectorAll<HTMLElement>('[data-chapter]').forEach(b => b.classList.toggle('selected',b.dataset.chapter === value));
   setLibrary(true);
 }
@@ -103,13 +124,17 @@ async function enter(animate = true) {
   document.body.classList.remove('entering');
   setLibrary(document.body.classList.contains('library-open'));
   $('.welcome').hidden = true;
-  $('.world-caption').hidden = false;
-  $('.world-bottom').hidden = false;
+  $('.world-caption').hidden = true;
+  $('.world-bottom').hidden = true;
+  explorerUI?.setActive(true);
+  syncExplorer();
 }
 
 function openArticle(id: string, updateHash = true) {
   const a = edition.articles.find(item => item.id === id);
-  if (!a) { toast('這篇文章尚未收錄。'); return; }
+  if (!a) { toast(t('這篇文章尚未收錄。', 'This article is not available yet.')); return; }
+  const item = explorerData?.items.find(item => item.articleId === a.id);
+  if (item) selectExplorer({ kind: 'item', itemId: item.id }, false);
   state.last = a.id; storage();
   const color = chapters[a.chapter].color;
   const pathIndex = activePath?.orders.indexOf(a.order) ?? -1;
@@ -131,8 +156,9 @@ function openArticle(id: string, updateHash = true) {
     <div class="related"><h2>同一座島，其他觀點</h2>${related.map(r=>`<button class="text-button" data-related="${r.id}">${h(r.title)} ↗</button>`).join('')}</div></footer></article>`;
   const bookmarked = () => { const value = state.bookmarks.includes(a.id); $('#bookmark').textContent = value ? '已收藏 ★' : '收藏 ☆'; $('#bookmark').setAttribute('aria-pressed',String(value)); };
   bookmarked();
-  $('#bookmark').onclick = () => { state.bookmarks = state.bookmarks.includes(a.id) ? state.bookmarks.filter(x=>x!==a.id) : [...state.bookmarks,a.id]; storage(); bookmarked(); renderList(); };
-  $('#complete').onclick = () => { if (!state.completed.includes(a.id)) state.completed.push(a.id); storage(); $('#complete').textContent='已完成閱讀 ✓'; renderList(); toast('已留下這篇的閱讀足跡。'); };
+  localizeChrome($('#reader'));
+  $('#bookmark').onclick = () => { state.bookmarks = state.bookmarks.includes(a.id) ? state.bookmarks.filter(x=>x!==a.id) : [...state.bookmarks,a.id]; storage(); bookmarked(); localizeChrome($('#reader')); renderList(); syncExplorer(); };
+  $('#complete').onclick = () => { if (!state.completed.includes(a.id)) state.completed.push(a.id); storage(); $('#complete').textContent='已完成閱讀 ✓'; renderList(); syncExplorer(); toast(t('已留下這篇的閱讀足跡。', 'Your reading progress has been saved.')); localizeChrome($('#reader')); };
   $('#next-article')?.addEventListener('click',()=>openArticle(next!.id));
   document.querySelectorAll<HTMLElement>('[data-related]').forEach(b=>b.onclick=()=>{activePath=null;openArticle(b.dataset.related!);});
   if (!reader.open) { lastFocus = document.activeElement as HTMLElement; reader.showModal(); }
@@ -147,7 +173,8 @@ function closeReader() {
   const original = lastFocus?.isConnected && lastFocus.tabIndex>=0 && !reader.contains(lastFocus) ? lastFocus : state.last ? document.querySelector<HTMLElement>(`[data-article="${CSS.escape(state.last)}"]`) : null;
   if (original && !original.closest('[inert]')) original.focus();
   else if (mobileLayout.matches && !document.body.classList.contains('library-open')) $('#toggle-library').focus();
-  else $('#library').focus();
+  else if (document.body.classList.contains('library-open')) $('#library').focus();
+  else $('#toggle-library').focus();
 }
 $('#reader-close').onclick = closeReader; $('#reader-back').onclick = closeReader;
 reader.addEventListener('cancel',e=>{e.preventDefault();closeReader();});
@@ -156,8 +183,10 @@ for (const [id, delta] of [['font-down',-2],['font-up',2]] as const) $(`#${id}`)
 $('#enter').onclick = () => void enter();
 $('.skip-link').onclick = e => {e.preventDefault();void enter(false);setLibrary(true,true);};
 $('#skip-intro').onclick = () => { void enter(false); setLibrary(true,true); };
-$('#motion').onclick = () => {motion=!motion;world?.setMotion(motion);$('#motion').textContent=motion?'◌ 動態開啟':'◌ 動態暫停';$('#motion').setAttribute('aria-pressed',String(motion));};
-$('#overview').onclick = () => {void enter(false);selectChapter(null);world?.reset();};
+$('#motion').onclick = () => { explorerState.paused = !explorerState.paused; syncExplorer(); };
+motionPreference.addEventListener('change', event => { explorerState.reducedMotion = event.matches; syncExplorer(); });
+$('#overview').onclick = () => { void enter(false); commandExplorer({ type: 'overview' }); };
+$<HTMLSelectElement>('#season').onchange = event => commandExplorer({ type: 'season', season: (event.target as HTMLSelectElement).value as Season });
 $('#toggle-library').onclick = () => {void enter(false);setLibrary(!document.body.classList.contains('library-open'),true);};
 $('#close-library').onclick = () => setLibrary(false,true);
 document.querySelectorAll<HTMLElement>('[data-chapter]').forEach(b=>b.onclick=()=>{void enter(false);selectChapter(b.dataset.chapter as Chapter);});
@@ -175,46 +204,181 @@ async function navigateHash() {
     try {
       if (year!==edition.year && catalog.years.some(y=>y.year===year)) await loadEdition(year);
       openArticle(id,false);
-    } catch { toast('無法開啟這篇文章，請從年度目錄重試。'); }
+    } catch { toast(t('無法開啟這篇文章，請從年度目錄重試。', 'Could not open this article. Try the edition directory.')); }
   } else if(reader.open) closeReader();
 }
 
-async function loadEdition(year: number) {
-  const item = catalog.years.find(y=>y.year===year);
-  if (!item) return;
-  const response = await fetch(asset(item.dataUrl));
-  if (!response.ok) throw new Error('年度內容載入失敗');
-  edition = await response.json();
-  if (edition.schemaVersion !== 1 || !Array.isArray(edition.articles) || !edition.articles.length) throw new Error('年度資料格式錯誤');
-  chapter=null; query=''; activePath=null;
-  $<HTMLInputElement>('#search').value='';
-  $('.brand-meta b').textContent=String(year);
-  $('.world-caption .small-line').textContent=`${year} · 決策智慧`;
-  $('.world-caption h1').textContent=year===2026?'重塑品牌與人的\n真實距離。':edition.title;
-  document.title=`決策群島｜${year} 決策智慧`;
-  $<HTMLSelectElement>('#year').value=String(year);
-  world?.setChapter(null);
-  $('#edition-stats').textContent=`${year} 年刊 ／ ${edition.articles.length} 篇觀點 ／ 人、模型與 AI`;
-  world?.setArticles(edition.articles);renderList();
+function syncExplorer() {
+  explorerState.completedArticleIds = [...state.completed];
+  explorerState.bookmarkedArticleIds = [...state.bookmarks];
+  motion = !explorerState.reducedMotion && !explorerState.paused;
+  world?.setState(explorerState);
+  world?.setMotion(motion);
+  explorerUI?.render(explorerState);
+  $('#motion').textContent = motion ? t('◌ 動態開啟', '◌ Motion on') : t('◌ 動態暫停', '◌ Motion paused');
+  $('#motion').setAttribute('aria-pressed', String(motion));
+  $<HTMLSelectElement>('#season').value = explorerState.season;
 }
+
+function selectExplorer(selection: ExplorerSelection, focus = true) {
+  explorerState.selection = selection;
+  explorerState.detailOpen = selection !== null;
+  if (selection) setLibrary(false);
+  world?.setSelection(selection, focus);
+  syncExplorer();
+}
+
+function commandExplorer(command: ExplorerCommand) {
+  switch (command.type) {
+    case 'overview':
+      explorerState.selection = null; explorerState.birdseye = false; explorerState.detailOpen = false;
+      world?.reset(); break;
+    case 'birdseye': explorerState.birdseye = command.enabled; break;
+    case 'minute': explorerState.minute = ((command.minute % 1440) + 1440) % 1440; break;
+    case 'paused': explorerState.paused = command.paused; break;
+    case 'season':
+      explorerState.season = command.season; applySeason(command.season); world?.setSeason(command.season);
+      if (!saveSeason(command.season)) toast(t('瀏覽器無法儲存節慶設定。', 'Your browser could not save the season.'));
+      break;
+    case 'chapter': selectChapter(command.chapter); return;
+    case 'toggle': explorerState[command.key] = command.value; break;
+    case 'query': explorerState.query = command.query; break;
+    case 'tab': explorerState.tab = command.tab; break;
+    case 'panel':
+      if (command.open) setLibrary(false);
+      if (command.panel === 'list') explorerState.listOpen = command.open;
+      else explorerState.detailOpen = command.open;
+      break;
+    case 'journalFilter': explorerState.journalFilter = command.flowId; break;
+    default: { const exhaustive: never = command; return exhaustive; }
+  }
+  syncExplorer();
+}
+
+function localizeChrome(host: HTMLElement) {
+  if (!en) return;
+  const translations: Record<string, string> = {
+    '暫時無法展開目錄。': 'The directory is unavailable.', '重新整理後再試，或先開啟完整閱讀目錄。': 'Reload to retry, or open the reading directory.', '開啟閱讀目錄': 'Open reading directory', '重新載入': 'Reload',
+    '跳到文章目錄': 'Skip to article directory', '決策群島首頁': 'Decision Islands home',
+    '決策群島互動場景': 'Interactive Decision Islands scene', '決策': 'Decision', '群島': 'Islands', '決策智慧': 'Decision Wisdom',
+    '⌖ 全景': '⌖ Overview', '☷ 目錄': '☷ Articles', '收起目錄': 'Close directory',
+    '電通行銷傳播集團 · 決策智慧十週年': 'dentsu · Ten years of Decision Wisdom',
+    '十年的智慧，': 'Ten years of wisdom,', '在這裡相遇。': 'meet here.', '穿過十年的智慧，': 'Travel through ten years of ideas,',
+    '尋找品牌與人的真實距離。': 'discover the distance between brands and people.', '啟程，探索 2026': 'Begin exploring 2026',
+    '直接開始閱讀': 'Start reading', '從一個問題出發，不必從第一頁開始。': 'Begin with a question. Find your own first page.',
+    '閱讀目錄': 'Article directory', '觀點在這裡相遇': 'Ideas meet here', '把理解，連起來。': 'Connect your understanding.',
+    '搜尋觀點、作者、關鍵字': 'Search ideas, authors, keywords', '目錄類型': 'Directory view', '全部觀點': 'All articles',
+    '策展路線': 'Reading paths', '我的書籤': 'Bookmarks', '觀點清單': 'Article list', '年度藏書': 'Edition', '選擇年度': 'Choose edition',
+    '關於這座群島': 'About these islands', '閱讀足跡': 'Reading progress', '只保存在這台裝置': 'Saved on this device',
+    '← 回到群島': '← Back to islands', '縮小字級': 'Decrease text size', '放大字級': 'Increase text size', '收藏': 'Bookmark',
+    '已收藏 ★': 'Saved ★', '收藏 ☆': 'Bookmark ☆', '關閉閱讀': 'Close reader', '關閉關於': 'Close about',
+    '決策智慧十週年': 'Ten years of Decision Wisdom', '先理解人，': 'Understand people,', '再理解下一步。': 'then the next step.',
+    '比賽規則與出處 ↗': 'Competition rules and source ↗', '資安問題揭露政策 ↗': 'Responsible disclosure policy ↗',
+    '不必讀完全部，先找到你在意的問題。': 'Find a question that matters to you.',
+    '這一年的策展路線正在整理，先從全部觀點開始。': 'Reading paths are being prepared. Start with all articles.',
+    '清除章節篩選': 'Clear chapter filter', '把想讀的，留在這裡。': 'Keep the articles you want to read.',
+    '還沒有找到這個觀點。': 'No matching articles yet.', '閱讀時點選「收藏」，下次就能接著探索。': 'Bookmark an article to return to it later.',
+    '試試「信任」「注意力」或作者姓名。': 'Try a keyword or author name in the original language.', '回到全部觀點': 'Show all articles',
+    '刊物文字整理。圖表與原始版面請對照原刊 PDF。': 'Transcribed publication text. Consult the original PDF for charts and layout.',
+    '刊物文字整理。圖表與原始版面請對照原刊 PDF。 與刊物版本無法核對的排版文字未收錄，以原刊 PDF 為完整依據。': 'Transcribed publication text. Unverified layout text is omitted. Consult the original PDF as the full source.',
+    '編輯摘要': 'Editorial summary', '先讀這個觀點': 'Start with this idea', '這篇值得帶走什麼？': 'What can you take from this article?',
+    '以下導讀來自提供的編輯目錄。': 'This guide comes from the supplied editorial directory.', '對照原刊 PDF ↗': 'Original PDF ↗',
+    '獨立閱讀頁 ↗': 'Standalone reading page ↗', '圖表、註解與補充文字': 'Charts, notes and additional text',
+    '以下文字見於原刊的多個位置，集中保留供查閱；圖表關係請對照 PDF。': 'Additional text is collected here for reference. Consult the original PDF for charts.',
+    '讀到這裡，你帶走了什麼？': 'What will you take away?', '已完成閱讀 ✓': 'Completed ✓', '留下閱讀足跡': 'Mark as read',
+    '沿著這條路線': 'Along this reading path', '繼續探索': 'Keep exploring', '閱讀下一篇 ↗': 'Read next ↗', '你已走完這條閱讀路線。': 'You have completed this reading path.',
+    '同一座島，其他觀點': 'Other ideas on this island',
+    '這是一座以《2026 決策智慧》為基礎的閱讀群島。島嶼對應原書章節，策展路線則把不同章節的觀點串起來，陪你從問題出發閱讀。': 'Explore the original 2026 Decision Wisdom articles through curated themes and reading paths. Island models are reading metaphors.',
+    '文章標題、作者與摘要來自提供的刊物及編輯目錄。閱讀導引與串聯理由屬本網站策展。全文由刊物轉錄，圖表與原版排版請對照各篇 PDF。': 'Titles, authors, summaries and original article text come from the supplied publication. Connections are curator suggestions. Consult the PDF for charts and layout. Original articles remain in Chinese.',
+    '目前收錄 2026。其他年度將在取得 PDF 並完成校對後匯入。收藏與閱讀足跡只存在你的瀏覽器，不傳送到伺服器。': 'The 2026 edition is available. Earlier editions will follow after source checks. Bookmarks and progress stay in your browser.',
+    '內容著作權屬電通行銷傳播集團及原作者。互動視覺為本作品原創。': 'Content copyright belongs to dentsu and the original authors. Interactive visuals are original to this project.',
+  };
+  const translate = (value: string) => {
+    const key = value.trim();
+    if (translations[key]) return value.replace(key, translations[key]);
+    return value.replace(/已讀 (\d+) \/ (\d+) 篇/, 'Read $1 / $2 articles').replace(/找到 (\d+) 篇觀點/, '$1 articles found')
+      .replace(/^路線 (\d+)$/, 'Path $1').replace(/(\d+) 篇串讀/, '$1 articles').replace(/約 (\d+) 分鐘/, 'About $1 minutes')
+      .replace(/原刊 p\./, 'Original p.').replace(/(\d{4}) 決策智慧/, '$1 Decision Wisdom').replace(/ · 已讀/g, ' · Read');
+  };
+  const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+  let node: Node | null;
+  while ((node = walker.nextNode())) {
+    if (!(node.parentElement?.closest('.article-body, .summary-block>p, .reading-guide p:not(.provenance), .byline'))) node.textContent = translate(node.textContent ?? '');
+  }
+  for (const element of host.querySelectorAll<HTMLElement>('[aria-label], [placeholder]')) {
+    for (const attribute of ['aria-label', 'placeholder']) {
+      const value = element.getAttribute(attribute);
+      if (value) element.setAttribute(attribute, translate(value));
+    }
+  }
+}
+
+async function loadEdition(year: number) {
+  const item = catalog.years.find(y => y.year === year);
+  if (!item) return;
+  const request = ++editionRequest;
+  const response = await fetch(asset(item.dataUrl));
+  if (!response.ok) throw new Error('Edition load failed');
+  const nextEdition: Edition = await response.json();
+  if (nextEdition.schemaVersion !== 1 || nextEdition.year !== year || !Array.isArray(nextEdition.articles) || !nextEdition.articles.length) throw new Error('Invalid edition');
+  const nextData = buildExplorerData(DATA, nextEdition);
+  if (request !== editionRequest) return;
+  world?.setData(nextData);
+  edition = nextEdition;
+  explorerData = nextData;
+  chapter = null; query = ''; activePath = null;
+  explorerState.chapter = null; explorerState.query = ''; explorerState.selection = null;
+  explorerState.journalFilter = null; explorerState.detailOpen = false;
+  $<HTMLInputElement>('#search').value = '';
+  if (explorerUI) { explorerUI.setData(nextData); explorerUI.clearEvents(); }
+  else {
+    const callbacks: ExplorerUICallbacks = {
+      onSelection: selection => selectExplorer(selection),
+      onReadArticle: id => { activePath = null; openArticle(id); },
+      onCommand: commandExplorer,
+      onThumbnail: id => world?.thumbnail(id) ?? null,
+      onResolveWalker: id => world?.getWalkers().find(walker => walker.id === id),
+    };
+    explorerUI = createExplorerUI($('#explorer-ui'), nextData, callbacks);
+    explorerUI?.setActive(entered && document.body.classList.contains('exploring'));
+  }
+  explorerUI?.setFallback(world?.getFallback() ?? true);
+  $('.brand-meta b').textContent = String(year);
+  $('.world-caption .small-line').textContent = `${year} · ${t('決策智慧', 'Decision Wisdom')}`;
+  $('.world-caption h1').textContent = edition.title;
+  document.title = `${t('決策群島', 'Decision Islands')} | ${year} ${t('決策智慧', 'Decision Wisdom')}`;
+  $<HTMLSelectElement>('#year').value = String(year);
+  $('#edition-stats').textContent = t(`${year} 年刊 ／ ${edition.articles.length} 篇觀點 ／ 人、模型與 AI`, `${year} edition / ${edition.articles.length} articles / People, models and AI`);
+  world?.setSelection(null, false);
+  syncExplorer(); renderList();
+}
+
 async function boot() {
   try {
-    world=createWorld($('#world'),{onChapter:c=>{void enter(false);selectChapter(c as Chapter);},onArticle:id=>{activePath=null;openArticle(id);},reducedMotion:!motion});
+    world = createWorld($('#world'), {
+      reducedMotion: explorerState.reducedMotion, season: explorerState.season, language,
+      onSelection: selection => { void enter(false); selectExplorer(selection, false); },
+      onMinute: minute => { explorerState.minute = minute; explorerUI?.render(explorerState); },
+      onEvents: events => explorerUI?.appendEvents(events),
+      onFallback: (fallback, message) => explorerUI?.setFallback(fallback, message),
+    });
+    syncExplorer();
     const response = await fetch(asset('data/catalog.json'));
     if (!response.ok) throw new Error('目錄載入失敗');
     catalog = await response.json();
     if (catalog.schemaVersion!==1 || !Array.isArray(catalog.years)) throw new Error('目錄格式錯誤');
-    $<HTMLSelectElement>('#year').innerHTML=catalog.years.map(y=>`<option value="${y.year}">${y.year} 決策智慧</option>`).join('')+'<option disabled>歷年刊物 · 待匯入</option>';
-    $<HTMLSelectElement>('#year').onchange=e=>{void loadEdition(Number((e.target as HTMLSelectElement).value)).catch(()=>toast('無法載入這個年度，請重新整理。'));};
+    $<HTMLSelectElement>('#year').innerHTML=catalog.years.map(y=>`<option value="${y.year}">${y.year} ${t('決策智慧', 'Decision Wisdom')}</option>`).join('')+`<option disabled>${t('歷年刊物 · 待匯入', 'Earlier editions · coming soon')}</option>`;
+    $<HTMLSelectElement>('#year').onchange=e=>{void loadEdition(Number((e.target as HTMLSelectElement).value)).catch(() => { $<HTMLSelectElement>('#year').value = String(edition.year); toast(t('無法載入這個年度，請重新整理。', 'Could not load this edition. Please retry.')); });};
     const linkedYear = Number(location.hash.match(/^#read\/(\d{4})-/)?.[1]);
     await loadEdition(catalog.years.some(y=>y.year===linkedYear)?linkedYear:catalog.years.some(y=>y.year===2026)?2026:catalog.years[0].year);
     if(location.hash.startsWith('#read/')){void enter(false);openArticle(location.hash.slice(6),false);}
     else if(state.last && edition.articles.some(a=>a.id===state.last)) {
-      const resume=document.createElement('button');resume.className='resume-reading';resume.textContent='接著上次的觀點讀下去 ↗';resume.onclick=()=>{void enter(false);openArticle(state.last!);};$('#library-content').prepend(resume);
+      const resume=document.createElement('button');resume.className='resume-reading';resume.textContent=t('接著上次的觀點讀下去 ↗', 'Continue your last article ↗');resume.onclick=()=>{void enter(false);openArticle(state.last!);};$('#library-content').prepend(resume);
     }
   } catch(error) {
     $('#library-content').innerHTML='<div class="empty"><h3>暫時無法展開目錄。</h3><p>重新整理後再試，或先開啟完整閱讀目錄。</p><a href="./read/2026/index.html">開啟閱讀目錄</a><button id="retry" class="text-button">重新載入</button></div>';
-    $('#retry').onclick=()=>location.reload();console.error(error);
+    $('#retry').onclick=()=>location.reload(); localizeChrome($('#library')); setLibrary(true); console.error(error);
   }
 }
+localizeChrome(root);
 void boot();
