@@ -64,3 +64,9 @@ book-boundaries-browser.mjs通過未知書中性閱讀、失敗載入保留現�
 實際結果JSON與截圖在本機test-results，測試原始碼隨提交保留；未將測試假書混入public。
 
 原有test:e2e七組於最終production build通過，包括22篇原文、PDF、收藏、已讀、字級、歷史、手機、無JS、無WebGL與第二年度。發布與正式讀回結果續記於下節。
+
+## 正式發布
+
+發布程式SHA為2843c6323a8b62eb461e76fdcf259943b25ff004。GitHub Actions run40040973506的build和deploy均成功，雲端npm test35/35，check_public findings空。正式HTML讀回index-BCcfdBxD.js及index-8HkTG50e.css，與本機已驗證工件相同。
+
+正式網址為https://mela0976.github.io/decision-islands/。正式站執行journey-browser.mjs通過1280與390尺寸的選擇、比較、改採、原文返回、略過、方案、重做與節慶保持；no-WebGL全8角色16任務48回合均可操作，英文手機與重載清除也通過。完整正式站測試結果在test-results/mission-results.json，errors為空。文件更新不改程式資產，不把文件提交SHA冒稱部署程式SHA。
