@@ -67,3 +67,5 @@ Astra候選A與Sol候選B都建議靜態文章、年度目錄及離線匯入。�
 Astra唯讀審查發現核心牆體被抬高15.6單位，已改為地面起算並驗證兩面核心bounds為0..15.6；另一項instance與shadow釋放缺口已修正。審查讀回12個instance與4個shadow均釋放一次，重複dispose沒有重複事件。no-comments限定範圍沒有待刪註解或正確性抑制。
 
 本機10項Node測試、7組完整瀏覽器情境及4項動態畫面檢查通過，桌面1440×1000與手機390×844截圖已檢視。程式變更保留原有22篇及PDF。瀏覽器檢查未量測真實GPU記憶體，背景暫停由visibilitychange與IntersectionObserver處理；沒有聲稱完成實體手機或跨瀏覽器驗收。上游外掛deslop與control-ui未安裝，改以人工diff審查、獨立Astra審查與Playwright驗證，未聲稱執行該外掛。
+
+升級版已推送main並由GitHub Pages發布。Actions run 39957181131成功。正式HTML、JS及CSS與本機建置相同，正式網址7組閱讀情境與4項旋轉／暫停／略過檢查全部通過。沒有後續待修的P0至P2；實體裝置與其他瀏覽器仍未驗證。

@@ -8,3 +8,6 @@ ts	phase	decision	why	evidence	result
 2026-10-23T20:29:43+08:00	verify	完成行為來源及實際瀏覽器驗收	以真實工件檢查整體閱讀旅程	VERIFICATION.md	5個Node測試13個Python測試及7組瀏覽器情境通過
 2026-10-23T20:35:00+08:00	publish	推送mela0976並以GitHubPages發布	使用者要求上傳且競賽需要公開網址	https://github.com/mela0976/decision-islands/actions/runs/39954203376	正式瀏覽器7組情境與44個來源連結通過
 2026-10-23T20:35:00+08:00	review	修正跳轉目錄的鍵盤入口並移除未實作縮放提示	Astra獨立審查的可重現發現	VERIFICATION.md	修正後正式瀏覽器驗收通過
+2026-10-23T20:57:47+08:00	visual	首頁改成兩側凸圓角書牆與玻璃天窗	使用者提供星空圖書館照片參考	../src/library-scene.ts	桌面1440×1000及手機390×844已檢視
+2026-10-23T20:57:47+08:00	motion	書本樹每150秒轉一圈且可暫停	使用者要求慢轉且需要保留減少動態設定	../src/entrance.ts	時間函式及實際畫面暫停恢復檢查通過
+2026-10-23T20:57:47+08:00	entrance	6.5秒連續鏡頭與遮幕切換並提供略過按鈕	讓圖書館到宇宙及群島的進入更沉浸	../tests/entrance.test.mjs	5項鏡頭測試及7組閱讀瀏覽器情境通過

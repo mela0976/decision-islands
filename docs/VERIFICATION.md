@@ -49,3 +49,10 @@ reviewed by gpt-6-astra。
 - `npm run build`：TypeScript與正式建置通過。
 - 桌面1440×1000與手機390×844實際截圖已檢視，兩側曲牆及完整中央書樹可見。
 - Astra獨立審查發現的牆體位移及instance／shadow資源釋放已修正。以模擬Canvas建立真實場景，讀回12個instance、4個shadow各釋放一次，重複dispose不重複釋放。未量測真實GPU記憶體。
+
+### 升級版正式網站讀回
+
+- 部署版本 `fdc8708df6312816274896bd3d7fff2baa6e8d12`，GitHub Actions run `39957181131` 的build與deploy均success，完成時間2026-10-23 20:57:28 Asia/Taipei。
+- 正式網址 https://mela0976.github.io/decision-islands/ 重跑7組瀏覽器情境與4項動態檢查全部通過，沒有page errors。
+- 正式HTML、JavaScript與CSS均與本機dist逐位元相同。index.html SHA256為 `f5afb55803ae2a951d1ae3c27acab8be47bbddbc4b736cf1a836d5b070a50ea6`。
+- 正式瀏覽器畫面與檢查結果保留在本機test-results。這份發布讀回為docs-only提交，未改變網站工件。
