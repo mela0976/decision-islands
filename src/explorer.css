@@ -978,6 +978,12 @@
   margin-top: 7px !important;
 }
 
+.explorer-npc-context { margin-top: 8px; font-size: 12px; }
+.explorer-npc-context > summary { cursor: pointer; min-height: 44px; padding-top: 10px; }
+.explorer-npc-situation-opening,
+.explorer-npc-latest .explorer-npc-reply,
+.explorer-npc-question-button { color: #263c3e; font-weight: 350; }
+
 .explorer-npc-latest {
   background: #fffdf9;
   border: 1px solid var(--explorer-border);

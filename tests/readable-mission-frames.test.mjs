@@ -61,7 +61,7 @@ test('visible mission meshes fit mobile and desktop with readable actors and obj
     }
     await page.evaluate(()=>{window.stage.setMotion(true);const mission=window.missions.find(item=>item.id==='shared-memory-1');window.input={key:mission.id,definition:mission.visual,choiceId:null,previewChoiceId:null};window.stage.update(window.input);window.stage.update({...window.input,previewChoiceId:'b'});});
     assert.equal((await page.evaluate(()=>window.stage.snapshot())).phase,'approach');
-    await page.clock.fastForward(1200);
+    await page.clock.fastForward(600);
     assert.equal((await page.evaluate(()=>window.stage.snapshot())).phase,'interact');
     await page.screenshot({clip:await page.locator('#fixture').boundingBox(),path:'test-results/readable-missions/interaction.png'});
     const before=await page.evaluate(()=>window.stage.snapshot());

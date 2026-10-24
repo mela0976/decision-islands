@@ -191,7 +191,7 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
     canvas.dataset.zoom = String(userZoom);
     camera.updateProjectionMatrix();
   };
-  const render = () => { if (renderer && !failed && !disposed) { fitCamera(); renderer.render(scene, camera); renderCount++; } };
+  const render = () => { if (renderer && active && !document.hidden && host.isConnected && !failed && !disposed) { fitCamera(); renderer.render(scene, camera); renderCount++; } };
   const resize = () => {
     if (!renderer || disposed) return;
     const bounds = host.getBoundingClientRect();

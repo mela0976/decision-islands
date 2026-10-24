@@ -294,7 +294,7 @@ export function createWorld(container: HTMLElement, options: Options) {
       if (phase === 'disposed' || phase === 'islands') return Promise.resolve();
       if (enterPromise) return enterPromise;
       enterPromise = new Promise<void>(resolve => { finishEnter = resolve; });
-      if (!enabled || !renderable) completeEnter();
+      if (compact || !enabled || !renderable) completeEnter();
       else { phase = 'transition'; root.dataset.phase = phase; controls.inert = false; elapsed = 0; lastTick = 0; wake(); }
       return enterPromise;
     },

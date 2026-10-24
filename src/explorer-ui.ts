@@ -1326,12 +1326,16 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
       }
       const situation = getNpcSituation(article, profileNpc.roleId, language, data.bookTitle);
       const scene = node('p', 'explorer-npc-situation-scene', situation.scene);
-      scene.hidden = !situation.scene.trim();
+      const context = node('details', 'explorer-npc-context');
+      context.append(node('summary', '', language === 'zh' ? '情境說明與文章線索' : 'Situation and article context'), scene);
+      context.hidden = !situation.scene.trim();
+      const sentence = language === 'zh' ? /^.*?[。！？]/u : /^.*?[.!?](?:\s|$)/u;
+      const opening = situation.opening.match(sentence)?.[0]?.trim() ?? situation.opening;
       situationPanel.replaceChildren(
         node('span', 'explorer-eyebrow', tr('npcScenarioTitle')),
         node('strong', 'explorer-npc-situation-article', article.title),
-        node('p', 'explorer-npc-situation-opening', situation.opening),
-        scene,
+        node('p', 'explorer-npc-situation-opening', opening),
+        context,
       );
       if (profile.roleColor) situationPanel.style.setProperty('--npc-role-color', profile.roleColor);
       else situationPanel.style.removeProperty('--npc-role-color');
@@ -1439,6 +1443,7 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
       dialogue.openingSpeechPending = false;
       renderHistory();
       emitNpcSpeech(npc.id, reply, NPC_QUESTION_REACTIONS[questionId]);
+      latestReply.scrollIntoView({ block: 'nearest', behavior: 'auto' });
     }
 
     function moveToNextTopic(): void {

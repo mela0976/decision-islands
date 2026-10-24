@@ -63,7 +63,8 @@ async function run(index, profile = false, variant = 'candidate') {
   await page.locator('#journey-picker [data-free-explore]').waitFor({ state: 'visible' });
   const entered = await page.evaluate(() => performance.now());
   await page.locator(process.env.PERF_REQUIRE_FRAME === '1' && variant !== 'baseline' ? '.island-world[data-island-frame-ms] canvas' : '.island-world canvas').waitFor({ state: 'attached' });
-  const worldReady = await page.evaluate(() => { const canvas = document.querySelector('.island-world canvas'), gl = canvas.getContext('webgl2'), debug = gl?.getExtension('WEBGL_debug_renderer_info'), data = document.querySelector('.island-world').dataset; return { at: performance.now(), firstFrame: data.firstFrameMs, firstFramePhase: data.firstFramePhase, firstIslandFrame: data.islandFrameMs, width: canvas.width, height: canvas.height, parallelShaderCompile: Boolean(gl?.getExtension('KHR_parallel_shader_compile')), renderer: debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : gl?.getParameter(gl.RENDERER) }; });
+  const worldReady = await page.evaluate(() => { const canvas = document.querySelector('.island-world canvas'), gl = canvas.getContext('webgl2'), debug = gl?.getExtension('WEBGL_debug_renderer_info'), data = document.querySelector('.island-world').dataset; return { at: performance.now(), rendered: data.rendered === 'true', phase: data.phase, firstFrame: data.firstFrameMs, firstFramePhase: data.firstFramePhase, firstIslandFrame: data.islandFrameMs, width: canvas.width, height: canvas.height, parallelShaderCompile: Boolean(gl?.getExtension('KHR_parallel_shader_compile')), renderer: debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : gl?.getParameter(gl.RENDERER) }; });
+  if (process.env.PERF_REQUIRE_FRAME === '1' && variant !== 'baseline' && !worldReady.rendered) throw Error('Island canvas did not render');
   await page.locator('#journey-picker [data-free-explore]').evaluate(el => el.click());
   await page.locator('[data-npc-open]').evaluate(el => el.click());
   const options = await page.locator('[data-npc-select] option[data-walker-id]').evaluateAll(ns => ns.map(n => n.value));
@@ -101,7 +102,7 @@ async function run(index, profile = false, variant = 'candidate') {
     actions.finalPhase = await page.locator('.mission-stage-canvas').getAttribute('data-phase');
     actions.longTasks = await page.evaluate(() => window.__perf.longTasks);
   }
-  const result = { index, variant, profile, ready, fonts, worldReady, actions, enterMs: entered - begin, npcSelectAndQuestionMs: reply.at - selectedAt, npcReplyMs: reply.at - questionAt, reply, errors, failures, nonSuccess };
+  const result = { index, variant, profile, ready, fonts, worldReady, actions, enterBegin: begin, enterMs: entered - begin, enterToActualIslandMs: Number(worldReady.firstIslandFrame) - begin, initialIslandFrameMs: Number(worldReady.firstIslandFrame), npcSelectAndQuestionMs: reply.at - selectedAt, npcReplyMs: reply.at - questionAt, reply, errors, failures, nonSuccess };
   if (profile) { const { profile: cpu } = await cdp.send('Profiler.stop'); await writeFile(`${output}/cpu-profile.json`, JSON.stringify(cpu)); }
   await context.close(); return result;
 }
@@ -112,6 +113,10 @@ try {
     for (const key of ['ready', 'fontsReady', 'enterMs', 'npcSelectAndQuestionMs', 'npcReplyMs']) { const values = runs.filter(r => r.variant === variant).map(r => key === 'ready' ? r.ready.ready : key === 'fontsReady' ? r.fonts.ready : r[key]).sort((a, b) => a - b); metrics[key] = { median: values[Math.floor(values.length / 2)], min: values[0], max: values.at(-1) }; }
     for (const key of ['readerOpenMs', 'readerFontsReadyMs', 'readerCloseMs', 'pickerOpenMs', 'audienceMs', 'roleMs', 'missionOpenMs', 'choiceFeedbackMs', 'choiceSettledMs']) {
       const values = runs.filter(r => r.variant === variant).map(r => r.actions[key]).filter(Number.isFinite).sort((a, b) => a - b);
+      if (values.length) metrics[key] = { median: values[Math.floor(values.length / 2)], min: values[0], max: values.at(-1) };
+    }
+    for (const key of ['enterToActualIslandMs', 'initialIslandFrameMs']) {
+      const values = runs.filter(r => r.variant === variant).map(r => r[key]).filter(Number.isFinite).sort((a, b) => a - b);
       if (values.length) metrics[key] = { median: values[Math.floor(values.length / 2)], min: values[0], max: values.at(-1) };
     }
     return metrics;
