@@ -1,0 +1,36 @@
+:root{--ink:#182f29;--muted-ink:#415348;--panel:#faf7ef;--border:#8d9a8d;color:var(--ink)}
+body{font-weight:400}
+button{min-height:44px;color:var(--ink);border-color:var(--border);font-weight:500}
+button:disabled{opacity:1;color:#556056;background:#e2e5dc;border-style:dashed;cursor:default}
+button:hover,button[aria-pressed=true]{background:#d7e1cc;color:#182f29;border-color:#52684b}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #8d3a1c;outline-offset:3px}
+header{background:#faf7eff5;border:1px solid #cbd2c4;border-radius:14px;padding:10px 12px;box-shadow:0 3px 16px #182f2914}
+.brand span{color:#354b40;font-weight:500}
+aside,#story,dialog{background:var(--panel);border-color:#adb8a7;box-shadow:0 10px 35px #182f2924}
+#status{background:var(--panel);color:#263d32;border:1px solid #b6c0af;font-size:12px;top:99px;line-height:1.65;max-width:min(670px,90vw)}
+#chapter-label,.eyebrow,#article-list small,#byline,#note-status,#recommendations small{color:var(--muted-ink);font-weight:500}
+#chapter-label,.eyebrow{font-size:11px;letter-spacing:.1em}
+#article-list small,#byline,#note-status,#recommendations small{font-size:13px}
+input,select,textarea{color:var(--ink);border-color:var(--border);background:#fffdf7;font-weight:400}
+input::placeholder,textarea::placeholder{color:#566459;opacity:1}
+a{color:#244d3b;text-decoration-thickness:1.5px;text-underline-offset:3px}
+.actions button:first-child{background:#253f33;color:#fffdf7;border-color:#253f33}
+.actions button:first-child:hover{background:#183226;color:#fffdf7}
+nav button{color:#304a3c;font-weight:500}
+#game-result{background:#edf0e5;border-left:3px solid #5c724f;padding:10px 12px;color:#223b2e;border-radius:4px}
+#game-result:empty{display:none}
+#travel-controls{position:fixed;z-index:4;top:145px;left:24px;background:#faf7ef;padding:8px;border:1px solid #adb8a7;border-radius:10px;box-shadow:0 6px 20px #182f2920}
+#travel-controls[hidden]{display:none}
+@media(max-width:650px){#travel-controls{top:138px;left:12px;padding:5px;font-size:12px}}
+#game-visual{border:1px solid #acb9a5}
+#game{position:fixed;inset:140px 24px auto auto;width:410px;max-height:calc(100dvh - 165px);overflow:auto;margin:0;padding:20px;box-shadow:0 8px 32px #182f2930;z-index:6}
+#game h2{font-size:20px;margin:12px 0 8px}
+#game .eyebrow{padding-right:25px;font-size:10px}
+#game-visual{height:50px;margin-top:10px}
+#game-visual span{font-size:23px}
+body:has(#game[open]) #story{display:none}
+@media(max-width:650px){#game{inset:auto 0 0;width:100%;max-height:46dvh;padding:12px 18px;border-radius:16px 16px 0 0}#game h2{font-size:18px;margin:6px 0}#game-intro{font-size:14px;line-height:1.65}#game-visual{display:none}#game-controls{font-size:14px;gap:6px}#game-result{font-size:14px;line-height:1.65}}
+aside{top:135px;border-radius:16px}
+#story{border-radius:16px}
+@media(min-width:900px){#story{bottom:88px}#story nav{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:8px 14px;background:#faf7ef;border:1px solid #aebba7;border-radius:40px;box-shadow:0 5px 20px #182f2920;gap:20px}#story nav button{min-width:100px}}
+@media(max-width:650px){header{left:8px;right:8px;top:8px;padding:7px 8px;border-radius:12px}.brand span{font-size:7px}.brand{font-size:22px}header button{font-size:11px;min-height:44px;padding:7px}#status{top:88px;left:12px;font-size:11px;max-width:calc(100vw - 24px);padding:5px 8px}#story{max-height:39dvh}#chapter-label{font-size:11px}#dialogue{font-size:15px;color:#182f29}aside{top:134px}body.fallback #story{top:153px}body.fallback #catalog{top:430px}#reading-content{font-weight:400}}

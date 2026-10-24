@@ -15,6 +15,7 @@ export function mulberry32(seed) {
 
 export async function createWorld({ canvas, data, onIslandSelect = () => {}, onObjectSelect = () => {}, onTransitionStage = () => {}, reducedMotion = false }) {
   if (!canvas || !data?.islands?.length) throw new Error('缺少群島畫布或內容資料。');
+  if (document.fonts) await document.fonts.load('600 42px "Publication Sans TW"', `${data.scenes.map(item=>item.coreDevice?.label||'').join('')}阿綺小岳映蓁芬姐`);
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, innerWidth < 700 ? 1.4 : 1.8));
   renderer.shadowMap.enabled = true;
@@ -67,7 +68,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     const context = surface.getContext('2d');
     context.fillStyle = '#fff9ed'; context.beginPath(); context.roundRect(4, 4, 504, surface.height - 8, 24); context.fill();
     context.strokeStyle = '#b5ad97'; context.lineWidth = 4; context.stroke();
-    context.fillStyle = color; context.font = `600 ${!speech && String(text).length <= 3 ? 88 : 42}px PublicationSansTW, sans-serif`; context.textAlign = 'center'; context.textBaseline = 'middle';
+    context.fillStyle = color; context.font = `600 ${!speech && String(text).length <= 3 ? 88 : 42}px "Publication Sans TW", sans-serif`; context.textAlign = 'center'; context.textBaseline = 'middle';
     if (speech) {
       lines.forEach((line, i) => context.fillText(line, 256, 40 + i * 51, 468));
     } else context.fillText(text, 256, 64, 466);
@@ -258,7 +259,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     const arms = [-1, 1].map(side => mesh(root, 'cylinder', profile.color, [side * .34, .75, 0], [.08, .65, .08]));
     const legs = [-1, 1].map(side => mesh(root, 'cylinder', '#58625e', [side * .14, .2, 0], [.095, .55, .1]));
     const prop = mesh(root, 'box', i === 0 ? '#a68459' : i === 1 ? '#4c5c62' : i === 2 ? '#f5e8ca' : '#d8b67a', [.4, 1.04, .2], i === 0 ? [.04, .35, .04] : [.22, .3, .04]);
-    const name = label(profile.name, '#263f42', 60); name.position.y = 2.12; root.add(name);
+    const name = label(profile.name, '#263f42', 76); name.position.y = 2.12; root.add(name);
     root.scale.setScalar(1.4);
     const configured = data.characters?.find(c => c.name === profile.name || c.id === profile.id);
     return { ...profile, id: configured?.id || profile.id, root, body, head, eyes, brows, mouth, arms, legs, prop, phase: i * 1.7, state: 'observe', stateUntil: 2 + i, base: new THREE.Vector3(...[[-2.4, 1.1, 2.2], [1, 1.1, 3.1], [-.7, 1.1, -.8], [3.3, 1.1, 1.4]][i]), reaction: 0, expression: 'neutral' };
@@ -418,7 +419,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     function part(type, color, position, scale, rotation = 0) { return mesh(g, type, color, position, scale, rotation); }
     function pose(actorId, x, z, expression) { const actor = actors.find(a => a.id === actorId || a.habit === actorId); if (actor && island === current) { actor.root.position.set(x, 1.1, z); actor.root.rotation.y = -.25; actor.expression = expression; actor.state = 'demonstrate'; actor.head.rotation.z = expression === 'concerned' ? -.15 : .04; actor.brows.forEach((b, i) => b.rotation.z = expression === 'concerned' ? (i ? -.35 : .35) : 0); actor.mouth.scale.set(expression === 'smile' ? .16 : .07, expression === 'concerned' ? .035 : .018, .02); } }
     if (kind === 'sourceverification') {
-      const hold = choices.includes('hold');
+      const hold = choices[0] === 'hold';
       for (let i = 0; i < 3; i++) { const card = part('box', i < choices.length - 1 ? '#87a17a' : '#d5b591', [-1.6 + i * 1.5, 2.7, 1], [1.05, 1.45, .12], (i - 1) * .2); card.rotation.z = hold ? .08 : -.08; part('box', '#5a736a', [-1.6 + i * 1.5, 2.75, 1.08], [.6, .06, .03]); }
       island.core.rotation.y += hold ? -.55 : .55; island.core.position.x += hold ? -1 : .8;
       pose('note', -1.4, 2.5, hold ? 'thoughtful' : 'concerned'); pose('pen', 1.4, 2.7, hold ? 'thoughtful' : 'concerned');

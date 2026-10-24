@@ -1,5 +1,6 @@
 import './style.css';
 import './publication-fonts.css';
+import './contrast.css';
 import { mountReadingNotes } from './reading-notes';
 import { initializeBrowserCache } from './browser-cache';
 import type { createWorld } from './world';
@@ -85,6 +86,12 @@ disclosure.href='https://www.dentsu.com/uk/en/policies/responsible-disclosure-po
 disclosure.textContent='資安問題揭露政策 ↗';
 disclosure.target='_blank';disclosure.rel='noopener noreferrer';
 $('.about-credit').before(disclosure);
+const immersivePreview = document.createElement('p');
+const immersivePreviewLink = document.createElement('a');
+immersivePreviewLink.href = `${import.meta.env.BASE_URL}immersive/`;
+immersivePreviewLink.textContent = t('體驗新版 22 座文章群島（製作中） ↗', 'Try the new 22 article islands (in progress) ↗');
+immersivePreview.append(immersivePreviewLink);
+$('.about-credit').before(immersivePreview);
 const mobileLayout = matchMedia('(max-width: 760px)');
 function setLibrary(open: boolean, focus = false) {
   document.body.classList.toggle('library-open', open);

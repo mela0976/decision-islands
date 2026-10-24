@@ -1,0 +1,15 @@
+:root{--ink:#182f29;--muted:#415348}
+.library,.about-dialog,#reader{color:#182f29;background:#faf8f2}
+.library-head>p,.library .result-count,.library .article-row small,.library .path-card p,.library .path-bottom,.library .empty p,.library .library-footer,.search-box kbd,.library .tabs button{color:#415348}
+.library .tabs button[aria-selected=true]{color:#182f29}
+.library .resume-reading,.library-kicker{color:#853b23}
+#reader .reader-meta,#reader .transcription-note,#reader .reading-guide .provenance,#reader .related h2,#reader .path-context,.about-dialog .about-credit{color:#415348}
+#reader .article-eyebrow,#reader .summary-block>span{color:#364d3e}
+#explorer-ui{--explorer-muted:#4e443e;--explorer-border:#aaa99a}
+#explorer-ui .explorer-panel,#explorer-ui .explorer-hud,#explorer-ui .explorer-help,#explorer-ui .explorer-toolbar{background:#fff9f0;color:#1e3329}
+.reading-journey-ui,#journey-picker{--journey-muted:#415348;--journey-secondary-ink:#344b3b;--journey-accent-ink:#793c28}
+body:not(.exploring) .welcome{padding:18px 22px;background:#152a30d9;border:1px solid #e3e9df55;border-radius:10px;color:#fffdf4;text-shadow:0 1px 2px #102329}
+body:not(.exploring) .welcome-copy,body:not(.exploring) .welcome-note,body:not(.exploring) .welcome .text-button{color:#f4f4e9}
+input::placeholder,textarea::placeholder{color:#536055;opacity:1}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline-color:#89391c}
+@media(max-width:600px){body:not(.exploring) .welcome{left:14px;width:calc(100vw - 28px);padding:14px 16px}}
