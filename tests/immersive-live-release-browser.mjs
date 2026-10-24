@@ -17,6 +17,10 @@ try {
   assert.equal(new URL(page.url()).hash, '#article');
   const islandCount = await page.evaluate(() => window.immersive.data.islands.length);
   assert.equal(islandCount, 22);
+  const arrival = await page.evaluate(() => window.immersive.world.getState().arrivalEvent);
+  assert.equal(arrival?.id, 'I01-arrival');
+  assert.equal(arrival.complete, true);
+  assert.equal(arrival.phase, 'reaction');
   const workerScopes = await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).map(registration => new URL(registration.scope).pathname));
   assert.ok(workerScopes.includes('/decision-islands/'));
   assert.ok(workerScopes.includes('/decision-islands/immersive/'));
@@ -57,6 +61,7 @@ try {
     finalUrl: page.url(),
     elapsedMs: Date.now() - startedAt,
     islandCount,
+    arrival,
     workerScopes,
     articleCharacters,
     interactionChoices: choices,
