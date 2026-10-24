@@ -1,5 +1,7 @@
 const WORLD_SEED = 0x20261126;
-const GOLDEN_ANGLE = 2.399963229728653;
+const MIN_ISLAND_SPACING = 18;
+const CLUSTER_RADIUS_LIMIT = 48;
+const CLUSTER_SAMPLE_RADIUS = 42;
 
 const ARTICLE_ORDER = [
   'I01', 'I02', 'P01', 'P02', 'P03', 'P04', 'P05', 'P06', 'P07', 'P08', 'P09',
@@ -7,10 +9,10 @@ const ARTICLE_ORDER = [
 ];
 
 const CHAPTERS = [
-  { id: 'intro', title: '序章群島', englishTitle: 'Intro', themeId: 'paper-shore', center: { x: -38, z: -32 }, articleRange: [0, 2] },
-  { id: 'people', title: '人本群島', englishTitle: 'People', themeId: 'warm-streets', center: { x: 34, z: -26 }, articleRange: [2, 11] },
-  { id: 'model', title: '洞察群島', englishTitle: 'Model', themeId: 'rose-lab', center: { x: 34, z: 32 }, articleRange: [11, 16] },
-  { id: 'ai', title: 'AI 行動群島', englishTitle: 'AI', themeId: 'blue-current', center: { x: -38, z: 35 }, articleRange: [16, 22] },
+  { id: 'intro', title: '序章群島', englishTitle: 'Intro', themeId: 'paper-shore', center: { x: -110, z: -110 }, articleRange: [0, 2] },
+  { id: 'people', title: '人本群島', englishTitle: 'People', themeId: 'warm-streets', center: { x: 110, z: -110 }, articleRange: [2, 11] },
+  { id: 'model', title: '洞察群島', englishTitle: 'Model', themeId: 'rose-lab', center: { x: 110, z: 110 }, articleRange: [11, 16] },
+  { id: 'ai', title: 'AI 行動群島', englishTitle: 'AI', themeId: 'blue-current', center: { x: -110, z: 110 }, articleRange: [16, 22] },
 ];
 
 const VISUAL_THEMES = [
@@ -47,7 +49,7 @@ const SCENE_CATALOG = [
     interactionType: 'judgment',
     interaction: { prompt: '如果提案只證明產出變快，下一個要補上的判斷是什麼？', control: { id: 'growth-claim', type: 'evidence-classification', label: '選一張桌上的判斷卡', minSelections: 1, maxSelections: 1, options: [{ id: 'speed', label: '先看製作速度', value: 'efficiency' }, { id: 'customer', label: '看是否替客戶創造價值', value: 'value' }, { id: 'risk', label: '先檢查資料與責任', value: 'governance' }] }, outcomes: [{ choiceId: 'speed', title: '速度是一項投入', text: '速度能縮短學習循環，但單靠產出更快，還不能說明市場價值。', insightTag: 'judgment', sourceHighlightIndex: 1 }, { choiceId: 'customer', title: '把問題拉回價值', text: '先問消費者是否得到更好的解決方式，才能分辨效率和成長。', insightTag: 'value', sourceHighlightIndex: 1 }, { choiceId: 'risk', title: '決策要有防線', text: '資料安全與人的判斷，是把 AI 速度用在經營上的必要條件。', insightTag: 'trust', sourceHighlightIndex: 2 }] },
     dialogue: [{ characterId: 'achi', text: '報告做得很快。可是客戶會因此得到什麼？', kind: 'fictional-dialogue' }, { characterId: 'yingzhen', text: '先把能證明的和還沒驗證的分開。', kind: 'fictional-dialogue' }],
-    handoff: { reason: '先從企業怎麼用 AI 學習與創造成長出發，再追問品牌變快之後如何真正理解人。', question: '如果答案來得更快，品牌和人的距離就會更近嗎？', visual: '工作台上的價值檢查表沿紙纖維展開，變成通往兩岸的連結裝置。' },
+    handoff: { relationType: 'concept-deepening', reason: '先從企業怎麼用 AI 學習與創造成長出發，再追問品牌變快之後如何真正理解人。', question: '如果答案來得更快，品牌和人的距離就會更近嗎？', visual: '工作台上的價值檢查表沿紙纖維展開，變成通往兩岸的連結裝置。' },
   },
   {
     id: 'I02', chapterId: 'intro', protagonistId: 'achi',
@@ -57,7 +59,7 @@ const SCENE_CATALOG = [
     interactionType: 'sourceverification',
     interaction: { prompt: '品牌想確認自己是否理解人，先把哪一種證據帶上橋？', control: { id: 'understanding-evidence', type: 'single-select', label: '選擇先核對的依據', minSelections: 1, maxSelections: 1, options: [{ id: 'survey', label: '消費者調查與生活型態資料', value: 'research' }, { id: 'contact', label: '品牌接觸點的曝光紀錄', value: 'contact' }, { id: 'conversation', label: '換說法或情境後的持續對話', value: 'dialogue' }] }, outcomes: [{ choiceId: 'survey', title: '研究提供起點', text: '調查讓品牌有依據，但仍要看樣本和情境能否回答眼前問題。', insightTag: 'people', sourceHighlightIndex: 1 }, { choiceId: 'contact', title: '接觸不等於理解', text: '曝光紀錄說明訊息出現過，無法單獨證明消費者真的認同。', insightTag: 'trust', sourceHighlightIndex: 0 }, { choiceId: 'conversation', title: '把研究變成對話', text: '持續測試不同主張和情境，讓研究成為修正方向的循環。', insightTag: 'dialogue', sourceHighlightIndex: 1 }] },
     dialogue: [{ characterId: 'achi', text: '訊息傳得更遠了，我們真的更懂人嗎？', kind: 'fictional-dialogue' }, { characterId: 'yue', text: '你們先聽聽看我為什麼停下來吧。', kind: 'fictional-dialogue' }],
-    handoff: { reason: '開場提出品牌與人的距離問題，接下來先進入 AI 真假難辨時的真實感與信任。', question: '看起來像真的內容，還需要什麼才能讓人相信？', visual: '橋邊一張未標來源的影像被海風吹起，印記逐漸變成花園裡可追查的線索。' },
+    handoff: { relationType: 'problem-cause', reason: '開場提出品牌與人的距離問題，接下來先進入 AI 真假難辨時的真實感與信任。', question: '看起來像真的內容，還需要什麼才能讓人相信？', visual: '橋邊一張未標來源的影像被海風吹起，印記逐漸變成花園裡可追查的線索。' },
   },
   {
     id: 'P01', chapterId: 'people', protagonistId: 'yingzhen',
@@ -67,7 +69,7 @@ const SCENE_CATALOG = [
     interactionType: 'sourceverification',
     interaction: { prompt: '這張影像很有說服力。你會先追哪個來源線索？', control: { id: 'image-trail', type: 'single-select', label: '選一個查證起點', minSelections: 1, maxSelections: 1, options: [{ id: 'creator', label: '找原始發布者與拍攝脈絡', value: 'primary-source' }, { id: 'reverse', label: '比對不同版本與發布時間', value: 'cross-check' }, { id: 'label', label: '看平台提供的生成標記', value: 'disclosure' }] }, outcomes: [{ choiceId: 'creator', title: '回到第一手來源', text: '先找作品由誰、在何種情境製作，能避免只用外觀判斷真實。', insightTag: 'truth', sourceHighlightIndex: 1 }, { choiceId: 'reverse', title: '交叉比對脈絡', text: '多個版本可顯示影像如何被改動與傳播，但仍要回到來源核實。', insightTag: 'verification', sourceHighlightIndex: 0 }, { choiceId: 'label', title: '標記只是線索', text: '生成標記能補充脈絡，不能取代對內容和來源的查證。', insightTag: 'truth', sourceHighlightIndex: 0 }] },
     dialogue: [{ characterId: 'yingzhen', text: '這張圖很真，但我還沒找到它從哪裡來。', kind: 'fictional-dialogue' }, { characterId: 'fenjie', text: '那我們先別急著轉給下一個人。', kind: 'fictional-dialogue' }],
-    handoff: { reason: '真實感需要可核對的來源，下一步是了解新聞查證如何把證據累積成信任。', question: '看起來是真的，就值得相信嗎？', visual: '照片背面的來源標籤延長成一道橋，橋端接住新聞查證室的證據卡。' },
+    handoff: { relationType: 'practical-application', reason: '真實感需要可核對的來源，接下來看品牌如何把真實感、信任與文化參與接成成長方法。', question: '品牌要怎麼同時被 AI 理解、被人信任，也進入文化？', visual: '花園裡的來源標記分成三條小徑，分別通往算法、人心與文化街區。' },
   },
   {
     id: 'P02', chapterId: 'people', protagonistId: 'fenjie',
@@ -77,7 +79,7 @@ const SCENE_CATALOG = [
     interactionType: 'journey',
     interaction: { prompt: '顧客走到街口卻沒有下一步，先把哪一段接好？', control: { id: 'growth-path', type: 'stage-select', label: '選一個先修復的街口', minSelections: 1, maxSelections: 1, options: [{ id: 'discover', label: '讓合適的人看見並理解品牌', value: 'discovery' }, { id: 'trust', label: '補上信任與情緒連結', value: 'trust' }, { id: 'culture', label: '讓顧客能參與文化情境', value: 'culture' }] }, outcomes: [{ choiceId: 'discover', title: '入口要被讀懂', text: 'AI 能讀取內容，才有機會把品牌放進相關的消費情境。', insightTag: 'growth', sourceHighlightIndex: 0 }, { choiceId: 'trust', title: '推薦不會自動產生偏好', text: '信任和情感連結需要長期投入，不能只靠演算法排序。', insightTag: 'trust', sourceHighlightIndex: 0 }, { choiceId: 'culture', title: '加入正在發生的文化', text: '娛樂、運動和 IP 能讓品牌被參與，而不只是被看到。', insightTag: 'culture', sourceHighlightIndex: 0 }] },
     dialogue: [{ characterId: 'fenjie', text: '先跟我說，你現在最想完成哪一件事。', kind: 'fictional-dialogue' }, { characterId: 'yue', text: '我想看懂選項，不想再多一排推薦。', kind: 'fictional-dialogue' }],
-    handoff: { reason: '增長街區分出多個需要協作的入口，策略角色要先判斷真正的成長課題再安排工作。', question: '看起來是轉換不佳，背後真正卡住的是哪個問題？', visual: '街區路線收束成一張立體策略工作台，分散的路口接成完整旅程。' },
+    handoff: { relationType: 'concept-deepening', reason: '增長街區分出多個需要協作的入口，策略角色要先判斷真正的成長課題再安排工作。', question: '看起來是轉換不佳，背後真正卡住的是哪個問題？', visual: '街區路線收束成一張立體策略工作台，分散的路口接成完整旅程。' },
   },
   {
     id: 'P03', chapterId: 'people', protagonistId: 'achi',
@@ -87,7 +89,7 @@ const SCENE_CATALOG = [
     interactionType: 'journey',
     interaction: { prompt: '先把表面症狀連回一個更可能的成長課題。', control: { id: 'strategy-question', type: 'stage-select', label: '選擇要先釐清的環節', minSelections: 1, maxSelections: 1, options: [{ id: 'positioning', label: '品牌定位是否清楚', value: 'positioning' }, { id: 'value', label: '消費者是否信任產品價值', value: 'value' }, { id: 'culture', label: '品牌是否進入對方的文化語境', value: 'culture' }] }, outcomes: [{ choiceId: 'positioning', title: '先釐清品牌說什麼', text: '如果定位不清楚，增加廣告聲量也不一定能補上品牌認知。', insightTag: 'strategy', sourceHighlightIndex: 0 }, { choiceId: 'value', title: '先問為何值得選', text: '轉換不佳可能是價值未被理解或信任不足，需回到消費者問題。', insightTag: 'trust', sourceHighlightIndex: 0 }, { choiceId: 'culture', title: '先進入生活脈絡', text: '年輕族群不買單可能表示品牌還沒有合適的文化連結方式。', insightTag: 'culture', sourceHighlightIndex: 0 }] },
     dialogue: [{ characterId: 'achi', text: '「年輕人不買」聽起來像結論，其實還是問題。', kind: 'fictional-dialogue' }, { characterId: 'yingzhen', text: '先拆清楚，我們才知道要驗證什麼。', kind: 'fictional-dialogue' }],
-    handoff: { reason: '策略架構需要真實的人性洞察，下一座島檢查信任如何由可查證的證據建立。', question: '我們說自己可靠，消費者能在哪裡看到證據？', visual: '工作台上的連線拉長成一道透明橋，桌面卡片轉成查證室的來源檔案。' },
+    handoff: { relationType: 'problem-cause', reason: '策略架構需要真實的人性洞察，下一座島檢查信任如何由可查證的證據建立。', question: '我們說自己可靠，消費者能在哪裡看到證據？', visual: '工作台上的連線拉長成一道透明橋，桌面卡片轉成查證室的來源檔案。' },
   },
   {
     id: 'P04', chapterId: 'people', protagonistId: 'yingzhen',
@@ -97,7 +99,7 @@ const SCENE_CATALOG = [
     interactionType: 'sourceverification',
     interaction: { prompt: '兩份材料都說得通，哪一步能讓信任多一點依據？', control: { id: 'trust-check', type: 'single-select', label: '選擇查證動作', minSelections: 1, maxSelections: 1, options: [{ id: 'three-sources', label: '尋找不同來源交叉驗證', value: 'cross-source' }, { id: 'counterparty', label: '補上當事人與競爭者說法', value: 'counter-view' }, { id: 'hold', label: '目前證據不足，暫緩定論', value: 'hold' }] }, outcomes: [{ choiceId: 'three-sources', title: '多來源互相核對', text: '交叉驗證能降低單一說法帶來的風險，仍需核對來源是否彼此獨立。', insightTag: 'trust', sourceHighlightIndex: 0 }, { choiceId: 'counterparty', title: '讓不同立場入場', text: '當事方與競爭者的說法可補足脈絡，不能只留下最有利的一方。', insightTag: 'verification', sourceHighlightIndex: 0 }, { choiceId: 'hold', title: '不刊出也是判斷', text: '無法驗證時暫緩發表，保住內容的可信度。', insightTag: 'judgment', sourceHighlightIndex: 1 }] },
     dialogue: [{ characterId: 'yingzhen', text: '這份資料還缺一個能互相核對的來源。', kind: 'fictional-dialogue' }, { characterId: 'achi', text: '那先別把猜測放進簡報結論。', kind: 'fictional-dialogue' }],
-    handoff: { reason: '信任來自可被理解的證據，接下來看品牌如何在理性推薦之外形成真實購買動機。', question: 'AI 找到划算的選項後，人為什麼還會想要另一個？', visual: '透明橋上的來源印記化成店門口的商品標籤，一張購物清單被風吹向情境商店。' },
+    handoff: { relationType: 'different-viewpoint', reason: '信任來自可被理解的證據，接下來看品牌如何在理性推薦之外形成真實購買動機。', question: 'AI 找到划算的選項後，人為什麼還會想要另一個？', visual: '透明橋上的來源印記化成店門口的商品標籤，一張購物清單被風吹向情境商店。' },
   },
   {
     id: 'P05', chapterId: 'people', protagonistId: 'yue',
@@ -107,7 +109,7 @@ const SCENE_CATALOG = [
     interactionType: 'purchase',
     interaction: { prompt: '先選一項真正影響你此刻想買什麼的理由。', control: { id: 'purchase-motive', type: 'single-select', label: '選一個此刻最重要的條件', minSelections: 1, maxSelections: 1, options: [{ id: 'value', label: '功能、價格和合用程度', value: 'rational-fit' }, { id: 'emotion', label: '和品牌故事或生活經驗的連結', value: 'emotional-fit' }, { id: 'context', label: '現在的情境與能否馬上取得', value: 'occasion-fit' }] }, outcomes: [{ choiceId: 'value', title: '理性選擇有它的理由', text: '推薦可快速比較價格和功能，但它不一定包含消費者所有在意的事。', insightTag: 'preference', sourceHighlightIndex: 1 }, { choiceId: 'emotion', title: '偏心來自情感慣性', text: '沒有簡單規格能完整說明的喜歡，可能來自故事、認同和熟悉感。', insightTag: 'affinity', sourceHighlightIndex: 0 }, { choiceId: 'context', title: '選擇發生在情境裡', text: '使用場景決定商品是否合適，品牌要在比較發生前被想起。', insightTag: 'journey', sourceHighlightIndex: 1 }] },
     dialogue: [{ characterId: 'yue', text: '推薦的確實划算，可是我今天想買的不是那個。', kind: 'fictional-dialogue' }, { characterId: 'fenjie', text: '你在意它哪一點？我們可以從這裡開始。', kind: 'fictional-dialogue' }],
-    handoff: { reason: '購買動機不只來自功能和價格，品牌也透過共同參與與情緒記憶進入生活。', question: '什麼樣的體驗會讓人過一陣子還記得？', visual: '商品袋上的情緒標籤延伸成一束舞台燈光，照亮體育場和演唱會的入口。' },
+    handoff: { relationType: 'concept-deepening', reason: '購買動機不只來自功能和價格，品牌也透過共同參與與情緒記憶進入生活。', question: '什麼樣的體驗會讓人過一陣子還記得？', visual: '商品袋上的情緒標籤延伸成一束舞台燈光，照亮體育場和演唱會的入口。' },
   },
   {
     id: 'P06', chapterId: 'people', protagonistId: 'yue',
@@ -117,7 +119,7 @@ const SCENE_CATALOG = [
     interactionType: 'memory',
     interaction: { prompt: '挑出會讓你想起這場共同參與的細節。', control: { id: 'shared-moment', type: 'multi-select', label: '選取最有記憶的現場線索', minSelections: 1, maxSelections: 3, options: [{ id: 'song', label: '大家一起唱的那一段', value: 'shared-song' }, { id: 'cheer', label: '和旁邊的人交換應援', value: 'participation' }, { id: 'place', label: '球場或舞台的共同場景', value: 'place' }, { id: 'story', label: '能說給朋友聽的故事', value: 'story' }] }, outcomes: [{ choiceId: 'song', title: '聲音成為共同線索', text: '共同聽見同一段內容，可能讓不同人找到相聚的時刻。', insightTag: 'memory', sourceHighlightIndex: 0 }, { choiceId: 'cheer', title: '參與讓關係可見', text: '粉絲不只是觀看者，應援和二創也讓人能加入文化現場。', insightTag: 'participation', sourceHighlightIndex: 1 }, { choiceId: 'place', title: '場域承接共同經驗', text: '體育與娛樂提供品牌和人能夠相遇的實際場景。', insightTag: 'culture', sourceHighlightIndex: 1 }, { choiceId: 'story', title: '記憶會被轉述', text: '能被人帶回日常分享的經驗，可能比單次曝光留下更久。', insightTag: 'attention', sourceHighlightIndex: 0 }] },
     dialogue: [{ characterId: 'yue', text: '我本來只是經過，現在想把這段唱完。', kind: 'fictional-dialogue' }, { characterId: 'achi', text: '這個時刻，好像比看見一次廣告更容易記住。', kind: 'fictional-dialogue' }],
-    handoff: { reason: '現場體驗說明注意力和參與會留下印象，接下來檢查演算法偏好的內容是否也能打動人。', question: '內容被排序看見之後，誰會願意替品牌說話？', visual: '舞台燈光化成手機留言上的一個光點，沿著社群巷弄滑向真實對話。' },
+    handoff: { relationType: 'practical-application', reason: '現場體驗說明注意力和參與會留下印象，接下來檢查演算法偏好的內容是否也能打動人。', question: '內容被排序看見之後，誰會願意替品牌說話？', visual: '舞台燈光化成手機留言上的一個光點，沿著社群巷弄滑向真實對話。' },
   },
   {
     id: 'P07', chapterId: 'people', protagonistId: 'yue',
@@ -127,7 +129,7 @@ const SCENE_CATALOG = [
     interactionType: 'sourceverification',
     interaction: { prompt: '一段討論被 AI 引用時，你要先看什麼？', control: { id: 'social-proof', type: 'single-select', label: '選擇核對的對話線索', minSelections: 1, maxSelections: 1, options: [{ id: 'detail', label: '是否有具體使用情境', value: 'experience' }, { id: 'source', label: '留言者能否被辨認為真實經驗者', value: 'authenticity' }, { id: 'balance', label: '是否包含限制與不同看法', value: 'balance' }] }, outcomes: [{ choiceId: 'detail', title: '經驗要說得具體', text: '具體情境讓資訊較容易被理解和擷取，也讓人知道分享者遇到什麼。', insightTag: 'content', sourceHighlightIndex: 1 }, { choiceId: 'source', title: '真實討論建立脈絡', text: '自發且具體的討論能提供品牌內容以外的參考，但不能只看數量。', insightTag: 'trust', sourceHighlightIndex: 0 }, { choiceId: 'balance', title: '資訊與情緒都要在場', text: '只有規格或只有情緒都不夠，品牌要守住可理解資訊和共鳴的交集。', insightTag: 'judgment', sourceHighlightIndex: 1 }] },
     dialogue: [{ characterId: 'yue', text: '這個介紹很完整，但朋友那段比較像真的用過。', kind: 'fictional-dialogue' }, { characterId: 'achi', text: '那我們得讓資訊說清楚，也讓人有話可說。', kind: 'fictional-dialogue' }],
-    handoff: { reason: '社群討論需要真實參與與具體感受，媒體也可以從購買曝光改為設計可參與的注意力。', question: '被看見之後，人有沒有真的投入一段時間？', visual: '留言裡的觀看時間刻度沿牆延伸，變成一條可以走進去的媒體街。' },
+    handoff: { relationType: 'concept-deepening', reason: '社群討論需要真實參與與具體感受，媒體也可以從購買曝光改為設計可參與的注意力。', question: '被看見之後，人有沒有真的投入一段時間？', visual: '留言裡的觀看時間刻度沿牆延伸，變成一條可以走進去的媒體街。' },
   },
   {
     id: 'P08', chapterId: 'people', protagonistId: 'achi',
@@ -137,7 +139,7 @@ const SCENE_CATALOG = [
     interactionType: 'attention',
     interaction: { prompt: '選一種觀看狀態，想想它能留下多少注意力證據。', control: { id: 'attention-level', type: 'discrete-range', label: '選一段投入程度', minSelections: 1, maxSelections: 1, options: [{ id: 'glance', label: '瞥見一下', value: 2 }, { id: 'watch', label: '停留觀看', value: 5 }, { id: 'join', label: '停下來參與', value: 8 }] }, outcomes: [{ choiceId: 'glance', title: '可視不代表被看進去', text: '畫面存在只是曝光，不能據此推定品牌已被記住。', insightTag: 'attention', sourceHighlightIndex: 0 }, { choiceId: 'watch', title: '觀看時間值得觀察', text: '研究指出平均觀看秒數比單看可視率更能預測品牌回想。', insightTag: 'memory', sourceHighlightIndex: 0 }, { choiceId: 'join', title: '參與留下可比較的經驗', text: '把媒體做成體驗，能讓人主動投入並形成記憶線索。', insightTag: 'participation', sourceHighlightIndex: 0 }] },
     dialogue: [{ characterId: 'achi', text: '報表說大家都看見了，怎麼還是記不住？', kind: 'fictional-dialogue' }, { characterId: 'yue', text: '我真的停下來的那一刻，才會想回頭找你。', kind: 'fictional-dialogue' }],
-    handoff: { reason: '注意力能讓品牌被感受到，下一座島追問哪些共看與共參與能在分眾時代留下共同記憶。', question: '大家一起記得的時刻，是怎麼形成的？', visual: '計時器的觀看刻度點亮成一座舊劇場的座位，空白座位逐漸坐滿共同記憶。' },
+    handoff: { relationType: 'concept-deepening', reason: '注意力能讓品牌被感受到，下一座島追問哪些共看與共參與能在分眾時代留下共同記憶。', question: '大家一起記得的時刻，是怎麼形成的？', visual: '計時器的觀看刻度點亮成一座舊劇場的座位，空白座位逐漸坐滿共同記憶。' },
   },
   {
     id: 'P09', chapterId: 'people', protagonistId: 'yue',
@@ -147,7 +149,7 @@ const SCENE_CATALOG = [
     interactionType: 'memory',
     interaction: { prompt: '挑出能讓不同人相遇的共同觀看線索。', control: { id: 'common-ground', type: 'multi-select', label: '收集共同記憶線索', minSelections: 1, maxSelections: 3, options: [{ id: 'music', label: '不同人都聽過的歌曲', value: 'music' }, { id: 'show', label: '一起追過的節目或戲劇', value: 'shared-show' }, { id: 'sport', label: '同一場賽事的現場時刻', value: 'sport' }, { id: 'talk', label: '把回憶說給別人聽', value: 'retelling' }] }, outcomes: [{ choiceId: 'music', title: '旋律讓人接上記憶', text: '共通內容可以跨過部分年齡與生活差異，成為品牌相聚的入口。', insightTag: 'memory', sourceHighlightIndex: 0 }, { choiceId: 'show', title: '共同觀看搭起橋梁', text: '收視和內容情境提供人與品牌共同經歷的場域。', insightTag: 'culture', sourceHighlightIndex: 0 }, { choiceId: 'sport', title: '現場感讓參與延伸', text: '賽事觀眾的共同情緒能延續成長期的討論和品牌關係。', insightTag: 'participation', sourceHighlightIndex: 1 }, { choiceId: 'talk', title: '轉述讓記憶繼續', text: '人願意分享的片段，讓共同經驗有機會持續被記起。', insightTag: 'trust', sourceHighlightIndex: 1 }] },
     dialogue: [{ characterId: 'yue', text: '我沒看過這一集，怎麼也跟得上大家在笑什麼？', kind: 'fictional-dialogue' }, { characterId: 'achi', text: '原來品牌也需要一個大家能相遇的地方。', kind: 'fictional-dialogue' }],
-    handoff: { reason: '共同記憶提供理解人的線索，接下來研究者把這些問題帶進可對話的消費者模型。', question: '品牌能不能在真正決策之前，先和消費者對話？', visual: '劇場裡的座位逐漸排成觀察室的訪談椅，掌聲聲波變成模型上的情境資料。' },
+    handoff: { relationType: 'research-validation', reason: '共同記憶提供理解人的線索，接下來研究者把這些問題帶進可對話的消費者模型。', question: '品牌能不能在真正決策之前，先和消費者對話？', visual: '劇場裡的座位逐漸排成觀察室的訪談椅，掌聲聲波變成模型上的情境資料。' },
   },
   {
     id: 'M01', chapterId: 'model', protagonistId: 'yingzhen',
@@ -157,7 +159,7 @@ const SCENE_CATALOG = [
     interactionType: 'persona',
     interaction: { prompt: '換一個情境，檢查模型推論是否還成立。', control: { id: 'persona-scenario', type: 'scenario-select', label: '選一個要測的情境', minSelections: 1, maxSelections: 1, options: [{ id: 'new-category', label: '從未出現過的新產品類別', value: 'novelty' }, { id: 'known-market', label: '既有品類中的包裝選擇', value: 'known-choice' }, { id: 'social-shift', label: '社會情緒突然改變', value: 'rapid-change' }] }, outcomes: [{ choiceId: 'new-category', title: '新類別需要更多校準', text: '沒有足夠先例時，模擬應由真人研究補上尚未觀察到的反應。', insightTag: 'model-boundary', sourceHighlightIndex: 1 }, { choiceId: 'known-market', title: '熟悉情境可先驗證', text: '已有研究基礎時，模型可協助比較產品、價格、包裝和溝通方向。', insightTag: 'simulation', sourceHighlightIndex: 2 }, { choiceId: 'social-shift', title: '態度變化要留意時點', text: '市場與情緒快速轉變時，既有樣本不一定足以代表新的狀態。', insightTag: 'judgment', sourceHighlightIndex: 1 }] },
     dialogue: [{ characterId: 'yingzhen', text: '0.89 是一個訊號，不是可以忘記邊界的理由。', kind: 'fictional-dialogue' }, { characterId: 'achi', text: '那張結果卡背面寫了什麼？', kind: 'fictional-dialogue' }],
-    handoff: { reason: 'Persona 模擬需清楚說明樣本和情境，下一步把有限注意力放回品牌會出現的關鍵場域。', question: '有限的注意力應該放在哪些地方，才不會被稀釋？', visual: '觀察室的情境卡展開成多渠道地圖，散落的接觸點被連成一條選擇路徑。' },
+    handoff: { relationType: 'practical-application', reason: 'Persona 模擬需清楚說明樣本和情境，下一步把有限注意力放回品牌會出現的關鍵場域。', question: '有限的注意力應該放在哪些地方，才不會被稀釋？', visual: '觀察室的情境卡展開成多渠道地圖，散落的接觸點被連成一條選擇路徑。' },
   },
   {
     id: 'M02', chapterId: 'model', protagonistId: 'achi',
@@ -167,7 +169,7 @@ const SCENE_CATALOG = [
     interactionType: 'attention',
     interaction: { prompt: '選出一個最值得進一步驗證的媒體場域。', control: { id: 'channel-focus', type: 'discrete-range', label: '選擇要先看的場域', minSelections: 1, maxSelections: 1, options: [{ id: 'video', label: '能累積較長觀看的影音場域', value: 3 }, { id: 'search', label: '消費者主動找答案的搜尋場域', value: 6 }, { id: 'experience', label: '能親自參與的實體體驗場域', value: 9 }] }, outcomes: [{ choiceId: 'video', title: '先檢查觀看品質', text: '影片曝光要和觀看秒數一起看，才能了解人是否有投入。', insightTag: 'attention', sourceHighlightIndex: 0 }, { choiceId: 'search', title: '守住被選擇的入口', text: '注意力被分散時，品牌仍要在消費者主動決策的場域保持可見。', insightTag: 'sov', sourceHighlightIndex: 0 }, { choiceId: 'experience', title: '場域可以承載參與', text: 'SOV 要連到消費者參與的關鍵場域，而不只是增加觸及點。', insightTag: 'participation', sourceHighlightIndex: 1 }] },
     dialogue: [{ characterId: 'achi', text: '這張地圖上有很多點，哪幾個是人真的會停留的？', kind: 'fictional-dialogue' }, { characterId: 'yingzhen', text: '先定義要觀察什麼，再決定怎麼比較。', kind: 'fictional-dialogue' }],
-    handoff: { reason: '媒體場域的取捨需要可比較的依據，接下來辨認哪些數據能支撐決策，哪些仍只是估計。', question: '看起來完整的資料，能直接替我們下決定嗎？', visual: '地圖上各渠道的標記變成天平上的不同證據卡，海岸另一端出現決策桌。' },
+    handoff: { relationType: 'research-validation', reason: '媒體場域的取捨需要可比較的依據，接下來辨認哪些數據能支撐決策，哪些仍只是估計。', question: '看起來完整的資料，能直接替我們下決定嗎？', visual: '地圖上各渠道的標記變成天平上的不同證據卡，海岸另一端出現決策桌。' },
   },
   {
     id: 'M03', chapterId: 'model', protagonistId: 'yingzhen',
@@ -177,7 +179,7 @@ const SCENE_CATALOG = [
     interactionType: 'judgment',
     interaction: { prompt: '替眼前的陳述選一個最合適的分類。', control: { id: 'evidence-type', type: 'evidence-classification', label: '選擇你目前會採用的標籤', minSelections: 1, maxSelections: 1, options: [{ id: 'observed', label: '資料中直接觀察到', value: 'data' }, { id: 'estimated', label: '根據模型估計', value: 'estimate' }, { id: 'unknown', label: '現有資訊還無法回答', value: 'unknown' }] }, outcomes: [{ choiceId: 'observed', title: '直接資料可被核對', text: '先標出實際觀察到的內容，避免和模型推估混在一起。', insightTag: 'evidence', sourceHighlightIndex: 0 }, { choiceId: 'estimated', title: '估計仍是估計', text: '模型結果可協助判斷，但要保留假設、樣本與可能偏差。', insightTag: 'judgment', sourceHighlightIndex: 1 }, { choiceId: 'unknown', title: '未知也要有位置', text: '把無法回答的問題明確留下，能讓人知道下一步該補什麼。', insightTag: 'unknown', sourceHighlightIndex: 0 }] },
     dialogue: [{ characterId: 'yingzhen', text: '數字很精確，先別把它當成真相。', kind: 'fictional-dialogue' }, { characterId: 'achi', text: '我把不確定的部分也帶進決策會議。', kind: 'fictional-dialogue' }],
-    handoff: { reason: '衡斷力負責區分證據與未知，下一步要看怎麼把資料用在顧客真正需要完成的事。', question: '從一份報告到顧客下一步，中間還缺少什麼？', visual: '天平旁的未知卡變成服務路徑上的岔口，通往生成式體驗的下一步地圖。' },
+    handoff: { relationType: 'practical-application', reason: '衡斷力負責區分證據與未知，下一步要看怎麼把資料用在顧客真正需要完成的事。', question: '從一份報告到顧客下一步，中間還缺少什麼？', visual: '天平旁的未知卡變成服務路徑上的岔口，通往生成式體驗的下一步地圖。' },
   },
   {
     id: 'M04', chapterId: 'model', protagonistId: 'fenjie',
@@ -187,7 +189,7 @@ const SCENE_CATALOG = [
     interactionType: 'journey',
     interaction: { prompt: '顧客停下來時，選一個最能解除眼前阻力的行動。', control: { id: 'next-step', type: 'stage-select', label: '選一個支援動作', minSelections: 1, maxSelections: 1, options: [{ id: 'compare', label: '把差異和限制說清楚', value: 'clarify' }, { id: 'simplify', label: '減少現在不需要的步驟', value: 'simplify' }, { id: 'assist', label: '提供真人或 Agent 協助', value: 'assist' }] }, outcomes: [{ choiceId: 'compare', title: '補上決策資訊', text: '商品資料要說明適用情境、問題、差異和購買後限制。', insightTag: 'content', sourceHighlightIndex: 1 }, { choiceId: 'simplify', title: '移除不必要的摩擦', text: '過長或複雜的流程可能讓顧客放棄，縮短路徑要一起檢查風險。', insightTag: 'journey', sourceHighlightIndex: 0 }, { choiceId: 'assist', title: '看情境安排協助', text: '生成式體驗應支援顧客的下一步，不只是在頁面上增加 AI 功能。', insightTag: 'experience', sourceHighlightIndex: 0 }] },
     dialogue: [{ characterId: 'fenjie', text: '他不是不要買，他只是還沒準備好往下走。', kind: 'fictional-dialogue' }, { characterId: 'achi', text: '那就先把他卡住的地方找出來。', kind: 'fictional-dialogue' }],
-    handoff: { reason: '個人旅程需要合適的資料和服務，企業也必須處理看不見的文化阻力才能把體驗落地。', question: '流程畫得很完整，為什麼組織還是走不動？', visual: '路徑下方浮出水面以下的冰山，服務路線與隱藏的文化暗流相接。' },
+    handoff: { relationType: 'problem-cause', reason: '個人旅程需要合適的資料和服務，企業也必須處理看不見的文化阻力才能把體驗落地。', question: '流程畫得很完整，為什麼組織還是走不動？', visual: '路徑下方浮出水面以下的冰山，服務路線與隱藏的文化暗流相接。' },
   },
   {
     id: 'M05', chapterId: 'model', protagonistId: 'fenjie',
@@ -197,7 +199,7 @@ const SCENE_CATALOG = [
     interactionType: 'judgment',
     interaction: { prompt: '選一個應該先被看見的水面下因素。', control: { id: 'hidden-current', type: 'evidence-classification', label: '選擇一張需要聆聽的卡', minSelections: 1, maxSelections: 1, options: [{ id: 'fear', label: '員工對工作改變的擔心', value: 'employee-concern' }, { id: 'guidance', label: '主管沒有說明省下時間的用途', value: 'leadership-gap' }, { id: 'silo', label: '跨部門資訊和責任分散', value: 'silo' }] }, outcomes: [{ choiceId: 'fear', title: '把擔心說出來', text: '員工對角色變化的感受會影響轉型是否被採用。', insightTag: 'culture', sourceHighlightIndex: 0 }, { choiceId: 'guidance', title: '補上清楚的工作方向', text: '工具省下時間後，組織仍要說明接下來要如何使用。', insightTag: 'leadership', sourceHighlightIndex: 1 }, { choiceId: 'silo', title: '看見交接處的阻力', text: '部門之間資訊分散，可能讓單一工具無法改變決策流程。', insightTag: 'organization', sourceHighlightIndex: 0 }] },
     dialogue: [{ characterId: 'fenjie', text: '工具是裝好了，可是大家好像還在等一句話。', kind: 'fictional-dialogue' }, { characterId: 'achi', text: '那我們先問清楚，改變對每個人意味著什麼。', kind: 'fictional-dialogue' }],
-    handoff: { reason: '文化暗流提醒企業不能只看系統能力，接下來把注意力帶回服務現場的猶豫與治理指標。', question: '顧客卡住的地方，從哪一個訊號才看得出來？', visual: '冰山水面下的阻力化成服務街上短暫停住的腳步和一個未完成的表單。' },
+    handoff: { relationType: 'practical-application', reason: '文化暗流提醒企業不能只看系統能力，接下來把注意力帶回服務現場的猶豫與治理指標。', question: '顧客卡住的地方，從哪一個訊號才看得出來？', visual: '冰山水面下的阻力化成服務街上短暫停住的腳步和一個未完成的表單。' },
   },
   {
     id: 'A01', chapterId: 'ai', protagonistId: 'fenjie',
@@ -207,7 +209,7 @@ const SCENE_CATALOG = [
     interactionType: 'journey',
     interaction: { prompt: '轉換提升但後續問題變多，先在哪個節點增加支援？', control: { id: 'service-repair', type: 'stage-select', label: '選一個先調整的服務節點', minSelections: 1, maxSelections: 1, options: [{ id: 'before-pay', label: '結帳前說清楚必要資訊', value: 'checkout' }, { id: 'after-order', label: '下單後補上配送與退貨說明', value: 'fulfillment' }, { id: 'support', label: '讓顧客容易找到客服協助', value: 'support' }] }, outcomes: [{ choiceId: 'before-pay', title: '先讓顧客知道代價', text: '縮短流程時仍要讓付款、商品和風險資訊足以支持選擇。', insightTag: 'journey', sourceHighlightIndex: 0 }, { choiceId: 'after-order', title: '檢查完整服務結果', text: '轉換率要和退款、取消、配送錯誤及客服量一起看。', insightTag: 'governance', sourceHighlightIndex: 0 }, { choiceId: 'support', title: '保留能接手的窗口', text: '當流程或商品不符合預期，顧客需要明確而可用的協助。', insightTag: 'service', sourceHighlightIndex: 0 }] },
     dialogue: [{ characterId: 'fenjie', text: '他下單很快，現在卻不知道該問誰。', kind: 'fictional-dialogue' }, { characterId: 'achi', text: '只看轉換率，我們會漏掉後面發生的事。', kind: 'fictional-dialogue' }],
-    handoff: { reason: '服務設計必須納入治理和支援，AI Agent 也需要回答它正在做什麼、使用哪些資料。', question: '顧客看不見 Agent 的工作過程，怎麼放心把任務交出去？', visual: '服務窗口上的待辦單被接進一個協作中心，Agent 的每個步驟都留下可確認的狀態。' },
+    handoff: { relationType: 'concept-deepening', reason: '服務設計必須納入治理和支援，AI Agent 也需要回答它正在做什麼、使用哪些資料。', question: '顧客看不見 Agent 的工作過程，怎麼放心把任務交出去？', visual: '服務窗口上的待辦單被接進一個協作中心，Agent 的每個步驟都留下可確認的狀態。' },
   },
   {
     id: 'A02', chapterId: 'ai', protagonistId: 'achi',
@@ -217,7 +219,7 @@ const SCENE_CATALOG = [
     interactionType: 'delegation',
     interaction: { prompt: '替這項任務選一個委託邊界，並標出人工檢查點。', control: { id: 'agent-trust-boundary', type: 'permission-select', label: '選擇 Agent 的可執行範圍', minSelections: 1, maxSelections: 1, options: [{ id: 'draft', label: '整理資料並提出草稿', value: 'draft-only' }, { id: 'recommend', label: '比較方案並提出建議', value: 'recommend' }, { id: 'execute', label: '直接完成且不回報進度', value: 'execute' }] }, outcomes: [{ choiceId: 'draft', title: '先讓人看得見工作', text: 'Agent 可以整理資料，並公開來源與待確認項目。', insightTag: 'transparency', sourceHighlightIndex: 0 }, { choiceId: 'recommend', title: '建議需要可檢查依據', text: 'AI 能協助判斷，使用者仍需知道依據、限制和建議如何形成。', insightTag: 'trust', sourceHighlightIndex: 0 }, { choiceId: 'execute', title: '不透明會傷害使用信任', text: '任務執行快不代表值得託付，狀態和接手方式也屬於體驗。', insightTag: 'human-checkpoint', sourceHighlightIndex: 0 }] },
     dialogue: [{ characterId: 'achi', text: '它做完了，但我不知道它到底檢查過什麼。', kind: 'fictional-dialogue' }, { characterId: 'yingzhen', text: '把資料來源和限制一起顯示，才知道能不能接著用。', kind: 'fictional-dialogue' }],
-    handoff: { reason: '可信任的 Agent 需要透明呈現工作和限制，品牌還要讓自己的內容被 AI 正確理解並被消費者記得。', question: '被 AI 引用之後，品牌留下了什麼？', visual: '任務牆上的內容卡變成答案花園裡的知識節點，卡片背面浮出情緒與品牌線索。' },
+    handoff: { relationType: 'different-viewpoint', reason: '可信任的 Agent 需要透明呈現工作和限制，品牌還要讓自己的內容被 AI 正確理解並被消費者記得。', question: '被 AI 引用之後，品牌留下了什麼？', visual: '任務牆上的內容卡變成答案花園裡的知識節點，卡片背面浮出情緒與品牌線索。' },
   },
   {
     id: 'A03', chapterId: 'ai', protagonistId: 'yue',
@@ -227,7 +229,7 @@ const SCENE_CATALOG = [
     interactionType: 'sourceverification',
     interaction: { prompt: '選一個可以檢查答案品質，也能保留品牌辨識的方法。', control: { id: 'geo-check', type: 'single-select', label: '選擇檢查方向', minSelections: 1, maxSelections: 1, options: [{ id: 'facts', label: '提供清楚、可核對的內容來源', value: 'grounding' }, { id: 'voice', label: '加入品牌獨有的觀點與語氣', value: 'distinctiveness' }, { id: 'experience', label: '核對宣稱與實際體驗是否一致', value: 'experience' }] }, outcomes: [{ choiceId: 'facts', title: '先讓資訊能被理解', text: '結構清楚和可信來源能提高內容被正確讀取的機會。', insightTag: 'geo', sourceHighlightIndex: 0 }, { choiceId: 'voice', title: '不要只留下標準答案', text: '只有規格和公版敘述，可能讓品牌在同類答案中失去辨識。', insightTag: 'brand-memory', sourceHighlightIndex: 0 }, { choiceId: 'experience', title: '答案要對得上真實使用', text: '內容若和實際商品或服務有落差，快速引用反而會放大失望。', insightTag: 'trust', sourceHighlightIndex: 0 }] },
     dialogue: [{ characterId: 'yue', text: '答案裡每個品牌都對，我還是不知道要記得誰。', kind: 'fictional-dialogue' }, { characterId: 'achi', text: '讓人記得的那一點，不能也被整理掉。', kind: 'fictional-dialogue' }],
-    handoff: { reason: 'GEO 讓品牌更容易被 AI 看見，接著要把來源、情緒和品牌觀點轉成能通過治理的創意內容。', question: '怎麼讓大量素材既可用，又保留品牌自己的聲音？', visual: '知識圖譜的節點被整理成一串素材規格，排列成創意工坊的工作台。' },
+    handoff: { relationType: 'practical-application', reason: 'GEO 讓品牌更容易被 AI 看見，接著要把來源、情緒和品牌觀點轉成能通過治理的創意內容。', question: '怎麼讓大量素材既可用，又保留品牌自己的聲音？', visual: '知識圖譜的節點被整理成一串素材規格，排列成創意工坊的工作台。' },
   },
   {
     id: 'A04', chapterId: 'ai', protagonistId: 'achi',
@@ -237,7 +239,7 @@ const SCENE_CATALOG = [
     interactionType: 'judgment',
     interaction: { prompt: '選出產出前最需要補上的品質檢查。', control: { id: 'creative-qc', type: 'evidence-classification', label: '選擇一項檢查規則', minSelections: 1, maxSelections: 1, options: [{ id: 'brief', label: '素材是否符合任務規格', value: 'specification' }, { id: 'brand', label: '觀點與品牌規範是否一致', value: 'brand-fit' }, { id: 'reviewer', label: '是否有人確認來源和最終版本', value: 'review' }] }, outcomes: [{ choiceId: 'brief', title: '先定義交付規格', text: '可重複的素材產線需要明確規格，不能只靠一句提示期待一致結果。', insightTag: 'quality', sourceHighlightIndex: 0 }, { choiceId: 'brand', title: '保留品牌營養', text: '觀點、個性與文化脈絡能避免產量增加時逐漸滑向平均值。', insightTag: 'brand', sourceHighlightIndex: 0 }, { choiceId: 'reviewer', title: '把檢驗放進流程', text: '生成力需要治理與品質檢查，才能轉成穩定交付。', insightTag: 'governance', sourceHighlightIndex: 1 }] },
     dialogue: [{ characterId: 'achi', text: '素材很多，但其中有幾張不像我們會說的話。', kind: 'fictional-dialogue' }, { characterId: 'yingzhen', text: '先把標準寫清楚，再讓人檢查例外。', kind: 'fictional-dialogue' }],
-    handoff: { reason: '素材標準要落在明確流程與品質責任，下一步觀察人和 AI 如何組成可交付的創意代理商。', question: '規則和工具之外，什麼工作仍需要人來完成？', visual: '檢查清單的筆跡延伸成不同專業的工位，走進人與 AI 共用的協作工作室。' },
+    handoff: { relationType: 'concept-deepening', reason: '素材標準要落在明確流程與品質責任，下一步觀察人和 AI 如何組成可交付的創意代理商。', question: '規則和工具之外，什麼工作仍需要人來完成？', visual: '檢查清單的筆跡延伸成不同專業的工位，走進人與 AI 共用的協作工作室。' },
   },
   {
     id: 'A05', chapterId: 'ai', protagonistId: 'achi',
@@ -247,7 +249,7 @@ const SCENE_CATALOG = [
     interactionType: 'delegation',
     interaction: { prompt: '挑出適合交給工具加速，且仍需要人檢查的工作。', control: { id: 'creative-delegation', type: 'permission-select', label: '選一個要安排的任務', minSelections: 1, maxSelections: 1, options: [{ id: 'adapt', label: '批次調整已核准的版型', value: 'repeatable-work' }, { id: 'culture', label: '判斷在地文化能不能被正確呈現', value: 'cultural-judgment' }, { id: 'final', label: '核准最終品牌內容與權利', value: 'final-approval' }] }, outcomes: [{ choiceId: 'adapt', title: '把重複工作交給流程', text: '已定義的規格可由工具協助產製，讓團隊把時間留給檢查和修正。', insightTag: 'delegation', sourceHighlightIndex: 1 }, { choiceId: 'culture', title: '讓懂情境的人參與', text: '在地文化線索和創意品質需要專業人員設計與確認。', insightTag: 'culture', sourceHighlightIndex: 1 }, { choiceId: 'final', title: '保留清楚的核准責任', text: '品牌規範、安全框架與權利檢查需要明確的人工責任。', insightTag: 'governance', sourceHighlightIndex: 1 }] },
     dialogue: [{ characterId: 'achi', text: '可以同時做更多版本，但每一個都要有負責的人。', kind: 'fictional-dialogue' }, { characterId: 'yingzhen', text: '先把工作拆好，別把判斷也一起交出去。', kind: 'fictional-dialogue' }],
-    handoff: { reason: '協作流程把專業、工具和檢查串在一起，最後要回到消費任務判斷 Agent 能負責到哪一層。', question: '知道顧客的需求後，Agent 可以替他做到哪一步？', visual: '工作室的任務流沿著海岸延伸，化成零售、美妝與保健服務街上的行動路徑。' },
+    handoff: { relationType: 'practical-application', reason: '協作流程把專業、工具和檢查串在一起，最後要回到消費任務判斷 Agent 能負責到哪一層。', question: '知道顧客的需求後，Agent 可以替他做到哪一步？', visual: '工作室的任務流沿著海岸延伸，化成零售、美妝與保健服務街上的行動路徑。' },
   },
   {
     id: 'A06', chapterId: 'ai', protagonistId: 'fenjie',
@@ -257,9 +259,34 @@ const SCENE_CATALOG = [
     interactionType: 'delegation',
     interaction: { prompt: '按任務風險替 Agent 設定行動範圍，並留下人工接手條件。', control: { id: 'task-permission', type: 'permission-select', label: '選擇一項待分工任務', minSelections: 1, maxSelections: 1, options: [{ id: 'retail', label: '零售商品搜尋與結帳', value: 'retail' }, { id: 'beauty', label: '美妝膚況建議與門市協助', value: 'beauty' }, { id: 'health', label: '保健資訊與健康相關判斷', value: 'health' }] }, outcomes: [{ choiceId: 'retail', title: '清楚、可逆的任務可走更遠', text: '零售任務界線較清楚時，Agent 可以協助完成更多流程，仍要有錯誤處理。', insightTag: 'delegation', sourceHighlightIndex: 0 }, { choiceId: 'beauty', title: '診斷和最終選擇分開', text: '美妝 AI 可協助提供膚況資訊，門市人員仍可補上情境與確認。', insightTag: 'human-checkpoint', sourceHighlightIndex: 0 }, { choiceId: 'health', title: '高風險領域要收緊權限', text: '保健內容受法規和健康風險限制，不能讓 Agent 自行越過專業判斷。', insightTag: 'governance', sourceHighlightIndex: 0 }] },
     dialogue: [{ characterId: 'fenjie', text: '可以先幫她找選項，到了健康問題我來接手。', kind: 'fictional-dialogue' }, { characterId: 'achi', text: '那麼最後的決定，還是要清楚知道誰負責。', kind: 'fictional-dialogue' }],
-    handoff: { reason: '不同產業的任務授權邊界不同，故事最後回到阿綺，她已能問清問題、查依據和安排接手。', question: '下一次需要答案時，你會先問清楚要解決什麼問題？', visual: '體驗街的路線沿海收束成最初工作室的桌面，阿綺把一支筆放回未完成的價值檢查表。' },
+    handoff: { relationType: 'later-reflection', reason: '不同產業的任務授權邊界不同，故事最後回到阿綺，她已能問清問題、查依據和安排接手。', question: '下一次需要答案時，你會先問清楚要解決什麼問題？', visual: '體驗街的路線沿海收束成最初工作室的桌面，阿綺把一支筆放回未完成的價值檢查表。' },
   },
 ];
+
+const SCENE_SOURCE_GROUNDING = {
+  I01: { highlightIndices: [1, 2], paragraphIndices: [18, 8], rationale: '把文章對效率與價值的區別，改編成企劃人要向客戶說明的問題。' },
+  I02: { highlightIndices: [0, 1], paragraphIndices: [7, 21], rationale: '把接觸頻率未必帶來理解深度，轉成兩岸之間的探索裝置。' },
+  P01: { highlightIndices: [0, 1], paragraphIndices: [1, 14], rationale: '把真假難辨和品牌需要保留真實差異，轉成尋找影像來源的花園。' },
+  P02: { highlightIndices: [0, 2], paragraphIndices: [59, 26], rationale: '以贏得演算法、人心與文化的增長框架安排街區路口。' },
+  P03: { highlightIndices: [0, 1], paragraphIndices: [6, 2], rationale: '以表面症狀和真實成長課題的落差，形成策略工作台事件。' },
+  P04: { highlightIndices: [0, 1], paragraphIndices: [14], rationale: '以至少三個獨立來源交叉驗證的新聞標準，設計證據橋。' },
+  P05: { highlightIndices: [0, 1], paragraphIndices: [2, 5], rationale: '以偏愛、偏心和 Agent 介入購物的差別，形成情境商店選擇。' },
+  P06: { highlightIndices: [0, 1], paragraphIndices: [11, 10], rationale: '以娛樂運動創造注意力和共同記憶，安排居民在現場一起參與。' },
+  P07: { highlightIndices: [0, 1], paragraphIndices: [10, 7], rationale: '以 AI 可讀取的具體使用經驗和人願意分享的情緒，安排社群對話牆。' },
+  P08: { highlightIndices: [0, 1], paragraphIndices: [16, 18], rationale: '把可視曝光和平均觀看秒數的差別，轉成可操作的注意力刻度。' },
+  P09: { highlightIndices: [0, 2], paragraphIndices: [62, 1], rationale: '以跨圈層共看、共談和再記起的共同記憶，設計共看廣場。' },
+  M01: { highlightIndices: [2], paragraphIndices: [23, 50], rationale: '以 People Model 的模擬結果與適用邊界，安排研究者翻看結果卡背面。' },
+  M02: { highlightIndices: [1, 2], paragraphIndices: [4, 7], rationale: '以 Share of Choice Context 和關鍵選擇場域，設計多渠道地圖。' },
+  M03: { highlightIndices: [0, 1], paragraphIndices: [21, 2], rationale: '把 AI 生成不等於核實，以及人類負責定方向，轉成證據分類桌。' },
+  M04: { highlightIndices: [0, 1], paragraphIndices: [4, 27], rationale: '以旅程中的猶豫節點和下一步支援，形成服務路徑分岔。' },
+  M05: { highlightIndices: [0, 1], paragraphIndices: [2, 4, 6], rationale: '以高層和基層的轉型感受落差及水面下阻力，設計文化暗流冰山。' },
+  A01: { highlightIndices: [0, 1], paragraphIndices: [2, 10], rationale: '以轉換改善後出現的客服和物流問題，安排服務街上的未完成單據。' },
+  A02: { highlightIndices: [0, 2], paragraphIndices: [1, 26], rationale: '以 Agent 不回報工作狀態和 AX 信任設計，安排透明任務面板。' },
+  A03: { highlightIndices: [0, 2], paragraphIndices: [10, 22], rationale: '以內容被引用與被記住的差別，設計答案花園中的品牌線索。' },
+  A04: { highlightIndices: [1, 2], paragraphIndices: [15, 26], rationale: '以規格、產線、檢驗和品牌品質治理，設計素材檢查工作台。' },
+  A05: { highlightIndices: [0, 1], paragraphIndices: [11, 13], rationale: '以 AI 原生製作流程和市場 DNA，在工作室呈現人與工具的分工。' },
+  A06: { highlightIndices: [0, 2], paragraphIndices: [2, 3, 4], rationale: '以不同產業的 Agent 自主程度和任務權限，安排零售、美妝與保健服務街。' },
+};
 
 const EXTENSION_LINKS = {
   I01: [
@@ -267,7 +294,7 @@ const EXTENSION_LINKS = {
     { target: 'P05', relationType: 'different-viewpoint', editorialReason: '企業追求效率與價值時，也需要理解消費者不一定選最划算商品的原因。', transitionQuestion: '效率提高後，人為什麼仍有自己的偏好？', transitionVisual: '價值工作表折成購物清單，清單上的商品走進情境商店。' },
   ],
   I02: [
-    { target: 'P01', relationType: 'concept-deepening', editorialReason: '品牌與人的距離問題，先要面對 AI 內容真假難辨時的真實感。', transitionQuestion: '怎麼辨認一段看似真實的內容？', transitionVisual: '兩岸之間的光線穿過真假交錯的藝術花園。' },
+    { target: 'P04', relationType: 'research-validation', editorialReason: '品牌與人的距離也牽涉信任來源，新聞查證提供如何交叉驗證內容的實例。', transitionQuestion: '接觸變多之後，消費者憑什麼相信品牌？', transitionVisual: '橋上的接觸光點化為查證室裡逐條核對的消息來源。' },
     { target: 'M01', relationType: 'practical-application', editorialReason: '持續理解人需要能反覆驗證的研究方法，People Model 把問題帶進情境對話。', transitionQuestion: '能不能在重大決策前先進行情境對話？', transitionVisual: '橋面的問題卡變成觀察室裡的一張 Persona 情境卡。' },
   ],
   P01: [
@@ -275,7 +302,7 @@ const EXTENSION_LINKS = {
     { target: 'P07', relationType: 'different-viewpoint', editorialReason: '真實感也來自使用者自發討論，品牌需要同時看可擷取資訊和真實經驗。', transitionQuestion: '真實的人會怎麼談論這個品牌？', transitionVisual: '花園裡的標籤沿著小徑變成社群巷弄的留言。' },
   ],
   P02: [
-    { target: 'P03', relationType: 'concept-deepening', editorialReason: '增長需要不同專業串連，策略工作台進一步把表面問題拆回真實課題。', transitionQuestion: '這些增長入口要如何接成一個正確的問題？', transitionVisual: '商業街的路口立起成一張策略工作台。' },
+    { target: 'P05', relationType: 'practical-application', editorialReason: '增長三角需要在人心建立偏好，購買文章說明品牌如何在推薦之前喚起動機。', transitionQuestion: 'AI 找到划算選項後，品牌怎麼讓人仍然想買？', transitionVisual: '街區裡的贏得人心路標化成商品標籤，帶進情境商店。' },
     { target: 'A01', relationType: 'practical-application', editorialReason: '成長架構要落到體驗服務，觀察顧客在哪個步驟停下來。', transitionQuestion: '顧客走到服務街時，在哪裡開始猶豫？', transitionVisual: '街區的行動路線延伸成結帳頁和服務窗口。' },
   ],
   P03: [
@@ -300,11 +327,11 @@ const EXTENSION_LINKS = {
   ],
   P08: [
     { target: 'M02', relationType: 'research-validation', editorialReason: '注意力品質要用來挑選關鍵媒體場域，重建 SOV 文章把它放回選擇地圖。', transitionQuestion: '品牌應該在哪些接觸點守住注意力？', transitionVisual: '觀看時間的刻度展成多渠道地圖，渠道不再平均排列。' },
-    { target: 'P09', relationType: 'concept-deepening', editorialReason: '投入時間能讓內容被注意，共同記憶則解釋如何讓體驗留得更久。', transitionQuestion: '被注意的一刻如何成為共同記憶？', transitionVisual: '媒體街上的體驗光點落在劇場座席，成為共看線索。' },
+    { target: 'P06', relationType: 'practical-application', editorialReason: '注意力媒體需要真實參與的場域，娛樂和運動提供共同觀看與投入的例子。', transitionQuestion: '哪些娛樂或運動現場能讓人主動投入？', transitionVisual: '街頭媒體的觀看刻度延伸為體育場和演唱會的入場路線。' },
   ],
   P09: [
     { target: 'P06', relationType: 'problem-cause', editorialReason: '共同記憶需要真實參與的文化場景，回到娛樂與運動的現場看它如何發生。', transitionQuestion: '哪些現場活動能讓人一起留下記憶？', transitionVisual: '劇場觀眾的回憶化成體育場和演唱會的共同聲景。' },
-    { target: 'M01', relationType: 'research-validation', editorialReason: '共同經驗是消費者洞察的一部分，研究模型可以檢視不同情境下的反應。', transitionQuestion: '不同人的共同記憶能否用情境來理解？', transitionVisual: '廣場上的共同故事進入觀察室，化為可比較的情境卡。' },
+    { target: 'M02', relationType: 'practical-application', editorialReason: '共同觀看是品牌爭取選擇情境的一種場域，SOV 文章提供選擇接觸點的觀點。', transitionQuestion: '品牌要在哪些文化場域與不同圈層相遇？', transitionVisual: '共看廣場的觀眾路線映在多渠道選擇地圖上。' },
   ],
   M01: [
     { target: 'M03', relationType: 'research-validation', editorialReason: 'Persona 模擬產生的結果需要區分證據、推估與未知，才適合進入決策。', transitionQuestion: '結果看起來很合理，就代表可以直接拿來決策嗎？', transitionVisual: '模擬結果卡翻面露出限制與未知，沿透明結構抵達證據天平。' },
@@ -328,7 +355,7 @@ const EXTENSION_LINKS = {
   ],
   A01: [
     { target: 'M04', relationType: 'research-validation', editorialReason: '服務摩擦不是單一轉換數字能解釋，回到決策地圖檢查問題如何形成。', transitionQuestion: '顧客在哪一步開始猶豫，該怎麼驗證？', transitionVisual: '未完成的服務表單展開成旅程岔路和顧客決策點。' },
-    { target: 'A02', relationType: 'practical-application', editorialReason: '服務現場需要可靠的協助窗口，Agent 體驗說明透明執行如何支撐信任。', transitionQuestion: 'Agent 如何讓顧客知道它正在做什麼？', transitionVisual: '服務窗口的待辦單進入 Agent 協作中心的透明任務面板。' },
+    { target: 'A06', relationType: 'practical-application', editorialReason: '體驗優化的下一個階段可能交由 Agent 執行，消費旅程文章說明如何依風險安排權限。', transitionQuestion: '顧客服務中哪些任務適合先交給 Agent？', transitionVisual: '服務街的未完成單據進入 Agent 權限板，標出人工接手位置。' },
   ],
   A02: [
     { target: 'A06', relationType: 'concept-deepening', editorialReason: 'Agent 體驗中的透明和接手，下一步要連到實際消費旅程的授權範圍。', transitionQuestion: '知道 Agent 正在做什麼之後，能把哪些行動交給它？', transitionVisual: '任務狀態線延伸成消費體驗街的權限刻度。' },
@@ -336,10 +363,10 @@ const EXTENSION_LINKS = {
   ],
   A03: [
     { target: 'P07', relationType: 'problem-cause', editorialReason: 'AI 答案的引用仰賴真實世界可讀取的討論，回看社群內容從何而來。', transitionQuestion: 'AI 引用的品牌資訊，在社群裡有人這樣談嗎？', transitionVisual: '答案節點展成社群巷弄的留言和使用者經驗。' },
-    { target: 'A04', relationType: 'practical-application', editorialReason: '讓 AI 正確讀取的內容還要保持品牌特色，素材標準把這個要求放進生產流程。', transitionQuestion: '被理解的內容怎麼維持品牌自己的觀點？', transitionVisual: '知識節點落到創意工坊的品牌檢查台。' },
+    { target: 'A05', relationType: 'practical-application', editorialReason: 'GEO 要求內容清楚可讀又有品牌特徵，AI 原生製作文章呈現如何串接工具和在地線索。', transitionQuestion: '品牌內容如何在不同通路保持可辨認？', transitionVisual: '答案花園的知識節點變成跨市場創意流程的素材卡。' },
   ],
   A04: [
-    { target: 'A05', relationType: 'practical-application', editorialReason: '品質標準需要一套人與工具都能遵循的流程，AI 原生製作說明專業分工。', transitionQuestion: '規格如何讓跨專業團隊穩定交付？', transitionVisual: '檢查清單上的規格變成協作工作室的任務卡。' },
+    { target: 'A02', relationType: 'practical-application', editorialReason: '內容規範還要讓 Agent 能正確讀取服務資訊，AX 文章說明透明內容如何建立信任。', transitionQuestion: '品牌素材要怎麼讓 Agent 和人都理解？', transitionVisual: '檢查台上的規格卡翻面，成為協作中心顯示的來源和服務條件。' },
     { target: 'A03', relationType: 'later-reflection', editorialReason: '素材產出標準不只為了規模，也要回頭檢查內容是否被 AI 正確理解且讓人記得。', transitionQuestion: '素材通過規範後，還留下品牌記憶了嗎？', transitionVisual: '工坊裡的成品卡回到答案花園，查看它在知識圖譜上的位置。' },
   ],
   A05: [
@@ -351,8 +378,6 @@ const EXTENSION_LINKS = {
     { target: 'M04', relationType: 'research-validation', editorialReason: '任務權限的安排需符合顧客的真實決策節點，回到生成式體驗檢查下一步。', transitionQuestion: '這種授權安排是否解決顧客當下的問題？', transitionVisual: '權限刻度折回服務路徑的分岔點，核對任務和情境是否相符。' },
   ],
 };
-
-const CHAPTER_RELATIONS = ['problem-cause', 'concept-deepening', 'different-viewpoint', 'research-validation', 'practical-application', 'later-reflection'];
 
 function mulberry32(seed) {
   let state = seed >>> 0;
@@ -367,19 +392,33 @@ function mulberry32(seed) {
 
 function buildPositionGenerator(seed) {
   const random = mulberry32(seed);
-  let globalIndex = 0;
-  const rankByChapter = new Map();
+  const positionsByChapter = new Map();
 
   return (chapter) => {
-    const rank = rankByChapter.get(chapter.id) ?? 0;
-    rankByChapter.set(chapter.id, rank + 1);
-    const angle = globalIndex * GOLDEN_ANGLE + (random() - 0.5) * 0.62;
-    const radius = 10 + Math.sqrt(rank + 1) * 8.5 + random() * 6;
-    globalIndex += 1;
-    return {
-      x: Number((chapter.center.x + Math.cos(angle) * radius * (0.9 + random() * 0.35)).toFixed(3)),
-      z: Number((chapter.center.z + Math.sin(angle) * radius * (0.78 + random() * 0.48)).toFixed(3)),
-    };
+    const placed = positionsByChapter.get(chapter.id) ?? [];
+    let point;
+    for (let attempt = 0; attempt < 10000; attempt += 1) {
+      const angle = random() * Math.PI * 2;
+      const radius = Math.sqrt(random()) * CLUSTER_SAMPLE_RADIUS;
+      const xStretch = 0.86 + random() * 0.28;
+      const zStretch = 0.86 + random() * 0.28;
+      const candidate = {
+        x: chapter.center.x + Math.cos(angle) * radius * xStretch,
+        z: chapter.center.z + Math.sin(angle) * radius * zStretch,
+      };
+      if (placed.every((existing) => Math.hypot(candidate.x - existing.x, candidate.z - existing.z) >= MIN_ISLAND_SPACING)) {
+        point = candidate;
+        break;
+      }
+    }
+    if (!point) throw new RangeError(`Could not place an island in the ${chapter.id} cluster.`);
+
+    const rounded = { x: Number(point.x.toFixed(3)), z: Number(point.z.toFixed(3)) };
+    if (placed.some((existing) => Math.hypot(rounded.x - existing.x, rounded.z - existing.z) < MIN_ISLAND_SPACING)) {
+      throw new RangeError(`Island spacing in the ${chapter.id} cluster fell below ${MIN_ISLAND_SPACING}.`);
+    }
+    positionsByChapter.set(chapter.id, [...placed, rounded]);
+    return rounded;
   };
 }
 
@@ -419,6 +458,29 @@ function buildArticle(article, islandId, chapterId) {
       threeMinute: { minutes: 3, paragraphs: threeMinuteParagraphs, source: 'summary-and-highlights' },
     },
   };
+}
+
+function buildSourceGrounding(article, islandId) {
+  const references = SCENE_SOURCE_GROUNDING[islandId];
+  if (!references) throw new TypeError(`No source grounding exists for island ${islandId}.`);
+  const highlights = references.highlightIndices.map((index) => {
+    const text = article.highlights?.[index];
+    if (!text) throw new TypeError(`Article ${article.id} has no highlight at index ${index}.`);
+    return { kind: 'editorial-highlight', sourceArticleId: article.id, sourceField: 'highlights', index, text };
+  });
+  const paragraphs = references.paragraphIndices.map((index) => {
+    const text = article.paragraphs?.[index];
+    if (!text) throw new TypeError(`Article ${article.id} has no paragraph at index ${index}.`);
+    return {
+      kind: 'source-paragraph',
+      sourceArticleId: article.id,
+      attribution: article.authors ?? null,
+      index,
+      sourcePage: article.paragraphSources?.[index]?.sourcePage ?? null,
+      text,
+    };
+  });
+  return { sourceArticleId: article.id, rationale: references.rationale, highlights, paragraphs };
 }
 
 function buildGraphEdge(source, target, relationType, editorialReason, transitionQuestion, transitionVisual, priority) {
@@ -480,6 +542,7 @@ export function buildData(edition) {
       coreDevice: design.coreDevice,
       dialogue: design.dialogue.map((line) => ({ ...line, fictional: true })),
       interaction,
+      sourceGrounding: buildSourceGrounding(article, island.id),
       transition: { ...design.handoff },
     };
   });
@@ -501,7 +564,7 @@ export function buildData(edition) {
     articleGraph.push(buildGraphEdge(
       current.articleId,
       next.articleId,
-      CHAPTER_RELATIONS[index % CHAPTER_RELATIONS.length],
+      design.handoff.relationType,
       `${design.handoff.reason} ${currentArticle.title} 引出的問題由「${nextArticle.title}」接續。`,
       design.handoff.question,
       design.handoff.visual,
@@ -515,7 +578,7 @@ export function buildData(edition) {
   articleGraph.push(buildGraphEdge(
     lastIsland.articleId,
     firstIsland.articleId,
-    'later-reflection',
+    lastDesign.handoff.relationType,
     `${lastDesign.handoff.reason} 全書回到「${articleBySourceId.get(firstIsland.articleId).title}」，讓讀者重新檢視開場問題。`,
     lastDesign.handoff.question,
     lastDesign.handoff.visual,
@@ -552,6 +615,7 @@ export function buildData(edition) {
       title: edition.title ?? '電通《2026 決策智慧》',
       year: edition.year ?? 2026,
       seed: WORLD_SEED,
+      layout: { minimumIslandSpacing: MIN_ISLAND_SPACING, clusterRadiusLimit: CLUSTER_RADIUS_LIMIT },
       sourceSchemaVersion: edition.schemaVersion ?? null,
       articleCount: articles.length,
       islandCount: islands.length,
@@ -605,4 +669,4 @@ export function buildData(edition) {
   };
 }
 
-export { ARTICLE_ORDER, CHAPTER_RELATIONS, INTERACTIONS, WORLD_SEED };
+export { ARTICLE_ORDER, INTERACTIONS, WORLD_SEED };

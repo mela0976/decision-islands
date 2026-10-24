@@ -22,6 +22,7 @@ test('buildData maps the full 2026 source edition onto all 22 canonical islands'
   assert.deepEqual(data.chapters.map(({ id, articleIds }) => [id, articleIds.length]), [
     ['intro', 2], ['people', 9], ['model', 5], ['ai', 6],
   ]);
+  assert.deepEqual(data.islands.map(({ id }) => id), ARTICLE_ORDER);
   assert.deepEqual(data.islands.map(({ articleId }) => articleId), sourceEdition.articles.map(({ id }) => id));
 
   for (const island of data.islands) {
@@ -51,18 +52,50 @@ test('fixed-seed coordinates are deterministic, irregular, unique, and grouped b
     assert.ok(new Set(points.map(({ x }) => x)).size > 1, `${chapter.id} varies on the x axis`);
     assert.ok(new Set(points.map(({ z }) => z)).size > 1, `${chapter.id} varies on the z axis`);
     assert.ok(points.every(({ x, z }) => Number.isFinite(x) && Number.isFinite(z)));
+    assert.ok(points.every(({ x, z }) => Math.hypot(x - chapter.center.x, z - chapter.center.z) <= data.meta.layout.clusterRadiusLimit));
   }
   assert.ok(new Set(data.islands.map(({ position }) => position.x.toFixed(1))).size > 10, 'positions do not fall on a small regular grid');
+
+  let minimumDistance = Infinity;
+  for (let left = 0; left < data.islands.length; left += 1) {
+    for (let right = left + 1; right < data.islands.length; right += 1) {
+      const a = data.islands[left];
+      const b = data.islands[right];
+      minimumDistance = Math.min(minimumDistance, Math.hypot(a.position.x - b.position.x, a.position.z - b.position.z));
+    }
+  }
+  assert.ok(minimumDistance >= 16, `every pair of islands is at least 16 units apart, got ${minimumDistance}`);
+
+  const chapterBounds = data.chapters.map((chapter) => {
+    const points = chapter.articleIds.map((articleId) => data.islands.find((island) => island.articleId === articleId).position);
+    return {
+      id: chapter.id,
+      minX: Math.min(...points.map(({ x }) => x)), maxX: Math.max(...points.map(({ x }) => x)),
+      minZ: Math.min(...points.map(({ z }) => z)), maxZ: Math.max(...points.map(({ z }) => z)),
+    };
+  });
+  for (let left = 0; left < chapterBounds.length; left += 1) {
+    for (let right = left + 1; right < chapterBounds.length; right += 1) {
+      const a = chapterBounds[left];
+      const b = chapterBounds[right];
+      const disjoint = a.maxX < b.minX || b.maxX < a.minX || a.maxZ < b.minZ || b.maxZ < a.minZ;
+      assert.ok(disjoint, `${a.id} and ${b.id} chapter bounds do not overlap`);
+    }
+  }
 });
 
 test('each article has a main-story route and two source-grounded extension routes', () => {
   const articleIds = new Set(data.articles.map(({ id }) => id));
   const edgesBySource = new Map(data.articles.map(({ id }) => [id, data.articleGraph.filter((edge) => edge.sourceArticleId === id)]));
+  const route = data.storyRoutes.find(({ id }) => id === 'main-story');
 
   for (const articleId of articleIds) {
     const edges = edgesBySource.get(articleId);
     assert.equal(edges.filter(({ priority }) => priority === 1).length, 1, `${articleId} has a main-story continuation`);
     assert.equal(edges.filter(({ priority }) => priority > 1).length, 2, `${articleId} has two extension routes`);
+    assert.equal(new Set(edges.map(({ targetArticleId }) => targetArticleId)).size, 3, `${articleId} has three distinct destinations`);
+    const mainEdge = edges.find(({ priority }) => priority === 1);
+    assert.equal(mainEdge.relationType, sceneByArticleId.get(articleId).transition.relationType, `${articleId} uses its authored main transition type`);
     for (const edge of edges) {
       assert.ok(articleIds.has(edge.targetArticleId), `${articleId} links to an included article`);
       assert.ok(edge.sourceArticleId !== edge.targetArticleId);
@@ -70,6 +103,12 @@ test('each article has a main-story route and two source-grounded extension rout
       assert.ok(edge.transitionQuestion.endsWith('？') || edge.transitionQuestion.endsWith('?'));
       assert.ok(edge.transitionVisual.length > 10);
     }
+  }
+  for (let index = 0; index < route.articleIds.length; index += 1) {
+    const sourceArticleId = route.articleIds[index];
+    const targetArticleId = route.articleIds[(index + 1) % route.articleIds.length];
+    const mainEdge = edgesBySource.get(sourceArticleId).find(({ priority }) => priority === 1);
+    assert.equal(mainEdge.targetArticleId, targetArticleId, `${sourceArticleId} continues the 22-island route`);
   }
 
   assert.ok(data.articleGraph.some(({ relationType }) => relationType === 'problem-cause'));
@@ -114,6 +153,7 @@ test('the 22-scene story returns to Achi and every island has its own fictional 
   assert.ok(data.meta.contentDisclosure.includes('虛構'));
   assert.equal(data.scenes.length, 22);
   assert.equal(new Set(data.scenes.map(({ lifeEvent }) => lifeEvent)).size, 22);
+  assert.equal(new Set(data.scenes.map(({ setting }) => setting)).size, 22);
   assert.equal(new Set(data.scenes.map(({ coreDevice }) => coreDevice.id)).size, 22);
   for (const scene of data.scenes) {
     assert.ok(articleById.has(scene.articleId));
@@ -123,6 +163,35 @@ test('the 22-scene story returns to Achi and every island has its own fictional 
     assert.ok(scene.characterIds.includes(scene.protagonistId));
     assert.ok(scene.dialogue.length >= 1);
     assert.ok(scene.dialogue.every(({ fictional, kind }) => fictional && kind === 'fictional-dialogue'));
+  }
+});
+
+test('each scene context traces to its article highlights and exact body paragraphs', () => {
+  const hooks = {
+    I01: '效率 vs 價值', I02: '接觸的頻率', P01: '彩虹雲', P02: '增長三角', P03: '品牌定位不夠清楚',
+    P04: '三個消息來源', P05: '偏心與偏愛', P06: '共同記憶', P07: 'AI 喜歡的內容', P08: '平均觀看秒數',
+    P09: 'Common Ground', M01: '0.89', M02: '關鍵場域', M03: '人類的專業決斷能力', M04: 'Decision Mapping',
+    M05: '19%', A01: '客服補件量增加', A02: 'Wendy', A03: '標準公版', A04: '品質控管', A05: 'AI 原生製作', A06: '自主程度',
+  };
+
+  assert.equal(data.scenes.length, 22);
+  for (const island of data.islands) {
+    const scene = sceneByArticleId.get(island.articleId);
+    const source = articleById.get(island.articleId);
+    const grounding = scene.sourceGrounding;
+    assert.equal(grounding.sourceArticleId, source.id);
+    assert.ok(grounding.rationale.length > 15);
+    assert.ok(grounding.highlights.length >= 1);
+    assert.ok(grounding.paragraphs.length >= 1);
+    assert.ok(grounding.highlights.every(({ kind, sourceArticleId, sourceField, index, text }) => (
+      kind === 'editorial-highlight' && sourceArticleId === source.id && sourceField === 'highlights' && text === source.highlights[index]
+    )));
+    assert.ok(grounding.paragraphs.every(({ kind, sourceArticleId, attribution, index, sourcePage, text }) => (
+      kind === 'source-paragraph' && sourceArticleId === source.id && attribution === source.authors
+      && text === source.paragraphs[index] && sourcePage === (source.paragraphSources?.[index]?.sourcePage ?? null)
+    )));
+    assert.ok(grounding.paragraphs.some(({ text }) => text.includes(hooks[island.id])), `${island.id} has a source paragraph for its defining concept`);
+    assert.ok(scene.dialogue.every(({ kind, fictional }) => kind === 'fictional-dialogue' && fictional));
   }
 });
 
