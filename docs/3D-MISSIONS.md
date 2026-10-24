@@ -8,10 +8,10 @@
 - [x] `architect` for parallel design exploration.
 - [x] Write the throughput checkpoint as four todo items.
 - [x] Delegate code-writing to a subagent using your configured feature model.
-- [ ] Verify on the matching surface.
-- [x] Rebase into small, ordered commits. Stack follow-ups. 資料、模型、引擎、整合與鏡頭依序提交，origin/main仍為基準34cd824，無衝突亦無需重寫歷史。
+- [x] Verify on the matching surface. 真WebGL終態、關節、代表動畫、手機、reader及fallback通過。
+- [x] Rebase into small, ordered commits. Stack follow-ups. 資料、模型、引擎、整合與鏡頭依序提交，整合前origin/main為基準34cd824，無衝突亦無需重寫歷史。
 - [x] If the design is contested, `interrogate` before shipping. 兩候選架構一致，獨立審查確認後整合，無未決設計爭議。
-- [ ] Run Opening a PR. 沿用既有更新GitHub Pages授權。
+- [x] Run Opening a PR. 沿用使用者更新GitHub Pages的授權直接發布，不另造PR。
 
 ## Throughput checkpoint
 
@@ -61,3 +61,19 @@ Astra獨立審查wrapper、main、validator，未發現未解P1/P2。第二次�
 - npm run build通過TypeScript及Vite，42modules。JS index-kTRwd8ff.js 1011.86kB，gzip297.55kB；CSS index-XZ7VXsfG.css。仍有原有chunk大小提示。
 - animated-missions-browser以noWebGL驗證全部48回合96選項SVG備援、390/360手機、英文、預覽/採用/重做、節慶、有限動畫/暫停/reduced-motion。
 - book-boundaries-browser驗證未知書、同年異書、明確自訂任務、mission ID碰撞不混答案、載入失敗及JS失效閱讀入口。
+
+## 本機完整旅程與畫面
+
+3d-missions-browser前段真WebGL逐一完成48回合96分支像素差異、8角色截圖、同canvas保存、預覽A但採用B、關閉比較回B、retry回initial；390×844與360×740場景和兩個44px以上按鈕可見。後段使用TEST_MOTION_ONLY=1獨立通過家庭歌單中間/結果、重播、暫停精確結果、拖曳實際視角、預覽中真context loss切SVG且仍保留B答案，以及human-review、shopping-control的不同中間與終態。畫布比對暫隱重播按鈕，避免把動態開關造成的按鈕顯示差異誤當3D結果差異。只抽查三組正常動畫，不把96個靜態結果稱為96段動畫全驗。
+
+TEST_WIDTH=390 journey-browser以真WebGL完成鍵盤、原文閱讀返回下一輪、前輪條件、略過/補答、方案、重走、重做、換角色及節慶保持。已檢視3d-mobile-390、role-marketer、拍攝與研究室，以及購物控制中間/結果實際截圖。人物/道具為真mesh，正常路徑沒有隱藏SVG。
+
+此環境為Chromium桌面與手機尺寸模擬，沒有宣稱實體手機、硬體FPS或理解成效。正式站讀回另記。
+
+## 正式站驗證
+
+部署提交283cd1088c11984afc7ba9ead97c914db93d10c1，GitHub Actions run40053439186的56項Node測試、13項Python測試、公開檢查、建置及Pages部署全部success。正式HTML讀回index-kTRwd8ff.js與index-XZ7VXsfG.css，和本機產物一致。
+
+正式網址https://mela0976.github.io/decision-islands/執行完整3d-missions-browser.mjs，一次通過全部48回合96分支的真WebGL實際畫面差異、8角色場景、穩定canvas、比較預覽/採用隔離與retry、390/360手機尺寸、節慶保持、家庭歌單實際中間/結果、重播、暫停精確結果、拖曳改變視角，以及預覽中真WEBGL_lose_context切SVG仍保存B答案。human-review與shopping-control的中間/結果畫格也通過。test-results/3d-mission-results.json的base為正式網址，errors空。這是96個終態與三組代表動畫的驗證，不是96段動畫逐幀全驗。
+
+最後驗證紀錄提交只更新文件，沒有改公開程式資產。未建立worktree，保留單一整合分支與可追溯提交。已停止本次建立的本機preview服務。
