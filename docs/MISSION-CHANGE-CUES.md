@@ -8,10 +8,10 @@
 - [x] `architect` for parallel design exploration.
 - [x] Write the throughput checkpoint as four todo items.
 - [x] Delegate code-writing to a subagent using your configured feature model.
-- [ ] Verify on the matching surface.
-- [ ] Rebase into small, ordered commits. Stack follow-ups.
-- [ ] If the design is contested, `interrogate` before shipping.
-- [ ] Run Opening a PR. 沿用直接更新既有GitHub Pages授權。
+- [x] Verify on the matching surface. 本機真WebGL、SVG、手機及66項完整測試通過。
+- [x] Rebase into small, ordered commits. Stack follow-ups. 引擎f80bc40、介面e361b5c、整合驗證0884b10。
+- [x] If the design is contested, `interrogate` before shipping. 兩次Astra獨立審查，誤判與清理問題已修正，沒有未解P1/P2。
+- [x] Run Opening a PR. 沿用直接更新既有GitHub Pages授權，不另建PR。
 
 ## Throughput checkpoint
 
@@ -43,3 +43,13 @@ Sol的4個純差異與4個WebGL測試通過，涵蓋未變道具不亮、缺少I
 完整npm test通過66/66，包含672個既有及對照狀態的投影界線檢查。最終建置為index-W3wfJT-g.js與index-CqNSIHr-.css，保留既有bundle大小提示。獨立Astra最終diff審查沒有未解P1/P2，確認沒有答案寫入邏輯變更，production wrapper切換與清除SVG時一律animate:false。
 
 隔離worktree沒有原始整本PDF，Python10項通過且原刊來源類別略過1組。原目錄以同一鎖定依賴環境重跑完整13項通過，來源相關程式未改。公開邊界讀回22篇文章、22份PDF，findings空。未把略過的原刊檢查說成worktree已通過。
+
+最終本機完整3d-missions-browser通過48回合96分支、8角色、360/390px、預覽/答案隔離、重試、節慶、代表動畫、重播、暫停、拖曳及真context loss。基準像素比較先以安裝的Playwright clock快轉2300ms讓cue自然到期，再維持原本精確還原斷言，沒有移除高亮或放寬像素差異；高亮期間另由change-cues-browser驗證真實畫面。
+
+## 正式發布
+
+0884b10fe0da3c77abd4157817b383d954d7fe88推送main，GitHub Actions run40060716187的66項Node測試及build/deploy全部成功。正式HTML讀回index-W3wfJT-g.js和index-CqNSIHr-.css，與本機最終資產一致。
+
+正式站change-cues-browser再次通過390px家庭3D、360px行銷3D及360px家庭SVG，高亮與無高亮的真實像素不同，2200ms後精確還原，短字12px以上且在螢幕內、最多兩則，同視圖不續期、快速切換與改選清理正確、答案保持、真context loss備援保持視圖與預覽。results.json的base指向正式站?v=0884b10，errors空。
+
+證據保存到原網站目錄test-results/change-cues，原有三個套件升級修改保持原樣。本次preview服務停止，獨立worktree在提交與證據保存後回收，整合分支及Git歷史保留。
