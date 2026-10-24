@@ -33,8 +33,8 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
   const initialScene = data.scenes?.find(item => item.articleId === initialArticleId);
   const initialFontText = `${data.islands[0].id} · ${initialScene?.coreDevice?.label || data.articles?.[0]?.title || ''} 阿綺小岳映蓁芬姐`;
   const initialFontsReady = Promise.all(document.fonts ? [
-    document.fonts.load('600 42px "Publication Sans TW"', initialFontText),
-    document.fonts.load('600 28px "Publication Sans TW"', '阿綺小岳映蓁芬姐'),
+    document.fonts.load('600 42px "Publication Latin", "Publication Sans TW", sans-serif', initialFontText),
+    document.fonts.load('600 28px "Publication Latin", "Publication Sans TW", sans-serif', '阿綺小岳映蓁芬姐'),
   ] : []).then(() => ({ status: 'fulfilled' }), reason => ({ status: 'rejected', reason }));
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, innerWidth < 700 ? 1.4 : 1.8));
@@ -190,14 +190,14 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
       context.clearRect(0, 0, surface.width, surface.height);
       context.fillStyle = '#fff9ed'; context.beginPath(); context.roundRect(4, 4, 504, surface.height - 8, 24); context.fill();
       context.strokeStyle = '#b5ad97'; context.lineWidth = 4; context.stroke();
-      context.fillStyle = color; context.font = `600 ${!speech && String(text).length <= 3 ? 88 : 42}px "Publication Sans TW", sans-serif`; context.textAlign = 'center'; context.textBaseline = 'middle';
+      context.fillStyle = color; context.font = `600 ${!speech && String(text).length <= 3 ? 88 : 42}px "Publication Latin", "Publication Sans TW", sans-serif`; context.textAlign = 'center'; context.textBaseline = 'middle';
       if (speech) lines.forEach((line, i) => context.fillText(line, 256, 40 + i * 51, 468));
       else context.fillText(text, 256, 64, 466);
     };
     draw();
     const texture = new THREE.CanvasTexture(surface); texture.colorSpace = THREE.SRGBColorSpace; textures.add(texture);
     const mat = new THREE.SpriteMaterial({ map: texture, depthTest: false }); materials.set(`label-${labelSerial++}`, mat);
-    const sprite = new THREE.Sprite(mat); sprite.userData.text = String(text); sprite.userData.font = `600 ${!speech && String(text).length <= 3 ? 88 : 42}px "Publication Sans TW"`; sprite.userData.screenWidth = width; sprite.userData.aspect = surface.height / surface.width; sprite.userData.redraw = () => { draw(); texture.needsUpdate = true; }; sprite.renderOrder = 3; labels.add(sprite); return sprite;
+    const sprite = new THREE.Sprite(mat); sprite.userData.text = String(text); sprite.userData.font = `600 ${!speech && String(text).length <= 3 ? 88 : 42}px "Publication Latin", "Publication Sans TW", sans-serif`; sprite.userData.screenWidth = width; sprite.userData.aspect = surface.height / surface.width; sprite.userData.redraw = () => { draw(); texture.needsUpdate = true; }; sprite.renderOrder = 3; labels.add(sprite); return sprite;
   }
   const sea = mesh(scene, 'cylinder', '#79b9bd', [0, -0.9, 0], [230, 0.35, 230]);
   sea.receiveShadow = true;
@@ -1253,8 +1253,8 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
   last = performance.now(); frame = requestAnimationFrame(tick);
   const allLabelText = `${data.islands.map((island, index) => `${identify(island, index)} · ${data.scenes?.find(item => item.articleId === island.articleId)?.coreDevice?.label || ''}`).join(' ')} 阿綺小岳映蓁芬姐`;
   void Promise.all([
-    document.fonts?.load('600 42px "Publication Sans TW"', allLabelText),
-    document.fonts?.load('600 28px "Publication Sans TW"', allLabelText),
+    document.fonts?.load('600 42px "Publication Latin", "Publication Sans TW", sans-serif', allLabelText),
+    document.fonts?.load('600 28px "Publication Latin", "Publication Sans TW", sans-serif', allLabelText),
   ]).then(() => labels.forEach(sprite => sprite.userData.redraw?.())).catch(() => undefined);
   const setupMs = performance.now() - setupStartedAt;
   return {
