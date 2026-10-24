@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { preview } from 'vite';
 import { chromium } from '@playwright/test';
@@ -50,6 +51,7 @@ try {
   await mkdir('test-results/immersive-mobile-profile', { recursive: true });
   await page.locator('#world').screenshot({ path: 'test-results/immersive-mobile-profile/first-draw.png', timeout: 10000 });
   const readyState = await page.evaluate(() => ({ render: window.immersive.world.getRenderState(), world: window.immersive.world.getState(), pixelRatio: window.devicePixelRatio }));
+  assert.ok(readyState.world.characters.every(character => !character.nameLabelVisible), 'mobile cast nameplates must not cover the scene');
   await page.waitForFunction(() => window.immersive.world.getRenderState().shadowCasting, { timeout: 5000 });
   const shadowsRestoredAt = Date.now();
   const restoredRenderer = await page.evaluate(() => window.immersive.world.getRenderState());

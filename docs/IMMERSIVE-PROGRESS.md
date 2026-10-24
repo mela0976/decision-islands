@@ -21,13 +21,13 @@
 | 書塔非永久主場景 | 正式根入口轉至文章群島；閱讀文章不重播 intro；舊互動網站由 `/legacy.html` 保留；根路徑與 `/decision-islands/` 子路徑均通過 built Preview；2026-10-24 Pages 發布 `44500d4` 後，線上 Chromium 從 `/` 導到 22 島、保留 query/hash、讀全文並完成情境互動，無 console/page errors | 正式環境此次 readback 已通過；實體行動裝置與不同 GPU 外觀未驗 |
 | 四章 2／9／5／6，共 22 島 | `immersive-data.test.mjs` 核對原刊 ID、章節與全文；瀏覽器逐一導航 22 島 | 全島最終美術與敘事品質審查 |
 | 不規則、可航行、保留海面 | 固定 seed 座標，島間距至少 18；四群島包圍盒分離 | 遠景觀感、章內船隻和自然海岸聚落需持續打磨 |
-| 紙本編輯與微縮世界質感 | 霧面建築、樹木、道具、柔和海面、章節色彩、參考影片層次 | 黑白影像、指紋、花朵、半色調等原刊語彙尚未完整融入 |
+| 紙本編輯與微縮世界質感 | 霧面建築、共享細顆粒紙岸粗糙度貼圖、樹木、道具、柔和海面與章節色彩；檢視手機首屏遮疊後，390px 寬度隱藏四位角色浮動姓名牌，保留角色本體、互動泡泡與 DOM 對話 | 黑白影像、指紋、花朵、半色調等原刊語彙尚未完整融入；真機材質觀感未驗 |
 | 22 個獨立文章場景 | 22 個 canonical 場景建構器與各自核心道具、事件、故事出口 | 逐島操作與視覺辨識審查未全部完成 |
-| 四位原創人物、獨立節奏與表情 | 阿綺、小岳、映蓁、芬姐；狀態、習慣、眨眼、動作與互動反應 | 真正接觸桌椅、互相目光、所有姿態與道具碰撞需要細修 |
+| 四位原創人物、獨立節奏與表情 | 阿綺、小岳、映蓁、芬姐；狀態、習慣、眨眼、動作與互動反應。手機首屏不顯示互相遮住人物的姓名牌；寬畫布仍顯示姓名牌。NPC 真觸控後可對話並自然恢復移動 | 真正接觸桌椅、互相目光、所有姿態與道具碰撞需要細修 |
 | 至少八類實際互動 | 查證、購買條件、注意回想、找記憶線索、情境 Persona、證據分類、旅程修復、委託權限；桌面與手機完成八種控制流程 | 任務視覺需逐島強化；部分教學仍使用共用練習，不能視為 22 個完成度相同的獨立遊戲 |
 | 選擇影響、前後比較 | 世界 API 接收不同玩法與選項，前後切換還原；情境面板保留世界可見 | 全選項的實際姿態、道具狀態與高亮驗收未完成 |
 | 微互動、閱讀不受遊戲阻擋 | 道具、人物、研究筆記、小鈴與故事出口；可直接讀原文 | 所有逐島微互動行為的操作證據仍待補齊 |
-| 洞察印記 | 八類遊戲收集主題足跡，沒有智力或成功率分數 | 規格十類主題的完整收集、展示與來源映射需補齊 |
+| 洞察印記 | 十類足跡真實／信任／偏好／共同記憶／注意力／消費者洞察／衡斷力／體驗／內容治理／Agent 協作都在 `progressConfig` 定義；各島映射一類，完成可選互動才保存印記，無能力或成功率分數 | 完成 22 島遊戲後的全印記瀏覽器流程需再驗；本次不把單項互動視為全收集驗收 |
 | 起承轉合，結尾回到阿綺 | DATA 22節點主線返回阿綺；文章人物、虛構事件、原刊觀點分開標記；End-to-end測試走訪22島 | 故事整體情緒節奏尚未完成人工逐幕審閱 |
 | 五階段曲線航行 | settle／question／carry／sail／arrival；可略過、取消、返回及 reduced-motion 快速抵達 | 三個指定轉場的連接物件和到場事件已由 navigation-browser 測試幾何變化、台詞、舞台順序；其他關聯轉場仍採概念依群島映射，需逐組美術審查 |
 | ArticleGraph 六類關聯 | 每篇主線與兩個不同延伸目的地，明列理由、問題、視覺與優先序；包含三個指定連結 | 推薦進度排序與近期路線避免循環需更多情境測試 |
@@ -36,7 +36,7 @@
 | 導讀、重點、全文與 PDF | 可選取 HTML、摘要、重點、原文、原刊來源；無 WebGL 也可操作 | 各篇導讀與重點的閱讀時間未逐篇量測 |
 | 原生 JS、Three 0.160、無建置入口 | `/immersive/` 以原生 ES modules 及 Three.js 0.160 CDN 執行；網站根 `index.html` 自有 redirect module 導入新世界；`legacy.html` 為保留舊實作的多頁 Vite entry。Pages run `40078198322` build/deploy 成功，現行線上入口與模組讀回通過 | 主應用仍以 Vite 驗證舊版 legacy 多頁 entry；原生新世界另以本機靜態伺服器和線上 Pages 驗證，不宣稱整站零建置 |
 | DATA 全部指定欄位 | `data.js` 包含 13 類資料，來源與引用由測試驗證 | 模組職責目前集中在 app/world，尚需依實際複雜度調整 |
-| LOD、共用資源與清理 | 當前島全細節、遠島 silhouette、instanced 人群、共用材質/幾何、delta上限與dispose；390×844 DPR2、冷context、10 Mbps/150 ms、CPU 4×、Chromium SwiftShader同profile重跑兩次：world ready 1.737/1.743秒，first WebGL draw 1.745/1.753秒，首次畫面呈現1.785/1.804秒 | 模擬瀏覽器不等同實體手機或不同 GPU；首幀先略過陰影，450ms後恢復完整投影，需真機校準延遲感受與長時GPU表現 |
+| LOD、共用資源與清理 | 當前島全細節、遠島 silhouette、instanced 人群、共享材質／幾何與紙岸粗糙度貼圖、delta 上限與 dispose。新版同 profile 單次：390×844 DPR2、10Mbps/150ms、CPU4×、冷 context、Chromium SwiftShader，world ready 1.838s、first draw 1.860s、雙 RAF 首次呈現 1.955s、world setup 164.5ms、109 calls／28,284 triangles、4 textures；NPC 對話泡泡 194ms、遊戲結果 819ms。先前兩次首次呈現1.785/1.804s保留為舊版量測，並非嚴格 A/B | 模擬瀏覽器不等同實體手機或不同 GPU；新版單次接近2秒目標而非保證真機達標；首幀略過陰影，450ms後恢復，需真機校準延遲感受與長時GPU表現 |
 | 滑鼠、觸控、鍵盤、音效、減少動態 | OrbitControls、DOM 按鈕、音效開關、reduced motion、手機閱讀面板。`immersive-npc-touch-browser.mjs` 在 390×844、DPR2 真觸控 canvas 點選可見居民，開啟角色對話 | 多種真手機／瀏覽器的鍵盤完整探索、音效、減少動態仍待體驗驗收 |
 | NPC 10–100 與對話 | 100 人在手機畫布中可實際觸控選取；I01 對話劇本沒有小岳台詞時使用消費者立場的虛構台詞；對話停留 700ms 後關閉，路徑角度增量 0.01695 rad、預期 0.02157 rad，步態持續，沒有追補暫停時間瞬移。證據 `test-results/immersive-npc-touch/results.json` | 多種 GPU/真機與不同角色/島嶼組合仍待驗；此實測不代表逐一點過100人 |
 | 瀏覽器紀錄與筆記 | 200ms 自動保存、舊紀錄遷移、備份匯出／合併匯入、讀取失敗不覆寫；新 Chromium context 從 `/` 線上進入 22 島，保留 `?campaign=entry#article`，切離線後直接重新導覽根網址 `/?campaign=offline#article`，仍進入 `/immersive/` 並可讀 3,232 字全文。world 延遲 1.8 秒時仍能先完成遊戲、切換選前/後，及開全文編輯筆記；讀者開啟期間 late-created renderer active=false，筆記再次 reload 保留。證據 `test-results/immersive-entry/results.json`、`immersive-late-world/results.json`。離線快照25/25：23個同源項目（11套出版字型含 CSS、封面與文章 JSON），加固定 Three 0.160 的 2 個 CDN modules；本次無缺項。原刊 PDF 不在快取範圍，開啟仍需本機已保存或線上 | 備份檔案實際匯出/匯入往返待驗 |
@@ -56,7 +56,7 @@
 - 子路徑部署實測：`node tests/immersive-subpath-browser.mjs` 在 `/decision-islands/` 部署模擬中驗 root query/hash 導向、22 島、3,232 字全文、根/子應用 worker scope，並在離線後直接重新導覽子路徑根網址成功回到全文。首次安裝 root worker 時會快取單一公開 redirect shell；跨應用快取只讀取通過完整 core snapshot guard 的沉浸應用 cache，缺資源時不拼湊半成品。結果在 `test-results/immersive-subpath/results.json`；該次 root→world 3.839秒，不代表行動裝置普遍效能。
 - 線上 release 實測：Pages workflow `40078198322` 在 `44500d4` 完成 build、測試、部署；`node tests/immersive-live-release-browser.mjs` 從公開根網址實測 query/hash 轉址、22 島、3,232 字全文與實際選項/互動結果，讀回 root 和 app worker scopes，沒有 console/page error。結果保存在 `test-results/immersive-live-release/results.json`；這份驗收只證明已發布主入口與一項互動可用，不代表所有情境/美術 scope 完成。
 - 角色／觸控與晚載入：`node tests/immersive-npc-touch-browser.mjs`、`node tests/immersive-late-world-browser.mjs` 驗真 canvas touch 命中居民、每位角色不借用其他角色台詞，以及快取模組延遲時保留已完成情境、文章全文、筆記與閱讀暫停。結果在 `test-results/immersive-npc-touch/`、`test-results/immersive-late-world/results.json`。
-- 代表性手機模擬：`node tests/immersive-mobile-profile-browser.mjs`，390×844、DPR2、冷瀏覽器內容、10Mbps下載/150ms延遲、CPU 4×、reduced motion、Chromium SwiftShader。同profile兩次：world ready 1.737/1.743秒，WebGL第一個draw 1.745/1.753秒，雙 RAF 首次呈現1.785/1.804秒；首個draw時投影關閉，450ms後恢復，畫面維持113 draw calls與28,292 triangles。100 NPC第100位對話泡泡更新8/129ms；證據分類遊戲結果670/728ms。resource timing證明Three 0.160模組與文章 JSON 並行載入。這是 emulated Chromium/SwiftShader 的界限測量，不代表真機。結果在 `test-results/immersive-mobile-profile/results.json` 和 `first-draw.png`。
+- 代表性手機模擬：`node tests/immersive-mobile-profile-browser.mjs`，390×844、DPR2、冷瀏覽器內容、10Mbps/150ms、CPU 4×、reduced motion、Chromium SwiftShader。新版檢查四位 cast 姓名牌在手機均不顯示以免蓋住角色，寬畫布仍可見；畫面檔 `first-draw.png`。新版單次 world ready 1.838秒、WebGL first draw 1.860秒、雙 RAF首次呈現1.955秒；world setup 164.5ms、109 draw calls、28,284 triangles、4 textures。100 NPC第100位泡泡194ms、證據分類互動結果819ms。Three 0.160與文章 JSON 並行載入。先前兩次1.785/1.804秒是改動前資料，非嚴格 A/B；emulated Chromium/SwiftShader不代表真機。結果在 `test-results/immersive-mobile-profile/results.json` 和 `first-draw.png`。
 - 根舊站以 `/legacy.html` 保留並可用 `node tests/browser.mjs` 真瀏覽器回歸；測試驗證22篇、PDF、收藏、搜尋、無JavaScript、WebGL fallback與閱讀深連結。
 
 輸出位於 `test-results/immersive/`。資料、世界或 UI 後續變更後，要重跑受影響檢查。手機尺寸瀏覽器不代表實體手機已驗收。上述待完成項目仍屬原始目標，不因已完成部分通過而移除。
