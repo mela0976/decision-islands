@@ -46,3 +46,11 @@
 三次沒有頁面、console、請求或 HTTP 錯誤。畫面保持 22 島、目前文章、居民與六個任務物件；當前場景只需一張編輯貼圖、自有貼圖七張。`setupMs` 為 655.5–657.9 ms，但仍包含等待，並非純 CPU 計時。
 
 本組未達兩秒目標。前後各三次且未交錯執行，背景系統負載也不是固定值；沒有依五次交錯試驗建立普遍加速結論，不宣稱固定改善比例。截圖工具完成於 4916–5001 ms，仍不等於首次螢幕呈現。
+
+## 整合版單次啟動診斷（不列入速度成績）
+
+`tests/immersive-startup-diagnostic.mjs` 對 8a6b542 production build 以相同手機視窗／網路／CPU 條件執行一次 CDP Profiler 取樣，結果在 `test-results/immersive-startup-diagnostic-B/`。取樣本身有額外負擔，不可與上述三次延遲比較。22 島、實際繪圖與無頁面錯誤檢查通過。
+
+取樣加權中 Three.js r160 `onFirstUse` 約 997 ms，`createWorld` 約 6 ms。這不是精確函式計時，也不代表 997 ms 全部是 GLSL 編譯；首用還包含程式診斷、uniform／attribute 初始化。下一步應針對程式首次使用及可重疊等待做有限實驗，不能只憑此關閉錯誤檢查。
+
+官方固定版本來源：[WebGLProgram r160](https://github.com/mrdoob/three.js/blob/r160/src/renderers/webgl/WebGLProgram.js)、[WebGLRenderer r160](https://github.com/mrdoob/three.js/blob/r160/src/renderers/WebGLRenderer.js)。`compileAsync` 可等待平行編譯完成，但若沒有與其他工作重疊，單純搬動等待不保證降低首可用時間。

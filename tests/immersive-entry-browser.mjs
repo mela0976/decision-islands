@@ -55,10 +55,19 @@ try {
     return (await cache.keys()).map(request => request.url).sort();
   });
   const cachedUrls = new Set(immersiveCacheInventory);
-  const requiredLocal = [`${origin}/immersive/index.html`, `${origin}/immersive/app.js`, `${origin}/immersive/data.js`, `${origin}/immersive/world.js`, `${origin}/immersive/editorial-textures.js`, `${origin}/immersive/character-events.js`, `${origin}/immersive/intro.js`, `${origin}/immersive/progress.js`, `${origin}/immersive/cache.js`, `${origin}/immersive/style.css`, `${origin}/immersive/contrast.css`, `${origin}/data/2026.json`, `${origin}/fonts/publication.css`, `${origin}/assets/cover-2026.webp`, ...Array.from({ length: 11 }, (_, index) => `${origin}/fonts/publication-${index === 0 ? 'latin-2a33d5d6a5' : index === 1 ? 'tc-supplement-0537efd18e' : `tw-variable-${index - 2}-${['a744bc8b6c','6cb5b4634b','773e05b1bc','81c18e680d','57e2764204','5d4b6c9d18','4358d63bf0','0b34eb3fe3','7a1dc60589'][index - 2]}`}.woff2`)];
+  const requiredCore = [
+    'immersive/index.html', 'immersive/app.js', 'immersive/data.js',
+    'immersive/world.js', 'immersive/editorial-textures.js',
+    'immersive/character-events.js', 'immersive/arrival-events.js',
+    'immersive/intro.js', 'immersive/progress.js', 'immersive/cache.js',
+    'immersive/style.css', 'immersive/contrast.css', 'data/2026.json',
+    'fonts/publication.css',
+  ].map(path => `${origin}/${path}`);
+  const requiredOptional = [`${origin}/assets/cover-2026.webp`, ...Array.from({ length: 11 }, (_, index) => `${origin}/fonts/publication-${index === 0 ? 'latin-2a33d5d6a5' : index === 1 ? 'tc-supplement-0537efd18e' : `tw-variable-${index - 2}-${['a744bc8b6c','6cb5b4634b','773e05b1bc','81c18e680d','57e2764204','5d4b6c9d18','4358d63bf0','0b34eb3fe3','7a1dc60589'][index - 2]}`}.woff2`)];
+  const requiredLocal = [...requiredCore, ...requiredOptional];
   const requiredCdn = ['https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js', 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js'];
-  const missingOptional = requiredLocal.slice(13).concat(requiredCdn).filter(url => !cachedUrls.has(url));
-  assert.ok(requiredLocal.slice(0, 13).every(url => cachedUrls.has(url)), 'all app core files are cached');
+  const missingOptional = requiredOptional.concat(requiredCdn).filter(url => !cachedUrls.has(url));
+  assert.ok(requiredCore.every(url => cachedUrls.has(url)), 'all app core files are cached, including the arrival controller');
   assert.deepEqual(missingOptional, [], 'all optional cover/font/CDN resources are present');
   assert.equal(immersiveCacheInventory.length, new Set([...requiredLocal, ...requiredCdn]).size);
   await page.context().setOffline(true);
