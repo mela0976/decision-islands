@@ -200,7 +200,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     const localIndex = chapterIndex[chapter] || 0; chapterIndex[chapter] = localIndex + 1;
     const origin = defaults[chapter] || [0, 0];
     const angle = localIndex * 2.399;
-    const radius = Math.sqrt(localIndex) * 16;
+    const radius = Math.sqrt(localIndex) * 18;
     const x = Number.isFinite(entry.position?.x) ? entry.position.x : origin[0] + Math.cos(angle) * radius;
     const z = Number.isFinite(entry.position?.z) ? entry.position.z : origin[1] + Math.sin(angle) * radius;
     const root = new THREE.Group(); root.position.set(x, 0, z); scene.add(root);
@@ -225,19 +225,37 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     island.baseline = capture(detail);
     island.baseline[0].visible = true;
     island.highlight = mesh(root, 'ring', '#aa7948', [0, 1.08, 0], [7.6, 6.3, 7.6]); island.highlight.rotation.x = Math.PI / 2; island.highlight.visible = false;
+    island.exploredLight = mesh(root, 'ball', '#f2dcaa', [0, 2.1, 4.9], [.22, .22, .22]); island.exploredLight.visible = false;
   });
   const routes = new THREE.Group(); scene.add(routes);
   const entries = [...islands.values()];
+  function seaCurve(a, b, height = .3) {
+    const direction = b.clone().sub(a).setY(0).normalize();
+    const coastA = a.clone().addScaledVector(direction, 6.7).setY(height);
+    const coastB = b.clone().addScaledVector(direction, -6.7).setY(height);
+    const bend = new THREE.Vector3(-direction.z, 0, direction.x).multiplyScalar(Math.min(7, a.distanceTo(b) * .12));
+    return new THREE.CatmullRomCurve3([coastA, coastA.clone().lerp(coastB, .5).add(bend), coastB]);
+  }
+  const coastLinks = [];
   for (let n = 1; n < entries.length; n++) {
     const a = entries[n - 1], b = entries[n];
-    const points = [a.root.position.clone().setY(.3), a.root.position.clone().lerp(b.root.position, .5).add(new THREE.Vector3(0, .3, -3)), b.root.position.clone().setY(.3)];
-    const curve = new THREE.CatmullRomCurve3(points);
+    const curve = seaCurve(a.root.position, b.root.position);
     const geo = new THREE.BufferGeometry().setFromPoints(curve.getPoints(32)); geometries.set(`route-${n}`, geo);
     const mat = new THREE.LineDashedMaterial({ color: a.color, dashSize: .8, gapSize: .6, transparent: true, opacity: .48 }); materials.set(`route-${n}`, mat);
     const line = new THREE.Line(geo, mat); line.computeLineDistances(); routes.add(line);
-    if (a.chapter === b.chapter && a.root.position.distanceTo(b.root.position) < 19) {
-      const mid = a.root.position.clone().lerp(b.root.position, .5); const len = a.root.position.distanceTo(b.root.position);
-      const bridge = mesh(routes, 'box', '#c8b699', [mid.x, .5, mid.z], [1, .18, len]); bridge.rotation.y = Math.atan2(b.root.position.x - a.root.position.x, b.root.position.z - a.root.position.z);
+    const distance = a.root.position.distanceTo(b.root.position);
+    if (a.chapter === b.chapter && distance <= 23) {
+      const steps = Math.ceil((distance - 13.4) / .6);
+      for (let step = 0; step < steps; step++) {
+        const t = (step + .5) / steps, point = curve.getPoint(t), tangent = curve.getTangent(t);
+        mesh(routes, 'box', '#c8b699', [point.x, .45, point.z], [1.25, .16, .65], Math.atan2(tangent.x, tangent.z));
+      }
+      coastLinks.push({ from: a.articleId, to: b.articleId, kind: 'coastal-boardwalk', distance });
+    } else if (a.chapter === b.chapter) {
+      const point = curve.getPoint(.55), tangent = curve.getTangent(.55);
+      const boat = new THREE.Group(); boat.position.copy(point); boat.rotation.y = Math.atan2(tangent.x, tangent.z); routes.add(boat);
+      mesh(boat, 'box', '#b99170', [0, .15, 0], [1.5, .35, 2.5]); mesh(boat, 'box', '#efe6cd', [0, .5, .1], [1.2, .15, 1.5]);
+      coastLinks.push({ from: a.articleId, to: b.articleId, kind: 'coastal-boat', distance });
     }
   }
   const cast = new THREE.Group(); scene.add(cast);
@@ -281,18 +299,95 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     }
     for (const object of [crowd, crowdHeads, crowdHair, crowdEyes]) object.instanceMatrix.needsUpdate = true;
   }
-  const carry = mesh(scene, 'box', '#fff2d2', [0, 0, 0], [.65, .85, .05]); carry.visible = false;
+  const carry = new THREE.Group(); scene.add(carry); carry.visible = false;
+  const carryForms = new Map();
+  function carryForm(kind) { const group = new THREE.Group(); group.visible = false; carry.add(group); carryForms.set(kind, group); return group; }
+  const evidence = carryForm('photo-evidence-bridge');
+  const photo = mesh(evidence, 'box', '#fff2d2', [0, 0, 0], [1.5, 1.1, .08]);
+  mesh(photo, 'ball', '#758b79', [-.18, .05, .65], [.2, .24, .1]); mesh(photo, 'cone', '#829b9a', [.15, -.16, .65], [.45, .3, .1]);
+  const evidenceMarks = Array.from({ length: 4 }, (_, i) => mesh(evidence, 'ring', '#aa7948', [-.55 + i * .36, -.32, .08], [.09, .09, .09]));
+  const evidenceCards = Array.from({ length: 4 }, (_, i) => mesh(evidence, 'box', '#f4e4c4', [0, 0, 0], [.65, .5, .05]));
+  const shopping = carryForm('product-service-journey');
+  const product = mesh(shopping, 'cylinder', '#8bbab2', [-.5, 0, 0], [.32, .8, .32]);
+  mesh(product, 'cylinder', '#e6c991', [0, .58, 0], [.75, .2, .75]);
+  const list = mesh(shopping, 'box', '#fff3d7', [.5, 0, 0], [.7, 1, .06]);
+  for (let i = 0; i < 3; i++) mesh(list, 'box', '#7b8d7d', [.05, .28 - i * .24, .65], [.65, .055, .08]);
+  const serviceSteps = Array.from({ length: 4 }, (_, i) => { const g = new THREE.Group(); shopping.add(g); mesh(g, 'box', ['#a7bba0', '#9bbec3', '#cdb585', '#d5a598'][i], [0, 0, 0], [.7, .16, .65]); mesh(g, i === 3 ? 'cone' : 'ring', '#f5ead1', [0, .35, 0], [.18, .18, .18]); return g; });
+  const judgment = carryForm('model-limits-scale');
+  const modelCard = mesh(judgment, 'box', '#e5c2d0', [0, 0, 0], [1.4, .95, .07]);
+  for (let i = 0; i < 3; i++) mesh(modelCard, 'box', '#73898c', [-.35 + i * .35, -.05, .65], [.12, .3 + i * .15, .1]);
+  for (let i = 0; i < 3; i++) mesh(modelCard, 'box', '#b27765', [0, .26 - i * .25, -.65], [.7 - i * .12, .07, .08]);
+  const scaleFrame = new THREE.Group(); judgment.add(scaleFrame);
+  const glass = new THREE.MeshStandardMaterial({ color: '#d0e8e1', transparent: true, opacity: .45, roughness: .3 }); materials.set('transition-glass', glass);
+  for (const x of [-1.2, 1.2]) { const pillar = mesh(scaleFrame, 'box', '#d0e8e1', [x, 0, 0], [.08, 2.4, .1]); pillar.material = glass; }
+  const beam = mesh(scaleFrame, 'box', '#d0e8e1', [0, .9, 0], [2.5, .1, .1]); beam.material = glass;
+  for (const x of [-.8, .8]) { mesh(scaleFrame, 'cylinder', '#c3a978', [x, -.3, 0], [.45, .06, .45]); mesh(scaleFrame, 'box', '#9db6ac', [x, .25, 0], [.025, 1.05, .025]); }
+  for (const [kind, type, color] of [['research-instrument', 'ring', '#d3a8bc'], ['conversation-thread', 'ball', '#c5d184'], ['memory-lantern', 'cone', '#d7b77e'], ['action-tool', 'cylinder', '#94c1c0']]) {
+    const g = carryForm(kind);
+    for (let i = 0; i < 3; i++) mesh(g, type, color, [-.65 + i * .65, 0, 0], [.32, .45, .32]);
+    mesh(g, 'box', '#e7d8ba', [0, -.5, 0], [2.1, .1, .35]);
+  }
+  let carryKind = null, carryMorph = 0;
+  function selectCarry(destination, relation) {
+    const pair = `${current.canonical}-${destination.canonical}`;
+    const kind = pair === 'P01-P04' ? 'photo-evidence-bridge' : pair === 'P05-A06' ? 'product-service-journey' : pair === 'M01-M03' ? 'model-limits-scale' : /research|validation|研究|驗證/.test(relation?.relationType || '') || destination.chapter === 'model' ? 'research-instrument' : /reflection|反思/.test(relation?.relationType || '') ? 'memory-lantern' : /application|應用/.test(relation?.relationType || '') || destination.chapter === 'ai' ? 'action-tool' : 'conversation-thread';
+    carryKind = kind; carryMorph = 0; for (const [key, form] of carryForms) form.visible = key === kind;
+  }
+  function animateCarry(t) {
+    const morph = THREE.MathUtils.smoothstep(t, .35, .8); carryMorph = morph;
+    carry.visible = t > .26 && t < .94;
+    carry.position.copy(camera.position).lerp(controls.target, .33); carry.rotation.set(.08, camera.rotation.y, .08); carry.scale.setScalar(1.3);
+    photo.scale.set(1.5 * (1 - morph * .75), 1.1 * (1 - morph * .75), .08);
+    evidenceMarks.forEach((mark, i) => { mark.position.set(-.55 + i * .36 + morph * (i - 1.5) * .65, -.32 + morph * .35, .1 + morph * .2); });
+    evidenceCards.forEach((card, i) => { card.visible = morph > .05; card.position.set((i - 1.5) * .75 * morph, -.65 * morph, .3 + i * .2 * morph); card.rotation.x = -morph * Math.PI / 2; card.scale.set(.65, .5 + morph * .2, .05); });
+    product.scale.set(.32 * (1 - morph * .7), .8 * (1 - morph * .7), .32 * (1 - morph * .7)); list.rotation.x = -morph * Math.PI / 2; list.scale.set(.7 + morph * 2.5, 1, .06);
+    serviceSteps.forEach((step, i) => { step.visible = morph > .05; step.position.set((i - 1.5) * morph * .85, -.35 + morph * i * .12, morph * .3); step.scale.setScalar(morph); });
+    modelCard.rotation.y = morph * Math.PI; modelCard.position.z = .4; scaleFrame.scale.setScalar(morph); scaleFrame.position.z = -.4 - morph;
+    const form = carryForms.get(carryKind); if (form && !['photo-evidence-bridge', 'product-service-journey', 'model-limits-scale'].includes(carryKind)) form.rotation.y = morph * .7;
+  }
+  const recommendationGroup = new THREE.Group(); scene.add(recommendationGroup);
+  let recommendations = [], recommendationObjects = [];
   let current = entries[0], journey = null, disposed = false, mode = 'story', frame = 0, time = 0, last = performance.now(), hover = null, audio = null, sound = false, active = !document.hidden;
   let previewed = null, encounter = null, speech = null, season = 'christmas', interactionPose = null;
   updateCrowd(0);
   const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
+  function clearRecommendations() {
+    for (const object of recommendationObjects) {
+      if (object.isLine) object.geometry.dispose();
+      const index = pickables.indexOf(object); if (index >= 0) pickables.splice(index, 1);
+    }
+    recommendationGroup.clear(); recommendationObjects = []; recommendations = [];
+  }
+  function setRecommendations(edges = []) {
+    clearRecommendations(); previewed = null;
+    const selected = new Set();
+    for (const edge of edges) {
+      if (recommendations.length === 3) break;
+      const from = islands.get(edge.sourceArticleId) || entries.find(i => i.canonical === edge.sourceArticleId);
+      const destination = islands.get(edge.targetArticleId) || entries.find(i => i.canonical === edge.targetArticleId);
+      if (from !== current || !destination || destination === current || selected.has(destination.articleId)) continue;
+      selected.add(destination.articleId);
+      const curve = seaCurve(current.root.position, destination.root.position, .65);
+      const geo = new THREE.BufferGeometry().setFromPoints(curve.getPoints(48));
+      const key = `recommendation-line-${recommendations.length}`;
+      if (!materials.has(key)) materials.set(key, new THREE.LineDashedMaterial({ color: destination.color, dashSize: 1.2, gapSize: .55, transparent: true, opacity: .68 }));
+      materials.get(key).color.set(destination.color);
+      const line = new THREE.Line(geo, materials.get(key)); line.computeLineDistances(); recommendationGroup.add(line); recommendationObjects.push(line);
+      const marker = mesh(recommendationGroup, 'ring', destination.color, destination.root.position.clone().add(new THREE.Vector3(0, 1.3, 0)).toArray(), [7.8, 6.5, 7.8]); marker.rotation.x = Math.PI / 2; tag(marker, destination, 'island', 'recommended-destination'); recommendationObjects.push(marker);
+      const object = destination.core.clone(); object.position.copy(destination.root.position).add(new THREE.Vector3(0, 5, 0)); object.scale.multiplyScalar(1.3); object.visible = false; recommendationGroup.add(object); tag(object, destination, 'island', 'destination-preview'); recommendationObjects.push(object);
+      recommendations.push({ ...edge, sourceArticleId: current.articleId, targetArticleId: destination.articleId, canonical: destination.canonical, curve, object, marker });
+    }
+    updateLOD(journey?.destination); return recommendations.length;
+  }
   function updateLOD(target = null) {
     for (const island of entries) {
-      island.detail.visible = island === current || island === target || island.articleId === previewed;
+      island.detail.visible = island === current || island === target;
       island.silhouette.visible = !island.detail.visible;
       island.sign.visible = mode === 'explore' || island === current || island === target || island.articleId === previewed;
       island.highlight.visible = island.articleId === previewed;
+      island.exploredLight.visible = island.visited;
     }
+    for (const route of recommendations) route.object.visible = route.targetArticleId === previewed;
   }
   function placeCast() {
     cast.position.copy(current.root.position);
@@ -306,20 +401,24 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     sunlight.position.copy(current.root.position).add(new THREE.Vector3(-25, 55, 30)); sunlight.target.position.copy(current.root.position);
     if (current.interaction) applyInteraction(current.articleId, current.interaction);
   }
-  function emitStage(stage, destination, relation) { onTransitionStage(stage, { articleId: destination.articleId, question: relation?.transitionQuestion || '', visual: relation?.transitionVisual || '', relation }); }
-  function finish(destination) { current = destination; current.visited = true; journey = null; carry.visible = false; controls.enabled = true; updateLOD(); placeCast(); }
+  function emitStage(stage, destination, relation) { onTransitionStage(stage, { articleId: destination.articleId, question: relation?.transitionQuestion || '', visual: relation?.transitionVisual || '', arrivalLine: destination.sceneData?.dialogue?.[0]?.text || '', arrivalEvent: stage === 'arrival' && destination.canonical === 'A06' ? { kind: 'ending-return-achi', characterId: 'achi', line: destination.sceneData?.dialogue?.find(line => line.characterId === 'achi')?.text || '' } : null, carryKind, relation }); }
+  function finish(destination) {
+    current = destination; current.visited = true; journey = null; carry.visible = false; controls.enabled = true; updateLOD(); placeCast();
+    const dialogue = destination.sceneData?.dialogue?.[0];
+    if (dialogue) { setEncounter(dialogue.characterId || destination.sceneData?.protagonistId); setSpeech(dialogue.text); const actor = actors.find(a => a.id === dialogue.characterId); if (actor) { actor.state = 'arrive'; actor.expression = 'thoughtful'; actor.stateUntil = time + 4; actor.arms[1].rotation.x = -.9; } }
+  }
   function focus(articleId, { animate = true, relation = null } = {}) {
     const destination = islands.get(articleId) || entries.find(i => i.canonical === articleId);
     if (!destination || disposed) return false;
     scene.fog.near = 155; scene.fog.far = 340; camera.far = 700; camera.updateProjectionMatrix();
-    journey = null; controls.enabled = true; carry.visible = false;
+    journey = null; controls.enabled = true; carry.visible = false; previewed = null; hover = null; clearRecommendations(); setEncounter(null); selectCarry(destination, relation);
     const portrait = canvas.clientWidth < 700;
     const endTarget = destination.root.position.clone().add(new THREE.Vector3(0, portrait ? -3.2 : 1.2, 0));
     const endPosition = destination.root.position.clone().add(portrait ? new THREE.Vector3(19, 23, 30) : new THREE.Vector3(12.5, 12, 17));
     updateLOD(destination);
     if (!animate || reducedMotion) {
-      for (const stage of STAGES) emitStage(stage, destination, relation);
-      camera.position.copy(endPosition); controls.target.copy(endTarget); finish(destination); controls.update(); return true;
+      for (const stage of STAGES.slice(0, 4)) emitStage(stage, destination, relation);
+      camera.position.copy(endPosition); controls.target.copy(endTarget); finish(destination); emitStage('arrival', destination, relation); controls.update(); return true;
     }
     const start = camera.position.clone(), startTarget = controls.target.clone();
     const middle = start.clone().lerp(endPosition, .5); middle.y += current.chapter === destination.chapter ? 6 : 15; middle.x += 4;
@@ -347,7 +446,8 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     else { applyInteraction(hit.articleId, { kind: hit.kind }); onObjectSelect(hit); }
     chime();
   }
-  function onMove(event) { if (press || journey) return; const hit = pick(event); const next = hit?.articleId || null; if (next !== hover) { hover = next; canvas.style.cursor = hit ? 'pointer' : 'grab'; for (const island of entries) island.sign.visible = mode === 'explore' || island === current || island.articleId === hover; } }
+  function onMove(event) { if (press || journey) return; const hit = pick(event); const next = hit?.articleId || null; if (next !== hover) { hover = next; canvas.style.cursor = hit ? 'pointer' : 'grab'; preview(recommendations.some(route => route.targetArticleId === next) ? next : null); for (const island of entries) island.sign.visible = mode === 'explore' || island === current || island.articleId === hover; } }
+  function onLeave() { press = null; hover = null; canvas.style.cursor = 'grab'; preview(null); }
   function capture(group) {
     const snapshot = [];
     group.traverse(object => { if (!object.isSprite) snapshot.push({ object, position: object.position.clone(), quaternion: object.quaternion.clone(), scale: object.scale.clone(), visible: object.visible, material: object.material }); });
@@ -394,7 +494,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
   function setMode(value) {
     mode = value === 'explore' ? 'explore' : 'story';
     if (mode === 'story') { focus(current.articleId, { animate: !reducedMotion }); return; }
-    journey = null; controls.enabled = true; carry.visible = false; setEncounter(null);
+    journey = null; controls.enabled = true; carry.visible = false; clearRecommendations(); previewed = null; setEncounter(null);
     const bounds = new THREE.Box3(); for (const island of entries) bounds.expandByPoint(island.root.position);
     const center = bounds.getCenter(new THREE.Vector3()); const extent = bounds.getSize(new THREE.Vector3());
     const distance = Math.max(extent.z + 20, (extent.x + 20) / Math.max(.4, camera.aspect)) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) * 1.1;
@@ -481,12 +581,12 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     if (disposed) return; frame = requestAnimationFrame(tick);
     const dt = Math.min((now - last) / 1000, .05); last = now; if (!active) return; time += dt;
     if (journey) {
-      const j = journey; j.elapsed += dt; const t = Math.min(j.elapsed / j.duration, 1); const phase = Math.min(4, Math.floor(t * 5));
+      const j = journey; j.elapsed += dt; const t = Math.min(j.elapsed / j.duration, 1); const phase = Math.min(3, Math.floor(t * 5));
       while (j.phase < phase) emitStage(STAGES[++j.phase], j.destination, j.relation);
       const sailT = THREE.MathUtils.smoothstep(t, .16, .93);
       camera.position.copy(j.position.getPoint(sailT)); controls.target.copy(j.target.getPoint(sailT)); camera.lookAt(controls.target);
-      carry.visible = t > .32 && t < .92; carry.position.copy(camera.position).lerp(controls.target, .33); carry.rotation.set(.08, time * .65, .12); carry.scale.setScalar(.65 + .2 * Math.sin(t * Math.PI));
-      if (t === 1) finish(j.destination);
+      animateCarry(t);
+      if (t === 1) { finish(j.destination); emitStage('arrival', j.destination, j.relation); }
     } else controls.update();
     if (!reducedMotion) {
       for (const actor of actors) {
@@ -519,15 +619,17 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     }
     renderer.render(scene, camera);
   }
-  canvas.addEventListener('pointerdown', onDown); canvas.addEventListener('pointerup', onUp); canvas.addEventListener('pointermove', onMove);
+  canvas.addEventListener('pointerdown', onDown); canvas.addEventListener('pointerup', onUp); canvas.addEventListener('pointermove', onMove); canvas.addEventListener('pointerleave', onLeave);
   document.addEventListener('visibilitychange', visibility); window.addEventListener('resize', resize);
   setSeason('christmas'); resize(); focus(current.articleId, { animate: false }); frame = requestAnimationFrame(tick);
   return {
-    focus, resize, applyInteraction, preview, setSeason, setEncounter, setSpeech, setMode,
+    focus, resize, applyInteraction, preview, setRecommendations, setSeason, setEncounter, setSpeech, setMode,
+    skipTransition() { return journey ? focus(journey.destination.articleId, { animate: false, relation: journey.relation }) : false; },
+    cancelTransition() { return journey ? focus(current.articleId, { animate: false }) : false; },
     setPopulation(count) { crowd.count = Math.max(10, Math.min(100, Math.round(Number(count) || 10))); crowdHeads.count = crowd.count; crowdHair.count = crowd.count; crowdEyes.count = crowd.count * 2; updateCrowd(reducedMotion ? 0 : time); },
     setReducedMotion(value) { reducedMotion = Boolean(value); if (reducedMotion && journey) focus(journey.destination.articleId, { animate: false, relation: journey.relation }); },
     setSound(enabled) { sound = Boolean(enabled); if (sound) chime(); },
-    getState() { return { current: current.articleId, currenttarget: journey?.destination.articleId || current.articleId, currentTarget: journey?.destination.articleId || current.articleId, mode, population: crowd.count, reducedMotion, transitioning: Boolean(journey), stage: journey ? STAGES[Math.max(0, journey.phase)] : 'arrival', renderedislandcount: entries.length, renderedIslandCount: entries.length, detailedIslandCount: entries.filter(i => i.detail.visible).length, silhouetteIslandCount: entries.filter(i => i.silhouette.visible).length, characters: actors.map(a => ({ id: a.id, name: a.name, state: a.state, habit: a.habit, expression: a.expression, position: a.root.position.toArray() })), previewed, season, decoratedIslandCount: entries.filter(i => i.decorations.children.length).length, encounter: encounter ? { ...encounter } : null, speech: speech?.userData.text || '', interaction: current.interaction ? { ...current.interaction, baselineRestored: current.interaction.before && matches(current.baseline) && matches(current.actorBaseline), propPosition: current.core.position.toArray(), propRotation: current.core.rotation.toArray().slice(0, 3), outcomeObjectCount: current.outcome.children.length } : null, camera: { position: camera.position.toArray(), target: controls.target.toArray() }, visited: entries.filter(i => i.visited).map(i => i.articleId), drawCalls: renderer.info.render.calls }; },
-    dispose() { if (disposed) return; disposed = true; cancelAnimationFrame(frame); controls.dispose(); canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointerup', onUp); canvas.removeEventListener('pointermove', onMove); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('resize', resize); for (const geo of geometries.values()) geo.dispose(); for (const mat of materials.values()) mat.dispose(); for (const texture of textures) texture.dispose(); for (const object of [crowd, crowdHeads, crowdHair, crowdEyes]) object.dispose(); renderer.dispose(); audio?.close(); scene.clear(); },
+    getState() { return { current: current.articleId, currenttarget: journey?.destination.articleId || current.articleId, currentTarget: journey?.destination.articleId || current.articleId, mode, population: crowd.count, reducedMotion, transitioning: Boolean(journey), stage: journey ? STAGES[Math.max(0, journey.phase)] : 'arrival', renderedislandcount: entries.length, renderedIslandCount: entries.length, detailedIslandCount: entries.filter(i => i.detail.visible).length, silhouetteIslandCount: entries.filter(i => i.silhouette.visible).length, characters: actors.map(a => ({ id: a.id, name: a.name, state: a.state, habit: a.habit, expression: a.expression, position: a.root.position.toArray() })), previewed, recommendations: recommendations.map(route => ({ sourceArticleId: route.sourceArticleId, targetArticleId: route.targetArticleId, relationType: route.relationType, editorialReason: route.editorialReason, transitionQuestion: route.transitionQuestion, canonical: route.canonical, previewVisible: route.object.visible, points: [0, .5, 1].map(t => route.curve.getPoint(t).toArray()) })), carry: { kind: carryKind, visible: carry.visible, morph: carryMorph, phase: journey ? STAGES[Math.max(0, journey.phase)] : 'arrival', shapes: carryKind === 'photo-evidence-bridge' ? { photoScale: photo.scale.toArray(), evidenceCards: evidenceCards.map(o => ({ position: o.position.toArray(), rotationX: o.rotation.x, visible: o.visible })) } : carryKind === 'product-service-journey' ? { productScale: product.scale.toArray(), listRotationX: list.rotation.x, serviceSteps: serviceSteps.map(o => ({ position: o.position.toArray(), scale: o.scale.x, visible: o.visible })) } : carryKind === 'model-limits-scale' ? { cardFlip: modelCard.rotation.y, frameworkScale: scaleFrame.scale.x } : {}, objectCount: carryKind ? carryForms.get(carryKind).getObjectsByProperty('isMesh', true).length : 0 }, coastLinks, exploredLightCount: entries.filter(i => i.exploredLight.visible).length, season, decoratedIslandCount: entries.filter(i => i.decorations.children.length).length, encounter: encounter ? { ...encounter } : null, speech: speech?.userData.text || '', interaction: current.interaction ? { ...current.interaction, baselineRestored: current.interaction.before && matches(current.baseline) && matches(current.actorBaseline), propPosition: current.core.position.toArray(), propRotation: current.core.rotation.toArray().slice(0, 3), outcomeObjectCount: current.outcome.children.length } : null, camera: { position: camera.position.toArray(), target: controls.target.toArray() }, visited: entries.filter(i => i.visited).map(i => i.articleId), drawCalls: renderer.info.render.calls }; },
+    dispose() { if (disposed) return; disposed = true; cancelAnimationFrame(frame); clearRecommendations(); controls.dispose(); canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointerup', onUp); canvas.removeEventListener('pointermove', onMove); canvas.removeEventListener('pointerleave', onLeave); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('resize', resize); for (const geo of geometries.values()) geo.dispose(); for (const mat of materials.values()) mat.dispose(); for (const texture of textures) texture.dispose(); for (const object of [crowd, crowdHeads, crowdHair, crowdEyes]) object.dispose(); renderer.dispose(); audio?.close(); scene.clear(); },
   };
 }
