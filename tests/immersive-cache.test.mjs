@@ -243,7 +243,7 @@ function currentCacheName() {
 
 function coreUrls() {
   return [
-    './index.html', './app.js', './data.js', './world.js', './intro.js', './progress.js', './cache.js',
+    './index.html', './app.js', './data.js', './world.js', './character-events.js', './intro.js', './progress.js', './cache.js',
     './style.css', './contrast.css', '../data/2026.json', '../fonts/publication.css',
   ].map(path => new URL(path, appScope).href);
 }

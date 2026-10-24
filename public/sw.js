@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const MAX_CACHE_ENTRIES = 80;
 const scopePath = new URL(self.registration.scope).pathname;
 const scopeKey = encodeURIComponent(scopePath);
@@ -6,14 +6,14 @@ const CACHE_PREFIX = `decision-islands-shell:${scopeKey}:`;
 const CACHE_NAME = CACHE_PREFIX + CACHE_VERSION;
 const IMMERSIVE_ROOT = new URL('immersive/', self.registration.scope);
 const IMMERSIVE_PATHS = new Set([
-  './index.html', './app.js', './data.js', './world.js', './intro.js', './progress.js', './cache.js', './style.css', './contrast.css',
+  './index.html', './app.js', './data.js', './world.js', './character-events.js', './intro.js', './progress.js', './cache.js', './style.css', './contrast.css',
 ].map(path => new URL(path, IMMERSIVE_ROOT).href));
 const IMMERSIVE_CDN_URLS = new Set([
   'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js',
   'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js',
 ]);
 const IMMERSIVE_CORE_URLS = [
-  './index.html', './app.js', './data.js', './world.js', './intro.js', './progress.js', './cache.js', './style.css', './contrast.css',
+  './index.html', './app.js', './data.js', './world.js', './character-events.js', './intro.js', './progress.js', './cache.js', './style.css', './contrast.css',
   '../data/2026.json', '../fonts/publication.css',
 ].map(path => new URL(path, IMMERSIVE_ROOT).href);
 const activeHashedAssets = new Set();

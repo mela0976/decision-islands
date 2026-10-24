@@ -23,7 +23,7 @@
 | 不規則、可航行、保留海面 | 固定 seed 座標，島間距至少 18；四群島包圍盒分離 | 遠景觀感、章內船隻和自然海岸聚落需持續打磨 |
 | 紙本編輯與微縮世界質感 | 霧面建築、共享細顆粒紙岸粗糙度貼圖、樹木、道具、柔和海面與章節色彩；檢視手機首屏遮疊後，390px 寬度隱藏四位角色浮動姓名牌，保留角色本體、互動泡泡與 DOM 對話 | 黑白影像、指紋、花朵、半色調等原刊語彙尚未完整融入；真機材質觀感未驗 |
 | 22 個獨立文章場景 | 22 個 canonical 場景建構器、各自情境事件和核心道具；`node tests/immersive-all-island-actions-browser.mjs` 真瀏覽器逐篇完成22項情境任務並保存每篇人物、道具、互動類型和結果長度 | 場景美術與角色物理互動仍需逐島審查，瀏覽器任務通過不等於完成人工藝術校稿 |
-| 四位原創人物、獨立節奏與表情 | 阿綺、小岳、映蓁、芬姐；狀態、習慣、眨眼、動作與互動反應。手機首屏不顯示互相遮住人物的姓名牌；寬畫布仍顯示姓名牌。NPC 真觸控後可對話並自然恢復移動 | 真正接觸桌椅、互相目光、所有姿態與道具碰撞需要細修 |
+| 四位原創人物、獨立節奏與表情 | 阿綺、小岳、映蓁、芬姐；狀態、習慣、眨眼、動作與互動反應。手機首屏不顯示互相遮住人物的姓名牌；寬畫布仍顯示姓名牌。NPC 真觸控後可對話並自然恢復移動 | P05 拿商品、P06 交應援卡、A01 接服務單已有手掌握點、雙節手臂、固定支撐面及互相目光；六組真瀏覽器接觸驗證見下方。其他逐島姿態、碰撞與敘事走位仍待審查 |
 | 至少八類實際互動 | 查證、購買條件、注意回想、找記憶線索、情境 Persona、證據分類、旅程修復、委託權限八種；22 篇真瀏覽器各完成自己的情境流程與非空回饋，涵蓋八種 interaction type | 任務視覺與選項仍需逐島人工細修；部分控制形式跨文章共用，但情境、輸入、結果和來源映射依島別資料 |
 | 68 個情境選項的專屬視覺後果 | `data.js` 為 22 島 68 個 scenarioChoice 指定具名人物、道具、動作與短反應；`world.js` 消費 action，建立可見 3D mesh 並移動角色。`node tests/immersive-scenario-choice.test.mjs` 覆蓋全部選項；`node tests/immersive-scenario-choice-browser.mjs` 以 Chromium WebGL/SwiftShader 固定通用玩法，實際完成 68 個選項，核對道具 geometry/position、每島不同 canvas 畫面、來源相符反應，並驗 compare、replay、離島返回及延遲 world module 載入。P06/M05/A01 另在 390×844 驗全部 10 個手機選項；結果面板 365.3px（43.3vh），截圖與 JSON 留在 `test-results/immersive-scenario-choice/`。一次 production build 後的 built Preview 再驗 P06-song，4 個 3D props、短反應與無 page error | 全島/全選項程式及瀏覽器矩陣已通過；逐島美術、姿態與道具接觸品質仍需人工審視，SwiftShader 手機尺寸不代表實體手機/GPU 驗收 |
 | 選擇影響、前後比較 | 世界 API 接收不同玩法與選項，前後切換還原；完成後收合選項，手機以≤48vh面板顯示具體影響摘要，完整結果可展開；推薦島為唯一滿版主操作，其餘比較、閱讀、調整、重玩均44px。閱讀原文時保留結果對話框與比較狀態，關閉後回到同一任務；手機與桌面 UX journey 量測面板/畫布幾何與截圖 | 情境選擇視覺差異已由上方 68 選項矩陣驗證；全島藝術與實體姿態仍需人工審視 |
@@ -64,3 +64,31 @@
 - 根舊站以 `/legacy.html` 保留並可用 `node tests/browser.mjs` 真瀏覽器回歸；測試驗證22篇、PDF、收藏、搜尋、無JavaScript、WebGL fallback與閱讀深連結。
 
 輸出位於 `test-results/immersive/`。資料、世界或 UI 後續變更後，要重跑受影響檢查。手機尺寸瀏覽器不代表實體手機已驗收。上述待完成項目仍屬原始目標，不因已完成部分通過而移除。
+
+
+## 2026-10-24 人物接觸與事件切片
+
+資料形狀是單一當前事件，包含 articleId、effectId、action、participantIds、prop、grip、support、owner 與 elapsed。`character-events.js` 負責 approach、contact、hold、release、react 五階段。`world.js` 提供既有情境具名實物、人物與 active delta，不另建計時器。新事件、比較選前、重玩、離島與 dispose 會取消前一事件。返回完成的島時直接重建相同的結果姿態。
+
+手掌與物件握點以世界座標對準。雙節手臂保留有限長度。交接只移動同一個既有物件，owner 在兩位參與者之間切換。放下後物件仍屬當島 outcome，固定桌面提供支撐，未掛在角色根節點。說話與聆聽人物的 head 朝向另一人的 head。非參與者保留各自 idle 節奏。正常動態泡泡先呈現起因，在 react 階段顯示對應的既有短反應。
+
+已完成並驗證的部分如下。
+
+- `node tests/immersive-character-contact-browser.mjs` 在原生 Three 0.160、Chromium ANGLE SwiftShader，對 P05-value、P06-cheer、A01-support 各跑 1280×800 與 390×844，共六案。遊戲選項由 DOM 操作，並保存起始、接觸、反應共 18 張 PNG。P05 拿取的商品仍由 price 與 low 通用條件決定。
+- 六案的接觸手掌與握點距離均小於頭寬四分之一。參與接觸的手掌量測誤差小於 0.00001，雙向目光內積為 1。P06 與 A01 的交接樣本都讀到兩位不同 owner，但每個樣本恰有一位 owner。相鄰交接樣本物件距離小於 0.2。放回桌面後 owner 為空、supported 為真、物件位置等於支撐點，後續取樣維持固定。暫停期間 elapsed 不變。
+- `node tests/immersive-character-contact-lifecycle.mjs` 使用 production build 的 Preview。真 Escape 關閉閱讀後保留下層任務，閱讀期間事件暫停且恢復時不追補時間。比較選前還原 baseline 並取消事件，重玩重新起始，離島不續播，返回及 reduced motion 呈現相同的支撐面結果姿態。精確核對 built `character-events.js` 與 CacheStorage 回應，斷網 reload 後 world 仍能完成初始化。
+- `node tests/immersive-scenario-choice-browser.mjs` 在本切片複驗 22 島 68 選項、八類玩法、P06、M05、A01 全十個手機選項、比較、重玩、返回及 M05 world 延遲 3.5 秒，無 page errors。此矩陣驗選項的實物差異，不能代替逐島接觸動作審查。
+- `node --test tests/immersive-cache.test.mjs tests/browser-cache.test.mjs` 通過 25 項。immersive 快照升至 `2026-10-24.9`，root worker 升至 `v4`。兩層 allowlist 與完整快照檢查均納入新模組。root worker 拒絕借用缺新模組的舊完整清單，補齊新模組後才允許借用。
+- `npm run build` 通過 TypeScript 與 Vite。既有出版字型 CSS build warning 保留，檔案以公開資產在執行時提供。整體 `npm test` 曾啟動，發現包含無關 legacy GPU 案例後中止，不列為本切片完整通過證據。
+
+結果在 `test-results/immersive-character-contact/results.json`、`lifecycle.json`、18 張 PNG，以及 `test-results/immersive-scenario-choice/results.json`。這些輸出不納入版本控制。協調者另提供上一發布基準 `332537c` 的 CI `40082849441` 成功及 live release 讀回，該證據不表示本切片已部署。
+
+仍待完成的部分如下。
+
+- action registry 已對既有 68 個效果提供拿取、翻面、轉向、比較、放置、交接、歌唱、聆聽、聚集與路過的有限動作。其餘 19 島 I01、I02、P01、P02、P03、P04、P07、P08、P09、M01、M02、M03、M04、M05、A02、A03、A04、A05、A06，尚未逐島驗起始、接觸、反應三個時間點的動作美術與敘事。不能稱 22 段獨立生活事件全部完成。
+- 代表三島已驗物理接觸與目光，完整戲劇走位仍需審視，例如 P05 回頭比較另一商品、P06 交換後共同轉向舞台、A01 接單後指向配送說明。現有有限反應姿態與台詞不等於這些逐幕演出已全部完成。
+- 尚未完成全身碰撞、桌椅穿透檢查、所有手機與 GPU 的可讀性驗收、實體手機驗收，以及原刊黑白影像、花朵、指紋、半色調材質切片。
+
+本切片採用 Model the Domain，將 owner、支撐面與階段集中於同一事件狀態。採用 Test Behavior, Not Implementation，以 DOM 選擇、畫布截圖與世界座標檢查動作。採用 Prove It Works，區分真正 Chromium 畫面、built 離線讀回與未驗證的逐島敘事品質。how 與 architect 只在本葉節點內完成架構梳理，依當次委派限制沒有再派代理或進行 arena。已讀 no-comments、technical-writing 與 unslop。deslop 外掛在當次技能安裝中未找到，未宣稱完成該外掛審查。
+
+throughput checkpoint。先驗三個代表動作，再回歸既有 68 選項，最後核對離線模組生命週期。沒有可比對照，不宣稱時間或 token 節省比例。

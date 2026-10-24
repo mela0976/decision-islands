@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { addContactRig, createCharacterEvents } from './character-events.js';
 
 const CHAPTERS = {
   intro: { color: '#d8cdb8', sea: '#f4eee1' },
@@ -306,6 +307,8 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     const configured = data.characters?.find(c => c.name === profile.name || c.id === profile.id);
     return { ...profile, id: configured?.id || profile.id, root, nameLabel: name, body, head, eyes, brows, mouth, arms, legs, prop, phase: i * 1.7, state: 'observe', stateUntil: 2 + i, base: new THREE.Vector3(...[[-2.4, 1.1, 2.2], [1, 1.1, 3.1], [-.7, 1.1, -.8], [3.3, 1.1, 1.4]][i]), reaction: 0, expression: 'neutral' };
   });
+  actors.forEach(actor => addContactRig(actor, mesh));
+  const characterEvents = createCharacterEvents({ actors, cast, mesh, onStart: text => setSpeech(text), onReaction: () => { if (current.interaction?.reactionText) setSpeech(current.interaction.reactionText); } });
   const crowd = new THREE.InstancedMesh(geometry('cylinder'), material('#ffffff'), 100); crowd.count = 24; crowd.castShadow = true; cast.add(crowd);
   const crowdHeads = new THREE.InstancedMesh(geometry('ball'), material('#d4b397'), 100); crowdHeads.count = crowd.count; crowdHeads.castShadow = true; cast.add(crowdHeads);
   const crowdHair = new THREE.InstancedMesh(geometry('ball'), material('#514136'), 100); crowdHair.count = crowd.count; cast.add(crowdHair);
@@ -415,6 +418,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     for (const route of recommendations) route.object.visible = route.targetArticleId === previewed;
   }
   function placeCast() {
+    characterEvents.cancel();
     cast.position.copy(current.root.position);
     interactionPose = null; scenarioCrowdPose = null; encounter = null; setSpeech('');
     const protagonist = current.sceneData?.protagonistId;
@@ -424,7 +428,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
       actor.root.position.copy(actor.base); actor.state = 'arrive'; actor.expression = 'neutral'; actor.stateUntil = time + 1; actor.reaction = time + 1.4;
     }
     sunlight.position.copy(current.root.position).add(new THREE.Vector3(-25, 55, 30)); sunlight.target.position.copy(current.root.position);
-    if (current.interaction) applyInteraction(current.articleId, current.interaction);
+    if (current.interaction) applyInteraction(current.articleId, { ...current.interaction, settled: true });
   }
   function emitStage(stage, destination, relation) { onTransitionStage(stage, { articleId: destination.articleId, question: relation?.transitionQuestion || '', visual: relation?.transitionVisual || '', arrivalLine: destination.sceneData?.dialogue?.[0]?.text || '', arrivalEvent: stage === 'arrival' && destination.canonical === 'A06' ? { kind: 'ending-return-achi', characterId: 'achi', line: destination.sceneData?.dialogue?.find(line => line.characterId === 'achi')?.text || '' } : null, carryKind, relation }); }
   function finish(destination) {
@@ -437,6 +441,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     const destination = islands.get(articleId) || entries.find(i => i.canonical === articleId);
     if (!destination || disposed) return false;
     scene.fog.near = 155; scene.fog.far = 340; camera.far = 700; camera.updateProjectionMatrix();
+    characterEvents.cancel();
     journey = null; controls.enabled = true; carry.visible = false; previewed = null; hover = null; clearRecommendations(); setEncounter(null); selectCarry(destination, relation);
     const portrait = canvas.clientWidth < 700;
     const endTarget = destination.root.position.clone().add(new THREE.Vector3(0, portrait ? -3.2 : 1.2, 0));
@@ -664,7 +669,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
       poseActor(partnerId, positions[effect.action], 4.1, 'thoughtful');
       if (partner) partner.arms[0].rotation.x = -.85;
     }
-    scenarioCrowdPose = ['sing', 'listen'].includes(effect.action) ? { articleId: island.articleId, count: Math.min(5, crowd.count) } : null;
+    scenarioCrowdPose = ['sing', 'listen', 'gather'].includes(effect.action) ? { articleId: island.articleId, count: Math.min(5, crowd.count) } : null;
     encounter = { characterId: effect.actorId, npcIndex: null };
     setSpeech(effect.reactionText);
   }
@@ -679,7 +684,8 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     const visualEffect = selectedOutcome?.visualEffect || null;
     island.actorBaseline ||= capture(cast);
     restore(island.baseline); island.outcome.clear();
-    if (island === current) restore(island.actorBaseline);
+    if (island === current) { characterEvents.cancel(); restore(island.actorBaseline); }
+    const eventStarts = new Map(actors.map(actor => [actor.id, actor.root.position.clone()]));
     const before = Boolean(payload.before);
     const impact = { kind, choices, scenarioChoice, effectId: visualEffect?.id || null, propId: visualEffect?.propId || null, action: visualEffect?.action || null, actorId: visualEffect?.actorId || null, reactionText: visualEffect?.reactionText || null, before, layout: 'waiting', expression: 'neutral', checkpoint: false };
     interactionPose = island === current ? impact : interactionPose;
@@ -738,7 +744,15 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
       island.core.rotation.y += unsafe ? -.6 : .6; pose('pen', .6, 3.1, unsafe ? 'concerned' : 'thoughtful'); pose('bell', unsafe ? 1.8 : 3.5, 2.6, unsafe ? 'concerned' : 'smile');
       impact.layout = unsafe ? 'agent-paused-human-takeover' : confirm ? 'agent-waits-at-confirmation-gate' : 'agent-draft-on-human-desk'; impact.checkpoint = confirm; impact.expression = unsafe ? 'concerned' : 'thoughtful';
     }
-    if (visualEffect) renderScenarioEffect(island, visualEffect, pose);
+    if (visualEffect) {
+      renderScenarioEffect(island, visualEffect, pose);
+      if (island === current) {
+        const purchase = island.canonical === 'P05';
+        const selected = choices.includes('high') ? 1 : choices.includes('price') ? 0 : 2;
+        const prop = purchase ? g.children[selected] : g.children.find(object => object.userData.scenarioVisualEffectId === visualEffect.id && object.geometry?.type === 'BoxGeometry' && object.scale.y > .4 && object.scale.x <= 2.2) || g.children.find(object => object.userData.scenarioVisualEffectId === visualEffect.id);
+        characterEvents.start({ island, effect: visualEffect, prop, starts: eventStarts, reducedMotion: reducedMotion || Boolean(payload.settled), purchase });
+      }
+    }
     for (const actor of actors) actor.state = island === current ? 'demonstrate' : actor.state;
     return true;
   }
@@ -761,7 +775,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     } else controls.update();
     if (!reducedMotion) {
       for (const actor of actors) {
-        if (interactionPose || (encounter?.characterId === actor.id && encounter.npcIndex === null)) continue;
+        if (characterEvents.hasParticipant(actor.id) || (!characterEvents.hasEvent() && interactionPose) || (encounter?.characterId === actor.id && encounter.npcIndex === null)) continue;
         const phase = time * actor.pace + actor.phase;
         if (time > actor.stateUntil) { actor.state = ['observe', 'walk', 'think', 'compare'][Math.floor(time / (3 + actor.pace) + actor.phase) % 4]; actor.stateUntil = time + 2.5 + actor.pace; }
         const walking = actor.state === 'walk';
@@ -780,6 +794,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
       }
       updateCrowd(time);
     }
+    characterEvents.update(dt, reducedMotion);
     const point = new THREE.Vector3();
     for (const sprite of labels) {
       sprite.getWorldPosition(point);
@@ -813,13 +828,14 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     skipTransition() { return journey ? focus(journey.destination.articleId, { animate: false, relation: journey.relation }) : false; },
     cancelTransition() { return journey ? focus(current.articleId, { animate: false }) : false; },
     setPopulation(count) { crowd.count = Math.max(10, Math.min(100, Math.round(Number(count) || 10))); crowdHeads.count = crowd.count; crowdHair.count = crowd.count; crowdEyes.count = crowd.count * 2; updateCrowd(reducedMotion ? 0 : time); },
-    setReducedMotion(value) { reducedMotion = Boolean(value); if (reducedMotion && journey) focus(journey.destination.articleId, { animate: false, relation: journey.relation }); },
+    setReducedMotion(value) { reducedMotion = Boolean(value); if (reducedMotion) characterEvents.update(0, true); if (reducedMotion && journey) focus(journey.destination.articleId, { animate: false, relation: journey.relation }); },
     setActive(value) { externallyActive=Boolean(value);visibility(); },
+    getCharacterContactState() { return characterEvents.state(); },
     getNPCState(index) { const seed=crowdSeeds[index]; if(!seed||index>=crowd.count)return null;const effective=seed.pauseStartedAt===null?Math.max(0,time-seed.pausedTotal):Math.max(0,seed.pauseStartedAt-seed.pausedTotal);const angle=seed.angle+effective*seed.speed;const position=new THREE.Vector3(Math.cos(angle)*seed.radius,1.45,Math.sin(angle)*seed.radius).add(cast.position);const screen=position.clone().project(camera),rect=canvas.getBoundingClientRect();return {index,angle,speed:seed.speed,walkPhase:(effective+index)%(Math.PI*2),paused:seed.pauseStartedAt!==null,position:{x:position.x,y:position.y,z:position.z},screen:{x:rect.left+(screen.x+1)*rect.width/2,y:rect.top+(1-screen.y)*rect.height/2,z:screen.z}}; },
     getCharacterScreenState() { return actors.map(actor=>{const position=actor.root.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0,1.5,0));const screen=position.project(camera),rect=canvas.getBoundingClientRect();return {id:actor.id,name:actor.name,screen:{x:rect.left+(screen.x+1)*rect.width/2,y:rect.top+(1-screen.y)*rect.height/2,z:screen.z}};}); },
     getRenderState() { return {active,renderedFrames,disposed,setupMs,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,textureCount:renderer.info.memory.textures,programCount:renderer.info.programs?.length||0,shadowEnabled:renderer.shadowMap.enabled,shadowCasting:sunlight.castShadow,firstDrawShadowCasting,shadowRestoreMs:shadowRestoredAt===null||firstDrawAt===null?null:shadowRestoredAt-firstDrawAt}; },
     setSound(enabled) { sound = Boolean(enabled); if (sound) chime(); },
-    getState() { return { current: current.articleId, currenttarget: journey?.destination.articleId || current.articleId, currentTarget: journey?.destination.articleId || current.articleId, mode, population: crowd.count, reducedMotion, transitioning: Boolean(journey), stage: journey ? STAGES[Math.max(0, journey.phase)] : 'arrival', renderedislandcount: entries.length, renderedIslandCount: entries.length, detailedIslandCount: entries.filter(i => i.detail.visible).length, silhouetteIslandCount: entries.filter(i => i.silhouette.visible).length, characters: actors.map(a => ({ id: a.id, name: a.name, nameLabelVisible: a.nameLabel.visible, state: a.state, habit: a.habit, expression: a.expression, position: a.root.position.toArray() })), previewed, recommendations: recommendations.map(route => ({ sourceArticleId: route.sourceArticleId, targetArticleId: route.targetArticleId, relationType: route.relationType, editorialReason: route.editorialReason, transitionQuestion: route.transitionQuestion, canonical: route.canonical, previewVisible: route.object.visible, points: [0, .5, 1].map(t => route.curve.getPoint(t).toArray()) })), carry: { kind: carryKind, visible: carry.visible, morph: carryMorph, phase: journey ? STAGES[Math.max(0, journey.phase)] : 'arrival', shapes: carryKind === 'photo-evidence-bridge' ? { photoScale: photo.scale.toArray(), evidenceCards: evidenceCards.map(o => ({ position: o.position.toArray(), rotationX: o.rotation.x, visible: o.visible })) } : carryKind === 'product-service-journey' ? { productScale: product.scale.toArray(), listRotationX: list.rotation.x, serviceSteps: serviceSteps.map(o => ({ position: o.position.toArray(), scale: o.scale.x, visible: o.visible })) } : carryKind === 'model-limits-scale' ? { cardFlip: modelCard.rotation.y, frameworkScale: scaleFrame.scale.x } : {}, objectCount: carryKind ? carryForms.get(carryKind).getObjectsByProperty('isMesh', true).length : 0 }, coastLinks, exploredLightCount: entries.filter(i => i.exploredLight.visible).length, season, decoratedIslandCount: entries.filter(i => i.decorations.children.length).length, encounter: encounter ? { ...encounter } : null, speech: speech?.userData.text || '', interaction: current.interaction ? { ...current.interaction, baselineRestored: current.interaction.before && matches(current.baseline) && matches(current.actorBaseline), propPosition: current.core.position.toArray(), propRotation: current.core.rotation.toArray().slice(0, 3), outcomeObjectCount: current.outcome.children.length, scenarioObjects: current.outcome.children.filter(object => object.userData.scenarioVisualEffectId === current.interaction.effectId).map(object => ({ effectId: object.userData.scenarioVisualEffectId, propId: object.userData.scenarioPropId, action: object.userData.scenarioAction, geometry: object.geometry?.type || null, position: object.position.toArray(), rotation: object.rotation.toArray().slice(0, 3), scale: object.scale.toArray() })) } : null, camera: { position: camera.position.toArray(), target: controls.target.toArray() }, visited: entries.filter(i => i.visited).map(i => i.articleId), drawCalls: renderer.info.render.calls }; },
-    dispose() { if (disposed) return; disposed = true; cancelAnimationFrame(frame); if (shadowRestoreTimer) clearTimeout(shadowRestoreTimer); clearRecommendations(); controls.dispose(); canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointerup', onUp); canvas.removeEventListener('pointermove', onMove); canvas.removeEventListener('pointerleave', onLeave); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('resize', resize); for (const geo of geometries.values()) geo.dispose(); for (const mat of materials.values()) mat.dispose(); for (const texture of textures) texture.dispose(); for (const object of [crowd, crowdHeads, crowdHair, crowdEyes]) object.dispose(); renderer.dispose(); audio?.close(); scene.clear(); },
+    getState() { return { characterEvent: characterEvents.state(), current: current.articleId, currenttarget: journey?.destination.articleId || current.articleId, currentTarget: journey?.destination.articleId || current.articleId, mode, population: crowd.count, reducedMotion, transitioning: Boolean(journey), stage: journey ? STAGES[Math.max(0, journey.phase)] : 'arrival', renderedislandcount: entries.length, renderedIslandCount: entries.length, detailedIslandCount: entries.filter(i => i.detail.visible).length, silhouetteIslandCount: entries.filter(i => i.silhouette.visible).length, characters: actors.map(a => ({ id: a.id, name: a.name, nameLabelVisible: a.nameLabel.visible, state: a.state, habit: a.habit, expression: a.expression, position: a.root.position.toArray() })), previewed, recommendations: recommendations.map(route => ({ sourceArticleId: route.sourceArticleId, targetArticleId: route.targetArticleId, relationType: route.relationType, editorialReason: route.editorialReason, transitionQuestion: route.transitionQuestion, canonical: route.canonical, previewVisible: route.object.visible, points: [0, .5, 1].map(t => route.curve.getPoint(t).toArray()) })), carry: { kind: carryKind, visible: carry.visible, morph: carryMorph, phase: journey ? STAGES[Math.max(0, journey.phase)] : 'arrival', shapes: carryKind === 'photo-evidence-bridge' ? { photoScale: photo.scale.toArray(), evidenceCards: evidenceCards.map(o => ({ position: o.position.toArray(), rotationX: o.rotation.x, visible: o.visible })) } : carryKind === 'product-service-journey' ? { productScale: product.scale.toArray(), listRotationX: list.rotation.x, serviceSteps: serviceSteps.map(o => ({ position: o.position.toArray(), scale: o.scale.x, visible: o.visible })) } : carryKind === 'model-limits-scale' ? { cardFlip: modelCard.rotation.y, frameworkScale: scaleFrame.scale.x } : {}, objectCount: carryKind ? carryForms.get(carryKind).getObjectsByProperty('isMesh', true).length : 0 }, coastLinks, exploredLightCount: entries.filter(i => i.exploredLight.visible).length, season, decoratedIslandCount: entries.filter(i => i.decorations.children.length).length, encounter: encounter ? { ...encounter } : null, speech: speech?.userData.text || '', interaction: current.interaction ? { ...current.interaction, baselineRestored: current.interaction.before && matches(current.baseline) && matches(current.actorBaseline), propPosition: current.core.position.toArray(), propRotation: current.core.rotation.toArray().slice(0, 3), outcomeObjectCount: current.outcome.children.length, scenarioObjects: current.outcome.children.filter(object => object.userData.scenarioVisualEffectId === current.interaction.effectId).map(object => ({ effectId: object.userData.scenarioVisualEffectId, propId: object.userData.scenarioPropId, action: object.userData.scenarioAction, geometry: object.geometry?.type || null, position: object.position.toArray(), rotation: object.rotation.toArray().slice(0, 3), scale: object.scale.toArray() })) } : null, camera: { position: camera.position.toArray(), target: controls.target.toArray() }, visited: entries.filter(i => i.visited).map(i => i.articleId), drawCalls: renderer.info.render.calls }; },
+    dispose() { if (disposed) return; disposed = true; characterEvents.cancel(); cancelAnimationFrame(frame); if (shadowRestoreTimer) clearTimeout(shadowRestoreTimer); clearRecommendations(); controls.dispose(); canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointerup', onUp); canvas.removeEventListener('pointermove', onMove); canvas.removeEventListener('pointerleave', onLeave); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('resize', resize); for (const geo of geometries.values()) geo.dispose(); for (const mat of materials.values()) mat.dispose(); for (const texture of textures) texture.dispose(); for (const object of [crowd, crowdHeads, crowdHair, crowdEyes]) object.dispose(); renderer.dispose(); audio?.close(); scene.clear(); },
   };
 }

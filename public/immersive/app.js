@@ -317,7 +317,7 @@ $('replay').onclick=()=>{$('game').close();openGame();}; $('game-read').onclick=
 $('game-next').onclick=()=>{const edge=recommend(gameState?.articleId||current)[0];if(!edge)return;$('game').close();visit(edge.targetArticleId,edge);};
 $('hide-explore-tip').onclick=()=>{ $('explore-tip').hidden=true; try{localStorage.setItem('dentsu-decision-2026-explore-tip','dismissed');}catch{} };
 $('game').addEventListener('close',()=>{if(!$('game').open){world?.setEncounter?.(null);world?.setSpeech?.('');}});
-addEventListener('keydown',event=>{if(event.key==='Escape'&&$('game').open)$('game').close();});
+addEventListener('keydown',event=>{if(event.key==='Escape'&&$('game').open&&!$('reader').open)$('game').close();});
 $('export-progress').onclick=()=>{flushNote();const url=URL.createObjectURL(new Blob([JSON.stringify(progress.state,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='decision-wisdom-reading-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 $('import-progress').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>2_000_000)throw Error('備份檔案過大');const saved=progress.restore(JSON.parse(await file.text()));renderCurrentProgressControls();renderCatalog();status(saved?'已合併閱讀紀錄，既有非空白筆記優先保留。':'已讀入本次畫面，但瀏覽器儲存失敗；請下載備份保存。');}catch(error){status(`無法匯入：${error.message}`);}finally{e.target.value='';}};
 $('world').addEventListener('webglcontextlost',event=>{event.preventDefault();contextFailed=true;world?.dispose();world=null;document.body.classList.add('fallback');$('catalog').hidden=false;status('3D 連線中斷，已切換閱讀模式。閱讀紀錄與筆記仍可使用。');});

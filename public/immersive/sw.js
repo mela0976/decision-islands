@@ -1,5 +1,5 @@
 // Bump this value when any core asset changes so each release keeps one complete snapshot.
-const CACHE_VERSION = '2026-10-24.8';
+const CACHE_VERSION = '2026-10-24.9';
 const MAX_CACHE_ENTRIES = 60;
 const OPTIONAL_CACHE_TIMEOUT_MS = 5000;
 const APP_SCOPE = new URL(self.registration.scope);
@@ -11,6 +11,7 @@ const CORE_PATHS = [
   './app.js',
   './data.js',
   './world.js',
+  './character-events.js',
   './intro.js',
   './progress.js',
   './cache.js',
