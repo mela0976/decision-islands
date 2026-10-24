@@ -70,3 +70,7 @@ book-boundaries-browser.mjs通過未知書中性閱讀、失敗載入保留現�
 發布程式SHA為2843c6323a8b62eb461e76fdcf259943b25ff004。GitHub Actions run40040973506的build和deploy均成功，雲端npm test35/35，check_public findings空。正式HTML讀回index-BCcfdBxD.js及index-8HkTG50e.css，與本機已驗證工件相同。
 
 正式網址為https://mela0976.github.io/decision-islands/。正式站執行journey-browser.mjs通過1280與390尺寸的選擇、比較、改採、原文返回、略過、方案、重做與節慶保持；no-WebGL全8角色16任務48回合均可操作，英文手機與重載清除也通過。完整正式站測試結果在test-results/mission-results.json，errors為空。文件更新不改程式資產，不把文件提交SHA冒稱部署程式SHA。
+
+## 2026-10-24 場景延伸
+
+48 回合現在都有對應生活或工作 SVG 插畫場景與兩種實際結果。選擇會移動人物與道具、改變展示／聆聽／工作姿勢及互動路徑；比較只預覽另一場景，採用後才更新答案。舞台跨 UI 重繪保存，快速改選不會殘留舊動畫。暫停或減少動態時直接呈現結果，未設定 visual 的其他書籍仍可使用原文字任務。契約與驗收見 ANIMATED-MISSIONS.md。
