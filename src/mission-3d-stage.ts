@@ -4,7 +4,7 @@ import type { Mission3DAssets, Mission3DModel, Mission3DStage, Mission3DSnapshot
 import type { MissionSceneEntity, MissionStageInput, MissionVisualFrame } from './mission-stage-types';
 
 const ACTORS = new Set(['adult', 'child', 'elder', 'robot']);
-const DURATION = 2100;
+const DURATION = 2800;
 const smooth = (t: number) => { const v = THREE.MathUtils.clamp(t, 0, 1); return v * v * (3 - 2 * v); };
 const mix = THREE.MathUtils.lerp;
 const position = (entity: MissionSceneEntity) => new THREE.Vector3((entity.x - 50) * .12, ACTORS.has(entity.kind) ? 0 : .85, ACTORS.has(entity.kind) ? (entity.y - 75) * .1 + 1.3 : (entity.y - 60) * .07 - .4);
@@ -18,8 +18,8 @@ function readPose(entry: Entity): Pose {
 function handPosition(entry: Entity): THREE.Vector3 {
   const arm = entry.model.joints?.rightArm;
   entry.model.root.updateWorldMatrix(true, true);
-  const hand = arm?.children.reduce<THREE.Object3D | undefined>((lowest, child) => !lowest || child.position.y < lowest.position.y ? child : lowest, undefined);
-  return hand ? hand.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, -.12, 0)) : entry.model.root.position.clone().add(new THREE.Vector3(0, .8, .4));
+  const hand = arm?.children.find(child => child.name.endsWith('-hand'));
+  return hand ? hand.getWorldPosition(new THREE.Vector3()) : entry.model.root.position.clone().add(new THREE.Vector3(0, .8, .4));
 }
 function terminalPose(entity: MissionSceneEntity, frame: MissionVisualFrame): Pose {
   const joints = Array<number>(18).fill(0);
@@ -28,19 +28,28 @@ function terminalPose(entity: MissionSceneEntity, frame: MissionVisualFrame): Po
   const otherId = action?.target ?? (flow && (flow.from === entity.id ? flow.to : flow.from));
   const other = frame.entities.find(item => item.id === otherId);
   const point = position(entity), target = other ? position(other) : null;
+  if (ACTORS.has(entity.kind)) {
+    const peers = frame.entities.filter(item => ACTORS.has(item.kind) && (item.opacity ?? 1) > .04).sort((a, b) => a.id.localeCompare(b.id));
+    const index = peers.findIndex(item => item.id === entity.id);
+    for (let prior = 0; prior < index; prior++) {
+      const neighbor = position(peers[prior]);
+      if (Math.abs(point.x - neighbor.x) < .8 && Math.abs(point.z - neighbor.z) < .75) point.z = neighbor.z + .85;
+    }
+  }
   const yaw = ACTORS.has(entity.kind) && target ? Math.atan2(target.x - point.x, target.z - point.z) : -.25;
   const pose = entity.pose ?? 'idle';
   if (pose === 'present' || action?.kind === 'show' || action?.kind === 'handoff' || (flow && flow.from === entity.id)) { joints[9] = -1.05; joints[11] = -.24; joints[3] = -.07; }
   if (pose === 'work' || action?.kind === 'operate' || action?.kind === 'review') { joints[6] = -.95; joints[9] = -.95; joints[3] = .16; joints[0] = .22; }
   if (pose === 'listen' || (flow && flow.to === entity.id)) { joints[0] = .13; joints[2] = .08; joints[6] = -.32; }
   if (action?.kind === 'pause' || (!action && flow?.kind === 'pause')) { joints[9] = -.9; joints[11] = -.65; joints[3] = -.12; }
-  return { position: point, yaw, joints, scale: entity.scale ?? 1, opacity: entity.opacity ?? 1 };
+  return { position: point, yaw, joints, scale: (entity.scale ?? 1) * (ACTORS.has(entity.kind) ? 1.45 : 1.35), opacity: entity.opacity ?? 1 };
 }
 
 export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', onFallback?: (fallback: boolean) => void): Mission3DStage {
   const canvas = document.createElement('canvas');
   canvas.className = 'mission-stage-canvas';
   canvas.dataset.renderer = 'fallback';
+  canvas.dataset.phase = 'ready';
   canvas.setAttribute('role', 'img');
   canvas.style.width = '100%';
   canvas.style.height = '100%';
@@ -60,6 +69,8 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
   let disposed = false, failed = false, active = true, motion = true;
   let current: MissionStageInput | null = null, frame: MissionVisualFrame | null = null;
   let signature = '', missionKey = '', progress = 1, startTime = 0, raf = 0, renderCount = 0;
+  let phase: Mission3DSnapshot['phase'] = 'ready', phaseMetadata = '';
+  let viewportWidth = 720, viewportHeight = 360;
   const entities = new Map<string, Entity>();
   const signals: Signal[] = [];
   const privateMaterials = new Map<THREE.Material, { opacity: number; transparent: boolean }>();
@@ -82,22 +93,61 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
     owned.clear();
   };
   const cancel = () => { if (raf) cancelAnimationFrame(raf); raf = 0; canvas.dataset.animating = 'false'; };
-  const render = () => { if (renderer && !failed && !disposed) { renderer.render(scene, camera); renderCount++; } };
+  const publishPhase = (next: Mission3DSnapshot['phase']) => {
+    const detail = {phase: next, choiceId: current?.previewChoiceId ?? current?.choiceId ?? null, preview: current?.previewChoiceId != null};
+    const metadata = JSON.stringify(detail);
+    phase = next; canvas.dataset.phase = phase;
+    if (metadata === phaseMetadata) return;
+    phaseMetadata = metadata;
+    canvas.dispatchEvent(new CustomEvent('mission-stage-phase', {bubbles: true, detail}));
+  };
+  const projectedBounds = (root: THREE.Group) => {
+    const box = new THREE.Box2();
+    root.updateWorldMatrix(true, true);
+    root.traverse(object => {
+      if (!(object instanceof THREE.Mesh) || !object.visible) return;
+      const geometry = object.geometry;
+      if (!geometry.boundingBox) geometry.computeBoundingBox();
+      const bounds = geometry.boundingBox!;
+      for (const x of [bounds.min.x, bounds.max.x]) for (const y of [bounds.min.y, bounds.max.y]) for (const z of [bounds.min.z, bounds.max.z]) {
+        const point = new THREE.Vector3(x, y, z).applyMatrix4(object.matrixWorld).project(camera);
+        box.expandByPoint(new THREE.Vector2(point.x, point.y));
+      }
+    });
+    return box;
+  };
+  const fitCamera = () => {
+    const box = new THREE.Box2();
+    camera.zoom = 1;
+    camera.left = -1; camera.right = 1; camera.top = 1; camera.bottom = -1;
+    camera.updateProjectionMatrix(); camera.updateMatrixWorld(true);
+    for (const entry of entities.values()) if (entry.model.root.visible && (entry.model.root.userData.opacity ?? 1) > .04) box.union(projectedBounds(entry.model.root));
+    if (box.isEmpty()) return;
+    const center = box.getCenter(new THREE.Vector2()), size = box.getSize(new THREE.Vector2());
+    const aspect = viewportWidth / viewportHeight;
+    const topMargin = Math.min(.36, 54 / viewportHeight), bottomMargin = .06;
+    const selected = current?.previewChoiceId != null || current?.choiceId != null;
+    const framing = selected ? mix(1.12, 1, smooth(progress / .34)) : 1.12;
+    const halfHeight = Math.max(size.y / (2 * (1 - topMargin - bottomMargin)), size.x / (2 * aspect * .88), 1.6) * framing;
+    center.y += halfHeight * (topMargin - bottomMargin);
+    camera.left = center.x - halfHeight * aspect; camera.right = center.x + halfHeight * aspect;
+    camera.top = center.y + halfHeight; camera.bottom = center.y - halfHeight;
+    camera.updateProjectionMatrix();
+  };
+  const render = () => { if (renderer && !failed && !disposed) { fitCamera(); renderer.render(scene, camera); renderCount++; } };
   const resize = () => {
     if (!renderer || disposed) return;
     const bounds = host.getBoundingClientRect();
     const width = Math.max(1, bounds.width || 720), height = Math.max(1, bounds.height || width / 2);
+    viewportWidth = width; viewportHeight = height;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, width < 600 ? 1.25 : 1.5));
     renderer.setSize(width, height, false);
-    const aspect = width / height;
-    const halfWidth = Math.max(8.5, 4.25 * aspect), halfHeight = halfWidth / aspect;
-    camera.left = -halfWidth; camera.right = halfWidth; camera.top = halfHeight; camera.bottom = -halfHeight;
-    camera.updateProjectionMatrix();
     render();
   };
   const fail = () => {
     failed = true; cancel(); progress = 1;
     entities.forEach(entry => apply(entry, 1)); applySignals(1);
+    publishPhase(current?.previewChoiceId != null || current?.choiceId != null ? 'result' : 'ready');
     canvas.dataset.renderer = 'fallback';
     onFallback?.(true);
   };
@@ -123,28 +173,28 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
   };
   const apply = (entry: Entity, t: number) => {
     const { start, end, model } = entry;
-    const approach = smooth(t / .48), perform = smooth((t - .38) / .32), settle = smooth((t - .78) / .22);
+    const approach = smooth(t / .34), perform = smooth((t - .30) / .40), settle = smooth((t - .78) / .22);
     if (t === 1) model.root.position.copy(end.position);
     else model.root.position.lerpVectors(start.position, end.position, approach);
     const interaction = frame?.actions?.find(action => action.prop === entry.definition.id);
     const operator = interaction && entities.get(interaction.actor);
-    const handling = Math.sin(Math.PI * smooth((t - .36) / .6));
-    if (operator && !model.joints && t > .36 && t < .96) {
+    const handling = smooth((t - .30) / .16) * (1 - smooth((t - .82) / .18));
+    if (operator && !model.joints && t > .30 && t < 1) {
       const hand = handPosition(operator);
       const receiver = interaction.kind === 'handoff' && entities.get(interaction.target);
       if (receiver) {
         const receivingHand = handPosition(receiver);
-        hand.lerp(receivingHand, smooth((t - .49) / .3));
+        hand.lerp(receivingHand, smooth((t - .48) / .28));
       }
+      hand.y -= .20 * end.scale;
       model.root.position.lerp(hand, handling);
     }
-    const moving = start.position.distanceTo(end.position) > .08 && t < .49;
+    const travels = start.position.distanceTo(end.position) > .08;
+    const moving = travels && t < .34;
     const walkYaw = Math.atan2(end.position.x - start.position.x, end.position.z - start.position.z);
-    const desiredYaw = moving ? walkYaw : end.yaw;
+    const desiredYaw = travels ? walkYaw + Math.atan2(Math.sin(end.yaw - walkYaw), Math.cos(end.yaw - walkYaw)) * smooth((t - .27) / .20) : end.yaw;
     const delta = Math.atan2(Math.sin(desiredYaw - start.yaw), Math.cos(desiredYaw - start.yaw));
     model.root.rotation.y = start.yaw + delta * smooth(t / .23);
-    if (!moving && t >= .48) model.root.rotation.y = walkYaw + Math.atan2(Math.sin(end.yaw - walkYaw), Math.cos(end.yaw - walkYaw)) * smooth((t - .48) / .22);
-    if (start.position.distanceTo(end.position) <= .08) model.root.rotation.y = mix(start.yaw, end.yaw, smooth(t / .3));
     if (t === 1) model.root.rotation.y = end.yaw;
     model.root.scale.setScalar(t === 1 ? end.scale : mix(start.scale, end.scale, smooth(t / .6)));
     const opacity = t === 1 ? end.opacity : mix(start.opacity, end.opacity, smooth(t / .65));
@@ -161,14 +211,14 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
     });
     if (!model.joints) return;
     const gait = moving ? Math.sin(t * Math.PI * 15) * .48 * Math.sin(Math.PI * approach) : 0;
-    const reach = Math.sin(Math.PI * perform) * (1 - settle);
+    const reach = smooth((t - .30) / .16) * (1 - settle);
     jointNames.forEach((name, index) => {
       const values = [0, 1, 2].map(axis => t === 1 ? end.joints[index * 3 + axis] : mix(start.joints[index * 3 + axis], end.joints[index * 3 + axis], smooth(t / .72)));
       if (name === 'leftLeg') values[0] += gait;
       if (name === 'rightLeg') values[0] -= gait;
       if (name === 'leftArm') values[0] -= gait * .65 + reach * .2;
-      if (name === 'rightArm') values[0] += gait * .65 - reach * .45;
-      if (name === 'torso') values[0] += reach * .13;
+      if (name === 'rightArm') values[0] += gait * .65 - reach * .68;
+      if (name === 'torso') values[0] += reach * .18;
       if (name === 'head') values[1] += Math.sin(perform * Math.PI * 2) * .13 * (1 - settle);
       model.joints![name].rotation.set(values[0], values[1], values[2]);
     });
@@ -178,20 +228,21 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
       const travel = smooth((t - .42) / .37);
       signal.token.position.lerpVectors(signal.from, signal.to, travel);
       signal.token.position.y += Math.sin(Math.PI * travel) * .5;
-      signal.root.visible = t >= .38;
+      signal.root.visible = t >= .30;
       signal.token.scale.setScalar(signal.kind === 'pause' ? 1 : .8 + Math.sin(Math.PI * travel) * .3);
     }
   };
-  const settle = () => { cancel(); progress = 1; entities.forEach(entry => apply(entry, 1)); applySignals(1); render(); };
+  const settle = () => { cancel(); progress = 1; entities.forEach(entry => apply(entry, 1)); applySignals(1); publishPhase(current?.previewChoiceId != null || current?.choiceId != null ? 'result' : 'ready'); render(); };
   const canAnimate = () => active && motion && !media.matches && !document.hidden && host.isConnected && !!renderer && !failed;
   const tick = (now: number) => {
     raf = 0;
     if (!canAnimate()) { settle(); return; }
     progress = Math.min(1, (now - startTime) / DURATION);
+    publishPhase(progress < .34 ? 'approach' : progress < .78 ? 'interact' : 'result');
     entities.forEach(entry => apply(entry, progress)); applySignals(progress); render();
     if (progress < 1) raf = requestAnimationFrame(tick); else canvas.dataset.animating = 'false';
   };
-  const begin = () => { cancel(); progress = 0; startTime = performance.now(); canvas.dataset.animating = 'true'; raf = requestAnimationFrame(tick); };
+  const begin = () => { cancel(); progress = 0; startTime = performance.now(); canvas.dataset.animating = 'true'; publishPhase('approach'); raf = requestAnimationFrame(tick); };
   const buildSignals = () => {
     disposeSignals();
     if (!frame) return;
@@ -203,7 +254,7 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
       const root = new THREE.Group(); root.name = flow.id;
       const color = flow.kind === 'pause' ? 0xd9534f : flow.kind === 'review' ? 0xd3a44e : 0x5d9e90;
       const material = new THREE.MeshStandardMaterial({color, roughness: .65}); owned.add(material);
-      const geometry = flow.kind === 'review' ? new THREE.TorusGeometry(.28, .045, 6, 20) : flow.kind === 'pause' ? new THREE.BoxGeometry(.46, .14, .11) : new THREE.BoxGeometry(.24, .3, .07);
+      const geometry = flow.kind === 'review' ? new THREE.TorusGeometry(.32, .065, 6, 20) : flow.kind === 'pause' ? new THREE.BoxGeometry(.56, .18, .13) : new THREE.BoxGeometry(.34, .4, .09);
       owned.add(geometry);
       const token = new THREE.Mesh(geometry, material); token.castShadow = true; root.add(token);
       if (flow.kind === 'pause') {
@@ -211,9 +262,14 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
         const ring = new THREE.Mesh(ringGeometry, material); token.add(ring);
       }
       const curve = new THREE.QuadraticBezierCurve3(from, from.clone().lerp(to, .5).add(new THREE.Vector3(0, .45, 0)), to);
-      const trailGeometry = new THREE.TubeGeometry(curve, 16, .018, 4, false); owned.add(trailGeometry);
+      const trailGeometry = new THREE.TubeGeometry(curve, 16, .035, 4, false); owned.add(trailGeometry);
       const trailMaterial = new THREE.MeshStandardMaterial({color, transparent: true, opacity: .45}); owned.add(trailMaterial);
       root.add(new THREE.Mesh(trailGeometry, trailMaterial));
+      const haloGeometry = new THREE.TorusGeometry(.48, .045, 6, 28); owned.add(haloGeometry);
+      const halo = new THREE.Mesh(haloGeometry, trailMaterial);
+      halo.rotation.x = -Math.PI / 2;
+      halo.position.copy(target.end.position); halo.position.y += .035;
+      root.add(halo);
       scene.add(root); signals.push({root, token, from, to, kind: flow.kind});
     }
   };
@@ -276,9 +332,8 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
       const nextSignature = JSON.stringify([input.key, input.definition.setting, physicalEntities, physicalFlows, nextFrame.actions ?? []]);
       current = input;
       canvas.setAttribute('aria-label', `${input.definition.title[language]} · ${nextFrame.description[language]}`);
-      if (nextSignature === signature) return;
-      camera.zoom = choice ? 1.18 : 1;
-      focus.set(0, .65, choice ? .8 : 0);
+      if (nextSignature === signature) { publishPhase(progress === 1 ? choice != null ? 'result' : 'ready' : phase); return; }
+      focus.set(0, .65, 0);
       aimCamera();
       camera.updateProjectionMatrix();
       const animate = missionKey === input.key && setting === input.definition.setting && choice !== null;
@@ -297,7 +352,10 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
       entities.forEach(entry => apply(entry, 0)); applySignals(0); render(); begin();
     },
     snapshot(): Mission3DSnapshot {
-      return {mode: renderer && !failed ? 'webgl' : 'fallback', animating: !!raf, progress, entities: [...entities].map(([id, entry]) => ({id, kind: entry.definition.kind, position: entry.model.root.position.toArray(), rotation: entry.model.root.rotation.toArray().slice(0, 3) as number[], visible: entry.model.root.visible, joints: readPose(entry).joints})), flowCount: signals.length, renderCount};
+      return {mode: renderer && !failed ? 'webgl' : 'fallback', animating: !!raf, progress, phase, entities: [...entities].map(([id, entry]) => {
+        const bounds = projectedBounds(entry.model.root), size = bounds.getSize(new THREE.Vector2());
+        return {id, kind: entry.definition.kind, position: entry.model.root.position.toArray(), rotation: entry.model.root.rotation.toArray().slice(0, 3) as number[], visible: entry.model.root.visible, joints: readPose(entry).joints, projected: {left: (bounds.min.x + 1) / 2 * viewportWidth, right: (bounds.max.x + 1) / 2 * viewportWidth, top: (1 - bounds.max.y) / 2 * viewportHeight, bottom: (1 - bounds.min.y) / 2 * viewportHeight, width: size.x / 2 * viewportWidth, height: size.y / 2 * viewportHeight}};
+      }), flowCount: signals.length, renderCount};
     },
     dispose() {
       if (disposed) return;

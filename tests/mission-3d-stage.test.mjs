@@ -62,7 +62,7 @@ test('real WebGL mission actors articulate, interact, retarget, and stop renderi
     await page.evaluate(() => {window.input.choiceId='b';window.stage.update(window.input);});
     const retargeted = await snapshot(page);
     assert.deepEqual(person(retargeted).position,person(working).position,'retarget starts at current visible position');
-    await page.clock.runFor(2200);
+    await page.clock.runFor(2900);
     const stopped = await snapshot(page);
     assert.equal(stopped.progress,1);
     assert.ok(Math.abs(person(stopped).position[0] + 1.8)<.0001);

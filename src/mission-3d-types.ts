@@ -22,7 +22,8 @@ export interface Mission3DSnapshot {
   mode: 'webgl' | 'fallback';
   animating: boolean;
   progress: number;
-  entities: {id: string; kind: string; position: number[]; rotation: number[]; visible: boolean; joints: number[]}[];
+  phase: 'ready' | 'approach' | 'interact' | 'result';
+  entities: {id: string; kind: string; position: number[]; rotation: number[]; visible: boolean; joints: number[]; projected: {left: number; top: number; right: number; bottom: number; width: number; height: number}}[];
   flowCount: number;
   renderCount: number;
 }
