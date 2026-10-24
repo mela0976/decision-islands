@@ -62,14 +62,14 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     object.castShadow = true; object.receiveShadow = true; parent.add(object); return object;
   }
   function label(text, color = '#263f42', width = 144, speech = false) {
-    const surface = document.createElement('canvas'); surface.width = 512; surface.height = speech ? 256 : 128;
+    const lines = String(text).match(/.{1,12}/gu)?.slice(0, 4) || [''];
+    const surface = document.createElement('canvas'); surface.width = 512; surface.height = speech ? 32 + lines.length * 51 : 128;
     const context = surface.getContext('2d');
     context.fillStyle = '#fff9ed'; context.beginPath(); context.roundRect(4, 4, 504, surface.height - 8, 24); context.fill();
     context.strokeStyle = '#b5ad97'; context.lineWidth = 4; context.stroke();
-    context.fillStyle = color; context.font = '600 42px PublicationSansTW, sans-serif'; context.textAlign = 'center'; context.textBaseline = 'middle';
+    context.fillStyle = color; context.font = `600 ${!speech && String(text).length <= 3 ? 88 : 42}px PublicationSansTW, sans-serif`; context.textAlign = 'center'; context.textBaseline = 'middle';
     if (speech) {
-      const lines = String(text).match(/.{1,12}/gu)?.slice(0, 4) || [''];
-      lines.forEach((line, i) => context.fillText(line, 256, 48 + i * 51, 468));
+      lines.forEach((line, i) => context.fillText(line, 256, 40 + i * 51, 468));
     } else context.fillText(text, 256, 64, 466);
     const texture = new THREE.CanvasTexture(surface); texture.colorSpace = THREE.SRGBColorSpace; textures.add(texture);
     const mat = new THREE.SpriteMaterial({ map: texture, depthTest: false }); materials.set(`label-${materials.size}`, mat);
@@ -258,7 +258,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     const arms = [-1, 1].map(side => mesh(root, 'cylinder', profile.color, [side * .34, .75, 0], [.08, .65, .08]));
     const legs = [-1, 1].map(side => mesh(root, 'cylinder', '#58625e', [side * .14, .2, 0], [.095, .55, .1]));
     const prop = mesh(root, 'box', i === 0 ? '#a68459' : i === 1 ? '#4c5c62' : i === 2 ? '#f5e8ca' : '#d8b67a', [.4, 1.04, .2], i === 0 ? [.04, .35, .04] : [.22, .3, .04]);
-    const name = label(profile.name, '#263f42', 52); name.position.y = 2.12; root.add(name);
+    const name = label(profile.name, '#263f42', 60); name.position.y = 2.12; root.add(name);
     root.scale.setScalar(1.4);
     const configured = data.characters?.find(c => c.name === profile.name || c.id === profile.id);
     return { ...profile, id: configured?.id || profile.id, root, body, head, eyes, brows, mouth, arms, legs, prop, phase: i * 1.7, state: 'observe', stateUntil: 2 + i, base: new THREE.Vector3(...[[-2.4, 1.1, 2.2], [1, 1.1, 3.1], [-.7, 1.1, -.8], [3.3, 1.1, 1.4]][i]), reaction: 0, expression: 'neutral' };
@@ -298,7 +298,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     interactionPose = null; encounter = null; setSpeech('');
     const protagonist = current.sceneData?.protagonistId;
     for (const actor of actors) {
-      actor.base.set(...[[-2.4, 1.1, 2.2], [1, 1.1, 3.1], [-.7, 1.1, -.8], [3.3, 1.1, 1.4]][actors.indexOf(actor)]);
+      actor.base.set(...[[-2.8, 1.1, 2], [-.4, 1.1, 3.7], [1.7, 1.1, 1.4], [3.6, 1.1, 3.2]][actors.indexOf(actor)]);
       if (actor.id === protagonist) actor.base.set(current.coreRest.x - 1.5, 1.1, Math.max(1.4, current.coreRest.z + 1.6));
       actor.root.position.copy(actor.base); actor.state = 'arrive'; actor.expression = 'neutral'; actor.stateUntil = time + 1; actor.reaction = time + 1.4;
     }
@@ -310,6 +310,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
   function focus(articleId, { animate = true, relation = null } = {}) {
     const destination = islands.get(articleId) || entries.find(i => i.canonical === articleId);
     if (!destination || disposed) return false;
+    scene.fog.near = 155; scene.fog.far = 340; camera.far = 700; camera.updateProjectionMatrix();
     journey = null; controls.enabled = true; carry.visible = false;
     const portrait = canvas.clientWidth < 700;
     const endTarget = destination.root.position.clone().add(new THREE.Vector3(0, portrait ? -3.2 : 1.2, 0));
@@ -348,7 +349,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
   function onMove(event) { if (press || journey) return; const hit = pick(event); const next = hit?.articleId || null; if (next !== hover) { hover = next; canvas.style.cursor = hit ? 'pointer' : 'grab'; for (const island of entries) island.sign.visible = mode === 'explore' || island === current || island.articleId === hover; } }
   function capture(group) {
     const snapshot = [];
-    group.traverse(object => snapshot.push({ object, position: object.position.clone(), quaternion: object.quaternion.clone(), scale: object.scale.clone(), visible: object.visible, material: object.material }));
+    group.traverse(object => { if (!object.isSprite) snapshot.push({ object, position: object.position.clone(), quaternion: object.quaternion.clone(), scale: object.scale.clone(), visible: object.visible, material: object.material }); });
     return snapshot;
   }
   function restore(snapshot) {
@@ -396,7 +397,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     const bounds = new THREE.Box3(); for (const island of entries) bounds.expandByPoint(island.root.position);
     const center = bounds.getCenter(new THREE.Vector3()); const extent = bounds.getSize(new THREE.Vector3());
     const distance = Math.max(extent.z + 20, (extent.x + 20) / Math.max(.4, camera.aspect)) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) * 1.1;
-    controls.maxDistance = Math.max(210, distance * 1.5); camera.far = Math.max(500, distance * 3); camera.updateProjectionMatrix();
+    controls.maxDistance = Math.max(210, distance * 1.5); camera.far = Math.max(500, distance * 3); scene.fog.near = distance * 1.5; scene.fog.far = distance * 3.5; camera.updateProjectionMatrix();
     controls.target.copy(center); camera.position.copy(center).add(new THREE.Vector3(distance * .18, distance * .83, distance * .7)); controls.update(); updateLOD();
   }
   function applyInteraction(articleId, payload = {}) {
