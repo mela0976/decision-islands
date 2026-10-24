@@ -144,7 +144,7 @@ class FakeCache {
   failPut = false;
 
   async keys() { return [...this.entries.keys()].map(url => ({ url })); }
-  async match(request) { return this.entries.get(request.url)?.response ?? undefined; }
+  async match(request) { return this.entries.get(typeof request === 'string' ? request : request.url)?.response ?? undefined; }
   async delete(request) { return this.entries.delete(typeof request === 'string' ? request : request.url); }
   async put(request, response) {
     if (this.failPut) throw new Error('quota exceeded');
@@ -339,9 +339,14 @@ test('root redirect navigation ignores campaign queries in its cache key while p
 test('root worker serves the immersive app root and public CDN modules from the scoped offline snapshot', async () => {
   cacheBuckets.clear();
   const appCache = await cacheStorage.open('decision-immersive:%2Fproject%2Fimmersive%2F:2026-10-24.3');
-  await appCache.put(request('https://app.example/project/immersive/index.html'), response(200, 'immersive shell'));
-  await appCache.put(request('https://app.example/project/immersive/style.css'), response(200, 'immersive css'));
+  for (const path of ['./index.html', './app.js', './data.js', './world.js', './intro.js', './progress.js', './cache.js', './style.css', './contrast.css', '../data/2026.json', '../fonts/publication.css']) {
+    const url = new URL(path, 'https://app.example/project/immersive/').href;
+    await appCache.put(request(url), response(200, path.includes('index') ? 'immersive shell' : 'public core'));
+  }
+  const styleUrl = 'https://app.example/project/immersive/style.css';
+  await appCache.put(request(styleUrl), response(200, 'immersive css'));
   await appCache.put(request('https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js'), response(200, 'three module', 'cors'));
+  await appCache.put(request('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js'), response(200, 'orbit controls', 'cors'));
   globalThis.fetch = async () => { throw new Error('offline'); };
   const nav = await dispatchFetch('https://app.example/project/immersive/?campaign=offline', { mode: 'navigate', destination: 'document' });
   assert.equal(nav.result.body, 'immersive shell');
@@ -351,6 +356,19 @@ test('root worker serves the immersive app root and public CDN modules from the 
   assert.equal(three.result.body, 'three module');
   const privateNav = await dispatchFetch('https://app.example/project/immersive/?token=private', { mode: 'navigate', destination: 'document' });
   assert.equal(privateNav.intercepted, false);
+  globalThis.fetch = async request => response(200, `network ${request?.url || ''}`);
+});
+
+test('root worker will not mix assets from an incomplete immersive snapshot', async () => {
+  cacheBuckets.clear();
+  const partial = await cacheStorage.open('decision-immersive:%2Fproject%2Fimmersive%2F:partial');
+  await partial.put(request('https://app.example/project/immersive/index.html'), response(200, 'partial shell'));
+  globalThis.fetch = async () => { throw new Error('offline with incomplete snapshot'); };
+  await assert.rejects(
+    dispatchFetch('https://app.example/project/immersive/?campaign=offline', { mode: 'navigate', destination: 'document' }),
+    /offline with incomplete snapshot/,
+  );
+  globalThis.fetch = async request => response(200, `network ${request?.url || ''}`);
 });
 
 test('resource seeding is bounded to 80 URLs and app-scoped cache cleanup leaves other caches intact', async () => {

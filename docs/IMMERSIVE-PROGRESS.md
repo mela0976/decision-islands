@@ -18,7 +18,7 @@
 | 規格 | 目前實作與證據 | 尚需完成或驗證 |
 |---|---|---|
 | 6–12 秒、可略過、首次入場開場 | 8.6 秒真 Three.js 封面、開書、螺旋書塔、紙頁海岸、群島雲層與抵達；可略過，完成狀態保存。Intro browser 在桌機/手機尺寸驗證四階段、釋放資源與不重播 | 實體手機與不同 GPU 的畫面表現未驗 |
-| 書塔非永久主場景 | 正式根入口轉至文章群島；閱讀文章不重播 intro；舊互動網站由 `/legacy.html` 保留 | 正式 GitHub Pages 發布與線上新入口仍待部署/readback |
+| 書塔非永久主場景 | 正式根入口轉至文章群島；閱讀文章不重播 intro；舊互動網站由 `/legacy.html` 保留；在根路徑與 `/decision-islands/` 子路徑均以 built Preview 驗 query/hash、22 島與全文 | GitHub Pages 最新 commit 部署與線上新入口仍待完成/readback |
 | 四章 2／9／5／6，共 22 島 | `immersive-data.test.mjs` 核對原刊 ID、章節與全文；瀏覽器逐一導航 22 島 | 全島最終美術與敘事品質審查 |
 | 不規則、可航行、保留海面 | 固定 seed 座標，島間距至少 18；四群島包圍盒分離 | 遠景觀感、章內船隻和自然海岸聚落需持續打磨 |
 | 紙本編輯與微縮世界質感 | 霧面建築、樹木、道具、柔和海面、章節色彩、參考影片層次 | 黑白影像、指紋、花朵、半色調等原刊語彙尚未完整融入 |
@@ -34,7 +34,7 @@
 | 三個推薦目的地在 3D 中預覽 | 閱讀結尾三個入口，hover／鍵盤 focus 預覽遠方島嶼 | 海面三條推薦航線同時顯示與離開 hover 清除需驗證 |
 | 故事與自由模式共享進度 | 切換模式、全景、22 篇目錄、搜尋、收藏、已讀 | 兩種模式的端到端敘事差異仍需深化 |
 | 導讀、重點、全文與 PDF | 可選取 HTML、摘要、重點、原文、原刊來源；無 WebGL 也可操作 | 各篇導讀與重點的閱讀時間未逐篇量測 |
-| 原生 JS、Three 0.160、無建置入口 | `/immersive/` 以原生 ES modules 及 Three.js 0.160 CDN 執行；網站根 `index.html` 自有 redirect module 導入新世界；`legacy.html` 為保留舊實作的多頁 Vite entry。已在 dist Preview 測根入口 | Pages 線上發布與根網址生產環境驗收仍待完成 |
+| 原生 JS、Three 0.160、無建置入口 | `/immersive/` 以原生 ES modules 及 Three.js 0.160 CDN 執行；網站根 `index.html` 自有 redirect module 導入新世界；`legacy.html` 為保留舊實作的多頁 Vite entry。根路徑及 `/decision-islands/` 子路徑均由 built Preview 實測；部署仍不需建置新世界模組 | Pages 最新版線上發布與生產環境驗收仍待完成 |
 | DATA 全部指定欄位 | `data.js` 包含 13 類資料，來源與引用由測試驗證 | 模組職責目前集中在 app/world，尚需依實際複雜度調整 |
 | LOD、共用資源與清理 | 當前島全細節、遠島 silhouette、instanced 人群、共用材質/幾何、delta上限與dispose；390×844 DPR2、冷context、10 Mbps/150 ms、CPU 4×、Chromium SwiftShader同profile重跑兩次：world ready 1.737/1.743秒，first WebGL draw 1.745/1.753秒，首次畫面呈現1.785/1.804秒 | 模擬瀏覽器不等同實體手機或不同 GPU；首幀先略過陰影，450ms後恢復完整投影，需真機校準延遲感受與長時GPU表現 |
 | 滑鼠、觸控、鍵盤、音效、減少動態 | OrbitControls、DOM 按鈕、音效開關、reduced motion、手機閱讀面板。`immersive-npc-touch-browser.mjs` 在 390×844、DPR2 真觸控 canvas 點選可見居民，開啟角色對話 | 多種真手機／瀏覽器的鍵盤完整探索、音效、減少動態仍待體驗驗收 |
@@ -53,6 +53,7 @@
 - 2026-10-24：完成新入口離線註冊接線，精確匹配 `/immersive/` 的導覽請求並回應快取的 `index.html`；離線回退僅限該應用根路徑。`node --test tests/immersive-cache.test.mjs tests/immersive-progress.test.mjs tests/immersive-data.test.mjs` 34/34 通過。Playwright Chromium 已載入後設為離線並 reload 原始 `/immersive/` URL，確認文章台詞可用；快取含入口、模組、CSS、原文資料、出版字體與 Three.js CDN 模組。
 - 新增可重跑 `node tests/immersive-offline-browser.mjs`：以真 Chromium 驗證 service worker 控制、25/25 清單項（11 個字體檔、字型 CSS、封面、文章 JSON、入口資產、兩個 Three.js CDN 模組）、離線載入 3,232 字元原文、離線編輯筆記後再次 reload 仍保存。原先狀態快照的 24 是 optional cache 尚未完成時讀取；完整清單為 25/25，未發現缺項。結果留在 `test-results/immersive-offline/results.json`。
 - 根入口實測：`node tests/immersive-entry-browser.mjs` 以 built Preview、fresh mobile Chromium 驗根 query/hash 導向、22 島、全文、無 JavaScript原文 fallback；先在線進站，再斷網直接由 `/?campaign=offline#article` 根網址導覽仍進入離線群島。根與子應用 Service Worker 僅提供固定公開頁殼/文章/字型/封面/Three 0.160 資產，不快取 token/session/private query；目錄完整25/25。此一無節流 cold run 量到 root→interactive 2.770秒，與受限手機 profile 的首次畫面 1.785/1.804秒屬不同量法，不宣稱所有手機都低於2秒。結果在 `test-results/immersive-entry/results.json`。
+- 子路徑部署實測：`node tests/immersive-subpath-browser.mjs` 在 `/decision-islands/` 部署模擬中驗 root query/hash 導向、22 島、3,232 字全文、根/子應用 worker scope，並在離線後直接重新導覽子路徑根網址成功回到全文。首次安裝 root worker 時會快取單一公開 redirect shell；跨應用快取只讀取通過完整 core snapshot guard 的沉浸應用 cache，缺資源時不拼湊半成品。結果在 `test-results/immersive-subpath/results.json`；該次 root→world 3.839秒，不代表行動裝置普遍效能。
 - 角色／觸控與晚載入：`node tests/immersive-npc-touch-browser.mjs`、`node tests/immersive-late-world-browser.mjs` 驗真 canvas touch 命中居民、每位角色不借用其他角色台詞，以及快取模組延遲時保留已完成情境、文章全文、筆記與閱讀暫停。結果在 `test-results/immersive-npc-touch/`、`test-results/immersive-late-world/results.json`。
 - 代表性手機模擬：`node tests/immersive-mobile-profile-browser.mjs`，390×844、DPR2、冷瀏覽器內容、10Mbps下載/150ms延遲、CPU 4×、reduced motion、Chromium SwiftShader。同profile兩次：world ready 1.737/1.743秒，WebGL第一個draw 1.745/1.753秒，雙 RAF 首次呈現1.785/1.804秒；首個draw時投影關閉，450ms後恢復，畫面維持113 draw calls與28,292 triangles。100 NPC第100位對話泡泡更新8/129ms；證據分類遊戲結果670/728ms。resource timing證明Three 0.160模組與文章 JSON 並行載入。這是 emulated Chromium/SwiftShader 的界限測量，不代表真機。結果在 `test-results/immersive-mobile-profile/results.json` 和 `first-draw.png`。
 - 根舊站以 `/legacy.html` 保留並可用 `node tests/browser.mjs` 真瀏覽器回歸；測試驗證22篇、PDF、收藏、搜尋、無JavaScript、WebGL fallback與閱讀深連結。

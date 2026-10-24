@@ -7,14 +7,15 @@ const CACHE_NAME = CACHE_PREFIX + CACHE_VERSION;
 const IMMERSIVE_ROOT = new URL('immersive/', self.registration.scope);
 const IMMERSIVE_PATHS = new Set([
   './index.html', './app.js', './data.js', './world.js', './intro.js', './progress.js', './cache.js', './style.css', './contrast.css',
-  '../data/2026.json', '../fonts/publication.css', '../assets/cover-2026.webp',
-  '../fonts/publication-latin-2a33d5d6a5.woff2', '../fonts/publication-tc-supplement-0537efd18e.woff2',
-  ...Array.from({ length: 9 }, (_, index) => `../fonts/publication-tw-variable-${index}-${['a744bc8b6c','6cb5b4634b','773e05b1bc','81c18e680d','57e2764204','5d4b6c9d18','4358d63bf0','0b34eb3fe3','7a1dc60589'][index]}.woff2`),
 ].map(path => new URL(path, IMMERSIVE_ROOT).href));
 const IMMERSIVE_CDN_URLS = new Set([
   'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js',
   'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js',
 ]);
+const IMMERSIVE_CORE_URLS = [
+  './index.html', './app.js', './data.js', './world.js', './intro.js', './progress.js', './cache.js', './style.css', './contrast.css',
+  '../data/2026.json', '../fonts/publication.css',
+].map(path => new URL(path, IMMERSIVE_ROOT).href);
 const activeHashedAssets = new Set();
 let currentEditionUrl = null;
 let cacheMutationQueue = Promise.resolve();
@@ -68,6 +69,35 @@ function canonicalCacheRequest(request) {
 function canonicalUrl(value) {
   const request = typeof value === 'string' ? { url: value } : value;
   return canonicalCacheRequest(request)?.url ?? null;
+}
+
+function isImmersiveResource(request) {
+  let url;
+  try { url = new URL(request.url); } catch { return false; }
+  return (request.mode === 'navigate' && url.origin === self.location.origin && url.pathname === IMMERSIVE_ROOT.pathname)
+    || (url.origin === self.location.origin && url.pathname.startsWith(IMMERSIVE_ROOT.pathname) && IMMERSIVE_PATHS.has(url.href))
+    || IMMERSIVE_CDN_URLS.has(url.href);
+}
+
+async function matchCompleteImmersiveSnapshot(request, cacheKey) {
+  const names = await caches.keys();
+  const prefix = `decision-immersive:${encodeURIComponent(IMMERSIVE_ROOT.pathname)}:`;
+  for (const name of names.filter(value => value.startsWith(prefix)).reverse()) {
+    const cache = await caches.open(name);
+    let complete = true;
+    for (const url of IMMERSIVE_CORE_URLS) {
+      if (!(await cache.match(url))) { complete = false; break; }
+    }
+    if (!complete) continue;
+    if (IMMERSIVE_CDN_URLS.has(cacheKey.url)) {
+      let bothModulesCached = true;
+      for (const url of IMMERSIVE_CDN_URLS) if (!(await cache.match(url))) { bothModulesCached = false; break; }
+      if (!bothModulesCached) continue;
+    }
+    const response = await cache.match(cacheKey);
+    if (response) return response;
+  }
+  return undefined;
 }
 
 function isContentHashedAsset(pathname) {
@@ -189,7 +219,20 @@ async function fetchAndCache(cache, request, cacheKey = request) {
 }
 
 self.addEventListener('install', event => {
-  event.waitUntil(self.skipWaiting());
+  event.waitUntil((async () => {
+    await self.skipWaiting();
+    // The root entry may be the first document in a fresh session and therefore
+    // cannot be cached by its own fetch handler. Seed the tiny redirect shell
+    // during install so a later direct root navigation can work offline.
+    try {
+      const request = new Request(new URL('./', self.registration.scope).href, { credentials: 'same-origin' });
+      const response = await fetch(request);
+      if (cacheableResponse(response)) {
+        const cache = await caches.open(CACHE_NAME);
+        await cache.put(canonicalCacheRequest({ url: request.url, mode: 'navigate' }), response);
+      }
+    } catch { /* Offline root shell remains a best-effort install resource. */ }
+  })());
 });
 
 self.addEventListener('activate', event => {
@@ -205,6 +248,10 @@ self.addEventListener('fetch', event => {
   if (policy === 'network') return;
   const cacheKey = canonicalCacheRequest(event.request);
   if (!cacheKey) return;
+  if (isImmersiveResource(event.request)) {
+    event.respondWith((async () => (await matchCompleteImmersiveSnapshot(event.request, cacheKey)) || fetch(event.request))());
+    return;
+  }
   if (policy === 'cache-first' && isContentHashedAsset(new URL(event.request.url).pathname)) {
     rememberActiveAssets([event.request.url]);
   }
