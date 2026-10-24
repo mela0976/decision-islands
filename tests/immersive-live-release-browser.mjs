@@ -44,6 +44,12 @@ try {
   assert.equal(effect.characterEvent?.effectId, effect.effectId);
   assert.equal(effect.characterEvent.complete, true);
   assert.equal(effect.characterEvent.supported, true);
+  const editorial = await page.evaluate(() => ({
+    motifs: window.immersive.world.getState().editorialMotifs,
+    textureCount: window.immersive.world.getRenderState().editorialTextureCount,
+  }));
+  assert.ok(editorial.motifs.some(motif => motif.motifId === 'proposal'));
+  assert.ok(editorial.textureCount > 0);
   assert.equal(errors.length, 0, errors.join('\n'));
 
   const evidence = {
@@ -56,6 +62,7 @@ try {
     interactionChoices: choices,
     interactionResult: result,
     scenarioEffect: effect,
+    editorial,
     browserErrors: errors,
     deploymentCommit: process.env.DEPLOYMENT_COMMIT || 'not-supplied',
   };
