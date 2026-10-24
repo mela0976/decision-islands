@@ -33,13 +33,20 @@ initOfflineCache({ onStatus: ({ state, applyUpdate }) => {
     }
   }
 } });
-let DATA, world, current, travelOrigin, depth = 'guide', noteTimer, gameState, soundContext, soundNodes = [], contextFailed=false;
+let DATA, world, current, travelOrigin, depth = 'guide', noteTimer, gameState, soundContext, soundNodes = [], soundChapter, navigationHistory = [], contextFailed=false;
+const NAVIGATION_HISTORY_KEY = 'decision-immersive-navigation-v1';
 let reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 $('motion').checked = reducedMotion;
 document.body.classList.toggle('reduce-motion', reducedMotion);
 const article = id => DATA?.articles.find(a => a.id === id);
 const scene = id => DATA?.scenes.find(s => s.articleId === id);
 const island = id => DATA?.islands.find(s => s.articleId === id);
+const chapterSoundProfiles = {
+  intro: { type: 'sine', volume: .011, frequencies: [130.81, 196, 261.63] },
+  people: { type: 'triangle', volume: .009, frequencies: [146.83, 220, 293.66] },
+  model: { type: 'square', volume: .004, frequencies: [110, 164.81, 220] },
+  ai: { type: 'sawtooth', volume: .003, frequencies: [98, 146.83, 196] },
+};
 const contentControls=['read','interact','bookmark','previous','next','mark-read','game-read'];
 contentControls.forEach(id=>{$(id).disabled=true;});
 const chapterNames = { intro: 'INTRO / 序章群島', people: 'PEOPLE / 人本群島', model: 'MODEL / 洞察群島', ai: 'AI / 行動群島' };
@@ -52,6 +59,96 @@ const offSceneDialogue = {
 };
 function dialogueForCharacter(characterId, sceneData) {
   return sceneData?.dialogue?.find(line => line.characterId === characterId)?.text || offSceneDialogue[characterId] || '我們先停一下，看看眼前這件事還需要哪些線索。';
+}
+
+function saveNavigationHistory(currentId) {
+  try { sessionStorage.setItem(NAVIGATION_HISTORY_KEY, JSON.stringify({ current: currentId, stack: navigationHistory.slice(-30) })); } catch {}
+}
+
+function restoreNavigationHistory(currentId) {
+  let saved;
+  try { saved = JSON.parse(sessionStorage.getItem(NAVIGATION_HISTORY_KEY) || 'null'); } catch {}
+  if (saved?.current === currentId && Array.isArray(saved.stack) && saved.stack.every(id => article(id)) && saved.stack.at(-1) !== currentId) {
+    navigationHistory = saved.stack.slice(-30);
+    return;
+  }
+  const stack = [];
+  for (const route of progress.state.routes) {
+    const [from, to, ...rest] = route.split('>');
+    if (rest.length || !article(from) || !article(to) || from === to) { stack.length = 0; continue; }
+    if (stack.at(-1) !== from) { stack.length = 0; stack.push(from); }
+    if (stack.length > 1 && stack.at(-2) === to) stack.pop();
+    else stack.push(to);
+  }
+  if (stack.at(-1) === currentId) stack.pop();
+  else stack.length = 0;
+  navigationHistory = stack.slice(-30);
+  saveNavigationHistory(currentId);
+}
+
+function renderReturnSource() {
+  const source = article(navigationHistory.at(-1));
+  const control = $('return-source');
+  control.hidden = !source || source.id === current;
+  if (control.hidden) { control.textContent = ''; control.removeAttribute('title'); control.removeAttribute('aria-label'); return; }
+  const sourceIsland = island(source.id).id;
+  control.textContent = `返回來源島 · ${sourceIsland}`;
+  control.title = `返回來源島 ${sourceIsland}：${source.title}`;
+  control.setAttribute('aria-label', `返回來源島 ${sourceIsland}：${source.title}`);
+}
+
+function stopChapterSound() {
+  for (const node of soundNodes.splice(0)) {
+    try { node.stop?.(); } catch {}
+    try { node.disconnect(); } catch {}
+  }
+  soundChapter = null;
+}
+
+function setChapterSound(chapter) {
+  if (!soundContext || !$('sound').checked || soundChapter === chapter) return;
+  const profile = chapterSoundProfiles[chapter];
+  if (!profile) return;
+  try {
+    stopChapterSound();
+    const gain = soundContext.createGain();
+    soundNodes.push(gain);
+    gain.gain.value = profile.volume;
+    gain.connect(soundContext.destination);
+    for (const frequency of profile.frequencies) {
+      const oscillator = soundContext.createOscillator();
+      soundNodes.push(oscillator);
+      oscillator.type = profile.type;
+      oscillator.frequency.value = frequency;
+      oscillator.connect(gain);
+      oscillator.start();
+    }
+    soundChapter = chapter;
+    $('sound-status').hidden = true;
+    $('sound-status').textContent = '';
+  } catch {
+    stopChapterSound();
+    $('sound').checked = false;
+    world?.setSound(false);
+    $('sound-status').hidden = false;
+    $('sound-status').textContent = '此瀏覽器未能啟用音效，仍可繼續閱讀與探索。';
+    status($('sound-status').textContent);
+  }
+}
+
+function enterFallback(message) {
+  const firstFallback = !document.body.classList.contains('fallback');
+  world = null;
+  document.body.classList.add('fallback');
+  $('population').disabled = true;
+  $('season').disabled = true;
+  $('catalog').hidden = false;
+  $('map-toggle').setAttribute('aria-expanded', 'true');
+  $('travel-controls').hidden = true;
+  $('arrival-controls').hidden = true;
+  $('replay-arrival').hidden = true;
+  $('fallback-hint').hidden = false;
+  if (firstFallback) status(message);
 }
 
 function renderCatalog() {
@@ -67,7 +164,7 @@ function renderCatalog() {
     text('small', chapterNames[a.chapter], b);
     b.addEventListener('mouseenter', () => world?.preview?.(a.id));
     b.addEventListener('focus', () => world?.preview?.(a.id));
-    b.addEventListener('mouseleave', () => world?.preview?.(null));
+    b.addEventListener('mouseleave', () => { if (document.activeElement !== b) world?.preview?.(null); });
     b.addEventListener('blur', () => world?.preview?.(null));
   }
   if (!visibleCount) {
@@ -86,17 +183,27 @@ function renderCatalog() {
   DATA.progressConfig.insightStamps.forEach(stamp=>{const item=text('span',stamp.label,stamps),collected=progress.state.stamps.includes(stamp.id);item.className=collected?'collected':'';item.setAttribute('aria-label',`${stamp.label}：${collected?'已留下閱讀足跡':'尚未探索'}`);});
 }
 
-function visit(id, relation = null, animate = true) {
+function visit(id, relation = null, animate = true, { history = 'push' } = {}) {
   const a = article(id); if (!a) return;
   if(current!==id&&$('game').open){$('game').close();gameState=null;}
-  if(current!==id){travelOrigin=current;relation ||= DATA.articleGraph.find(edge=>edge.sourceArticleId===current&&edge.targetArticleId===id);}
+  if(current!==id){
+    const from = current;
+    travelOrigin = { id: from, history };
+    relation ||= DATA.articleGraph.find(edge=>edge.sourceArticleId===from&&edge.targetArticleId===id);
+    if (history === 'pop' && navigationHistory.at(-1) === id) navigationHistory.pop();
+    else if (history === 'push' && article(from)) navigationHistory.push(from);
+    navigationHistory = navigationHistory.slice(-30);
+  }
   flushNote(); current = id; progress.visit(id);
+  saveNavigationHistory(id);
   $('island-title').textContent = a.title;
   $('chapter-label').textContent = `${chapterNames[a.chapter]} · ${island(id).id}`;
   const s = scene(id), line = s?.dialogue?.[0];
   const name = DATA.characters.find(c => c.id === (line?.characterId || s?.protagonistId))?.name || '阿綺';
   $('dialogue').textContent = line ? `${name}：「${line.text}」` : s?.lifeEvent || '答案很多，可是我到底該相信哪一個？';
   renderCurrentProgressControls();
+  renderReturnSource();
+  setChapterSound(a.chapter);
   world?.focus(id, { animate: animate && !reducedMotion, relation });
   renderCatalog();
 }
@@ -156,7 +263,7 @@ function renderReading() {
     text('small', edge.transitionQuestion, b); text('small', edge.editorialReason, b);
     b.addEventListener('mouseenter', () => world?.preview?.(edge.targetArticleId));
     b.addEventListener('focus', () => world?.preview?.(edge.targetArticleId));
-    b.addEventListener('mouseleave', () => world?.preview?.(null));
+    b.addEventListener('mouseleave', () => { if (document.activeElement !== b) world?.preview?.(null); });
     b.addEventListener('blur', () => world?.preview?.(null));
   });
 }
@@ -296,7 +403,8 @@ $('skip-arrival').onclick=()=>{world?.skipArrival?.();$('arrival-controls').hidd
 $('replay-arrival').onclick=()=>{world?.playArrival?.({source:'bell'});};
 $('read').onclick = read; $('interact').onclick = () => openGame();
 $('skip-travel').onclick=()=>{world?.focus(current,{animate:false});$('travel-controls').hidden=true;};
-$('return-travel').onclick=()=>{if(travelOrigin)visit(travelOrigin,null,false);$('travel-controls').hidden=true;};
+$('return-travel').onclick=()=>{if(travelOrigin)visit(travelOrigin.id,null,false,{history:travelOrigin.history==='pop'?'push':'pop'});$('travel-controls').hidden=true;};
+$('return-source').onclick=()=>{const source=navigationHistory.at(-1);if(article(source))visit(source,null,true,{history:'pop'});};
 $('bookmark').onclick = () => { progress.toggle('bookmarks', current); renderCurrentProgressControls(); renderCatalog(); };
 $('mark-read').onclick = () => { if (!progress.state.read.includes(current)) progress.toggle('read', current); renderCurrentProgressControls(); renderCatalog(); };
 $('note').addEventListener('input', () => { clearTimeout(noteTimer); $('note-status').textContent = '儲存中…'; noteTimer = setTimeout(flushNote, 200); });
@@ -313,8 +421,9 @@ $('population').oninput = () => { $('population-value').value = $('population').
 $('motion').onchange = () => { reducedMotion = $('motion').checked; document.body.classList.toggle('reduce-motion',reducedMotion); world?.setReducedMotion(reducedMotion); };
 $('season').onchange = () => { document.body.dataset.season = $('season').value; world?.setSeason?.($('season').value); };
 $('sound').onchange = async () => {
-  if (!$('sound').checked) { for (const n of soundNodes) { try { n.stop(); } catch {} } soundNodes = []; world?.setSound(false); return; }
-  try { soundContext ||= new (window.AudioContext || window.webkitAudioContext)(); await soundContext.resume(); const gain = soundContext.createGain(); gain.gain.value=.013; gain.connect(soundContext.destination); for (const frequency of [130.81,196,261.63]) { const oscillator=soundContext.createOscillator(); oscillator.frequency.value=frequency; oscillator.connect(gain); oscillator.start(); soundNodes.push(oscillator); } world?.setSound(true); } catch { $('sound').checked=false; status('此瀏覽器未能啟用音效，仍可繼續探索。'); }
+  if (!$('sound').checked) { stopChapterSound(); world?.setSound(false); return; }
+  try { soundContext ||= new (window.AudioContext || window.webkitAudioContext)(); await soundContext.resume(); if (!$('sound').checked) return; setChapterSound(article(current)?.chapter || 'intro'); if ($('sound').checked) world?.setSound(true); }
+  catch { $('sound').checked=false; stopChapterSound(); world?.setSound(false); $('sound-status').hidden=false; $('sound-status').textContent='此瀏覽器未能啟用音效，仍可繼續閱讀與探索。'; status($('sound-status').textContent); }
 };
 $('compare').onclick = () => { gameState.before=!gameState.before; $('compare').textContent=gameState.before?'查看選擇後':'查看選擇前'; $('game-visual').classList.toggle('changed',!gameState.before); const visibleResult=gameState.before?`選擇前：${scene(gameState.articleId).lifeEvent}`:gameState.result; $('game-result').textContent=visibleResult; $('game-impact').textContent=gameState.before?`選擇前：${scene(gameState.articleId).lifeEvent.split(/[。！？]/)[0]}。`:gameState.visualEffect?.reactionText||visibleResult.split(/[。！？]/).filter(Boolean).slice(0,2).join('。')+'。'; world?.applyInteraction?.(gameState.articleId,{...gameState,before:gameState.before}); if(gameState.before){world?.setEncounter?.(gameState.characterId,gameState.npcIndex);world?.setSpeech?.(gameState.speech);} };
 $('replay').onclick=()=>{$('game').close();openGame();}; $('game-read').onclick=()=>read({keepGame:true});
@@ -324,7 +433,7 @@ $('game').addEventListener('close',()=>{if(!$('game').open){world?.setEncounter?
 addEventListener('keydown',event=>{if(event.key==='Escape'&&$('game').open&&!$('reader').open)$('game').close();});
 $('export-progress').onclick=()=>{flushNote();const url=URL.createObjectURL(new Blob([JSON.stringify(progress.state,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='decision-wisdom-reading-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 $('import-progress').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>2_000_000)throw Error('備份檔案過大');const saved=progress.restore(JSON.parse(await file.text()));renderCurrentProgressControls();renderCatalog();status(saved?'已合併閱讀紀錄，既有非空白筆記優先保留。':'已讀入本次畫面，但瀏覽器儲存失敗；請下載備份保存。');}catch(error){status(`無法匯入：${error.message}`);}finally{e.target.value='';}};
-$('world').addEventListener('webglcontextlost',event=>{event.preventDefault();contextFailed=true;world?.dispose();world=null;document.body.classList.add('fallback');$('catalog').hidden=false;status('3D 連線中斷，已切換閱讀模式。閱讀紀錄與筆記仍可使用。');});
+$('world').addEventListener('webglcontextlost',event=>{event.preventDefault();contextFailed=true;const lostWorld=world;world=null;try{lostWorld?.dispose();}catch{}enterFallback('3D 連線中斷，已切換閱讀模式。閱讀紀錄與筆記仍可使用。');});
 
 async function boot() {
   try {
@@ -334,7 +443,7 @@ async function boot() {
     const response=await fetch('../data/2026.json'); if(!response.ok)throw Error('文章資料暫時無法載入');
     DATA=buildData(await response.json()); if(DATA.articles.length!==22||DATA.islands.length!==22)throw Error('文章與島嶼資料不完整');
     contentControls.forEach(id=>{$(id).disabled=false;});
-    current=article(progress.state.last)?.id||'2026-01'; renderCatalog(); visit(current,null,false);
+    current=article(progress.state.last)?.id||'2026-01'; restoreNavigationHistory(current); renderCatalog(); visit(current,null,false,{history:'replace'});
     $('mode').textContent=progress.state.mode==='story'?'故事探索':'自由閱讀';
     let expired=false,worldTimeout;
     const worldReady=Promise.race([worldModulePromise.then(async ({module,error})=>{
@@ -343,6 +452,7 @@ async function boot() {
       const created=await m.createWorld({
         canvas:$('world'),data:DATA,reducedMotion,initialArrival:false,onIslandSelect:id=>visit(id),
         onObjectSelect:object=>{
+          if(object.kind==='microevent')return;
           if(object.articleId!==current)visit(object.articleId,null,false);
           if(object.kind==='exit'){const edge=DATA.articleGraph.find(item=>item.sourceArticleId===current&&item.priority===1);if(edge)visit(edge.targetArticleId,edge);}
           else if(object.objectId==='scene-bell')return;
@@ -367,8 +477,8 @@ async function boot() {
       if(expired){created.dispose();throw Error('3D 載入逾時');}return created;
     }),new Promise((_,reject)=>{worldTimeout=setTimeout(()=>{expired=true;reject(Error('3D 載入逾時'));},15000);})]).then(value=>({value}),error=>({error}));
     await intro();
-    try { const loaded=await worldReady;clearTimeout(worldTimeout);if(loaded.error)throw loaded.error;if(contextFailed){loaded.value.dispose();throw Error('3D 連線中斷');}world=loaded.value; syncWorldState();world.setArrivalEnabled(true);if(!$('game').open&&!$('reader').open)world.playArrival({source:'arrival'});status('群島已展開，從一座文章島開始探索。'); try{if(!localStorage.getItem('dentsu-decision-2026-explore-tip'))$('explore-tip').hidden=false;}catch{$('explore-tip').hidden=false;} }
-    catch(error){document.body.classList.add('fallback');$('catalog').hidden=false;status(`${error.message}。已切換可閱讀全部文章的 2D 模式。`);}
+    try { const loaded=await worldReady;clearTimeout(worldTimeout);if(loaded.error)throw loaded.error;if(contextFailed){loaded.value.dispose();throw Error('3D 連線中斷');}world=loaded.value;$('population').disabled=false;$('season').disabled=false;$('replay-arrival').hidden=false;$('fallback-hint').hidden=true;document.body.classList.remove('fallback'); syncWorldState();world.setArrivalEnabled(true);if(!$('game').open&&!$('reader').open)world.playArrival({source:'arrival'});status('群島已展開，從一座文章島開始探索。'); try{if(!localStorage.getItem('dentsu-decision-2026-explore-tip'))$('explore-tip').hidden=false;}catch{$('explore-tip').hidden=false;} }
+    catch(error){enterFallback(`${error.message}。已切換可閱讀全部文章的 2D 模式。`);}
     window.immersive={get data(){return DATA;},get world(){return world;},get progress(){return progress.state;},visit,openGame};
   } catch(error) { document.body.classList.add('fallback');status(error.message);$('dialogue').replaceChildren();const a=text('a','開啟完整原文目錄',$('dialogue'));a.href='../read/2026/index.html'; }
 }

@@ -16,6 +16,7 @@ aside,#story,dialog{background:var(--panel);border-color:#adb8a7;box-shadow:0 10
 #chapter-label,.eyebrow{font-size:11px;letter-spacing:.1em}
 #article-list small,#byline,#note-status,#recommendations small{font-size:13px}
 input,select,textarea{color:var(--ink);border-color:var(--border);background:#fffdf7;font-weight:400}
+input:disabled,select:disabled{opacity:.8;color:#556056;background:#e2e5dc;cursor:not-allowed}
 input::placeholder,textarea::placeholder{color:#566459;opacity:1}
 a{color:#244d3b;text-decoration-thickness:1.5px;text-underline-offset:3px}
 .actions button:first-child{background:#253f33;color:#fffdf7;border-color:#253f33}
@@ -61,4 +62,9 @@ aside{top:135px;border-radius:16px}
 #game-after:not([hidden]){display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;padding:8px 0;background:#faf7ef}
 #game-after button{min-height:44px;padding:7px 9px;font-size:12px}
 #game-after #game-next{grid-column:1/-1;font-size:14px;font-weight:650}
+#return-source{display:block;width:100%;margin:8px 0 4px;text-align:left}
+#return-source[hidden],#fallback-hint[hidden]{display:none}
+#fallback-hint{margin:8px 0;padding:9px 11px;border:1px solid #9cac96;border-left:4px solid #607b52;border-radius:6px;background:#edf1e7;color:#304236;font-size:13px;line-height:1.55}
+body[data-island-preview=true] dialog::backdrop{background:#172f3526;backdrop-filter:none}
+@media(max-width:650px){#story{display:grid;grid-template-rows:minmax(0,1fr) auto auto;overflow:hidden}#story-copy{min-height:0;overflow:auto;overscroll-behavior:contain}#story .actions{z-index:1;padding:5px 0 0;background:#f6f3e9ed}#reader{height:58dvh;max-height:58dvh}}
 @media(max-width:650px){#explore-tip{left:12px;top:133px;width:calc(100vw - 24px);padding:8px 10px;font-size:13px}#game{max-height:48dvh;padding:10px 16px}#game h2{font-size:17px;margin:4px 0}#game-intro{font-size:13px;line-height:1.45;margin:4px 0}#game-controls{font-size:13px;gap:4px}#game-impact{font-size:14px;line-height:1.5;margin:5px 0;padding:7px 9px}#game-full-result{font-size:12px}#game-full-result summary{min-height:40px;padding:9px 4px}#game-after:not([hidden]){grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;padding:5px 0}#game-after button{min-height:44px;padding:5px 2px;font-size:11px;line-height:1.25}#game-after #game-next{font-size:13px}}
