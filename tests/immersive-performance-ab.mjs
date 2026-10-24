@@ -23,11 +23,19 @@ for (let pair = 1; pair <= 5; pair++) {
   for (const [side, directory] of sides) {
     const target = resolve(directory);
     const destination = resolve(output, `${pair}-${side}`);
-    const { stdout, stderr } = await execute(process.execPath, [harness], {
-      cwd: target,
-      env: { ...process.env, PERF_RUNS: '1', PERF_OUTPUT: destination },
-      maxBuffer: 2 * 1024 * 1024,
-    });
+    let command;
+    try {
+      command = await execute(process.execPath, [harness], {
+        cwd: target,
+        env: { ...process.env, PERF_RUNS: '1', PERF_OUTPUT: destination },
+        maxBuffer: 2 * 1024 * 1024,
+      });
+    } catch (error) {
+      await mkdir(destination, { recursive: true });
+      await writeFile(`${destination}/command.log`, `${error.stdout || ''}\n${error.stderr || error.message}`);
+      throw new Error(`${side} pair ${pair} did not complete. Full evidence: ${destination}`);
+    }
+    const { stdout, stderr } = command;
     await writeFile(`${destination}/command.log`, `${stdout}\n${stderr}`);
     const series = JSON.parse(await readFile(`${destination}/series.json`, 'utf8'));
     assert.equal(series.runs.length, 1);

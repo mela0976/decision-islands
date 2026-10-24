@@ -102,3 +102,43 @@ PERF_FIRST=after PERF_OUTPUT=test-results/immersive-startup-ba-final node tests/
 保留的是字形供應、Canvas 中英文 family 及字形完成後重畫的正確性工作。上述 2739 ms 只屬指定基準，不直接當作後續新版本或實體手機速度；首載兩秒仍未達。另一次 22 島 warm-world 操作見 IMMERSIVE-INTERACTION-LATENCY.md，不能用 warm 操作通過替代 cold-start。
 
 重跑歷史比較時，需使用各節記錄的測試器版本；目前腳本要求 visibleLabels 與新的字碼 metadata，不能套在沒有這些觀察介面的舊版本，再聲稱重現原數字。
+
+## 原刊 JSON 提早下載
+
+基準 f43eed8、候選 220ae53 的唯一產品差異，是 native HTML head 預載既有 ../data/2026.json。應用程式仍以原 fetch 讀取同一份資料，沒有改文章、字型、畫質或初始化功能。fetch preload 的 crossorigin 依 [MDN preload 說明](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/rel/preload) 與正常請求配合；實際重用由下面的網路紀錄驗證，不只靠標記存在。
+
+使用 SHA eb63d84db726ecdc891767a2b8554e394a58360cc2d6d8c5920cc09a25d0d012 的原計時器。先固定五組反向 BA，再因第一批有隨時間下降及範圍重疊，預先固定另一批五組 AB；沒有逐次補樣本直到數字理想。兩批分開判讀。
+
+| 批次與指標 | 基準中位／範圍 ms | 候選中位／範圍 ms |
+|---|---|---|
+| 第一批，首互動 | 3126／2964–3349 | 2901／2833–3087 |
+| 第一批，World API | 2548／2499–2826 | 2232／2203–2397 |
+| 第一批，100人對話狀態 | 15／13–91 | 76／16–140 |
+| 第一批，任務結果 | 672／539–806 | 571／430–706 |
+| 確認批，首互動 | 4034／3965–4545 | 3836／3638–4164 |
+| 確認批，World API | 3257／2881–3338 | 2617／2557–3079 |
+| 確認批，100人對話狀態 | 121／91–131 | 107／96–134 |
+| 確認批，任務結果 | 803／775–1037 | 759／681–875 |
+
+十組配對首互動都較早，配對節省中位分別為 241 ms、219 ms；這和上表兩側中位數之差不同。二十次都保留 22 島、100 人、6 個實際道具及完整字形門檻，四類錯誤都是零。第二批機器背景負載較高，不能用跨批絕對秒數聲稱退化或固定改善幅度。冷啟動仍未達兩秒。
+
+每次只有一個 JSON request、一筆 resource，HTTP 200，解碼大小相同 582225 bytes。首批候選 initiator 為 link，導航起點後333–373 ms開始；基準由fetch在883–928 ms開始，沒有重複下載。資料檔提早約半秒不等於首互動同樣縮短半秒，其他模組及首幀仍有等待。
+
+圖像不是逐像素相同。代表圖RGB最大差為1/255、RMS約0.026/255；人工檢視沒有內容改動，所有run的drawCalls143、triangles30076、programs18相同。原始資料分別在 test-results/json-preload-ba/ 與 test-results/json-preload-ab-confirm/，網路及圖像紀錄為 fetch-reuse-and-parity.json。獨立審查同意保留此單行改善，發布後仍需公開重用與離線驗收。
+
+## 世界模組提前發現
+
+在 JSON 預載 220ae53 基礎上，8d1f9e1 僅加入 world.js modulepreload。目的是提前發現 world.js 及其子模組，沒有改 importmap、Three r160、畫質、字型或遊戲內容。先前網路 trace 顯示子模組仍晚於 Three 完成，故調整的是下載瀑布，不是刪除首幀工作。
+
+第一個固定 AB 批次在第一對截圖逾時，當時主機 load 20.85–23.21、10 核心，另有已確認屬於其他專案的高 CPU GPU 程序。該批次保留於 test-results/world-preload-ab/，結論為 inconclusive。沒有提高逾時或拿不完整資料判贏。確認該外部程序消失、負載回落後，預先固定新的五組 BA，沿用相同 production snapshots、計時器與門檻。
+
+| 指標 | JSON 基準中位／範圍 ms | 世界預載中位／範圍 ms |
+|---|---|---|
+| 首互動及可見字形就緒 | 2939／2935–2974 | 2777／2654–2888 |
+| World API 中位 | 2259 | 2285 |
+| 100 人對話狀態中位 | 15 | 16 |
+| 任務結果中位 | 640 | 569 |
+
+五對首互動節省為 163、115、316、284、47 ms，配對中位 163 ms。API 與 NPC 沒有改善，不將其描述為加速。十次四類錯誤皆零，保留 22 島、100 人、6 道具及完整字形；五對截圖均為 780×1688 且 RGB 逐像素相同。world.js 每次只有一個 request 與 resource，解碼大小均 113027 bytes，開始時間從約 1076–1082 ms 提前至 336–367 ms。可觀察限制仍包含必要下載及首幀編譯，不能由提前請求時間推算同等端到端節省。
+
+原始紀錄為 test-results/world-preload-ba-retry/runs.json 及 summary.json。Astra 獨立核對請求、圖像、工作量與五對資料，同意保留 a320f05。此結論限指定本機模擬條件，公開部署另驗，冷啟動仍未達兩秒。
