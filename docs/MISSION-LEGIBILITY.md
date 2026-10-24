@@ -51,3 +51,11 @@ Astra唯讀獨立審查camera/lifecycle/phase/cache及6張實際畫面，未發�
 序列化後run40055782468仍在同一result-b截圖逾時，排除跨檔案競爭為唯一原因。追加Notion即時SOP F及diagnosing-bugs，保留兩次原始紅燈記錄。排序假設為SwiftShader/合成器渲染排隊、特定終態合成卡住、暫停時鐘協調、字型等待（log已顯示fonts loaded，較弱）。
 
 獨立Sol唯讀檢查Playwright實際clock原始碼及stage.tick，確認動畫以絕對timestamp推導而非逐格物理積分。將同一失敗測試的clock.runFor四處改為fastForward，只取原定420/1200/終點及idle觀察時間，不在模擬時間中密集排入數百個GPU frame；保持全部姿態、真實像素、retarget、cache、fallback與idle斷言，也不增加30秒timeout。相關2項測試通過。這是單一變因的下一次Linux驗證，未將渲染排隊稱為已直接量測的確定根因。
+
+## 正式發布與讀回
+
+run40056211341（提交445183ea320d3c248531c4032ca6bf60f3c02c81）完成全部59項Node測試、13項Python測試、公開檢查、TypeScript/Vite build及Pages部署。改為單一時間取樣後，原兩次失敗位置在此Linux完整流程未再逾時；保留排隊/合成機制為最有支持的原因推論，不稱為GPU內部直接量測。59個斷言項目完整保留。
+
+正式HTML讀回index-DeGivpKF.js與index-C5yYF5f4.css，和本機產物一致。正式網址https://mela0976.github.io/decision-islands/完整3d-missions-browser通過48回合96分支、8角色場景、預覽/採用/retry、390×844及360×740手機尺寸、節慶保持、準備/操作/結果phase、移動與操作中間畫格、重播、暫停精確結果、拖曳、預覽中真context loss備援與human-review/shopping-control兩組代表動畫。test-results/3d-mission-results.json的base為正式站且errors空。
+
+最後紀錄只改文件，不改已驗證的遊戲資產。已停止本次preview服務，臨時probe與PNG移至/tmp/decision-islands-legibility-debug-445183e保留診斷，未留下應用程式debug或suppressions。

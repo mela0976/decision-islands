@@ -77,3 +77,7 @@ TEST_WIDTH=390 journey-browser以真WebGL完成鍵盤、原文閱讀返回下一
 正式網址https://mela0976.github.io/decision-islands/執行完整3d-missions-browser.mjs，一次通過全部48回合96分支的真WebGL實際畫面差異、8角色場景、穩定canvas、比較預覽/採用隔離與retry、390/360手機尺寸、節慶保持、家庭歌單實際中間/結果、重播、暫停精確結果、拖曳改變視角，以及預覽中真WEBGL_lose_context切SVG仍保存B答案。human-review與shopping-control的中間/結果畫格也通過。test-results/3d-mission-results.json的base為正式網址，errors空。這是96個終態與三組代表動畫的驗證，不是96段動畫逐幀全驗。
 
 最後驗證紀錄提交只更新文件，沒有改公開程式資產。未建立worktree，保留單一整合分支與可追溯提交。已停止本次建立的本機preview服務。
+
+## 手機辨識與互動提示更新
+
+後續使用者要求人物與道具更大、選擇影響更清楚，已改為互動區近景與visible mesh framing，保留54px控制帶並加入準備/操作/結果提示。現行尺寸、動作、雲端與正式站驗收見 [任務辨識度](MISSION-LEGIBILITY.md)。本頁先前的全景構圖與2.1秒時長屬歷史版本；現行有限動畫為2.8秒。
