@@ -54,3 +54,32 @@
 取樣加權中 Three.js r160 `onFirstUse` 約 997 ms，`createWorld` 約 6 ms。這不是精確函式計時，也不代表 997 ms 全部是 GLSL 編譯；首用還包含程式診斷、uniform／attribute 初始化。下一步應針對程式首次使用及可重疊等待做有限實驗，不能只憑此關閉錯誤檢查。
 
 官方固定版本來源：[WebGLProgram r160](https://github.com/mrdoob/three.js/blob/r160/src/renderers/webgl/WebGLProgram.js)、[WebGLRenderer r160](https://github.com/mrdoob/three.js/blob/r160/src/renderers/WebGLRenderer.js)。`compileAsync` 可等待平行編譯完成，但若沒有與其他工作重疊，單純搬動等待不保證降低首可用時間。
+
+## 同步提交材質與字型等待重疊
+
+先前取樣使候選聚焦在首用 program。實作只提前提交初始可見材質的 shader/link 工作，與原字型等待重疊；首畫面仍在字型成功且 label redraw 後，原有 shader diagnostics 保留。沒有改 pixel ratio、陰影、材質、文章或島數。未使用有內部 readiness polling 的 compileAsync。
+
+探索批次以 87b205a 對 92f7502，前後各五次 AB 交錯，首互動中位 4392→3349 ms，範圍 3636–5196→2915–4279 ms；任務中位 770→998 ms。五對首互動都縮短，但分布重疊、背景負載變化，不作穩定加速結論。獨立審查另外發現一份字型拒絕、另一份仍 pending 時，allSettled 不會 fail-fast，故原樣候選未被接受。
+
+最終候選 b07732a 恢復 fail-fast 並立即處理聚合結果。四個真 r160 案例包含正常延遲字型、字型拒絕、單一拒絕加另一份永久 pending、初始化途中 context loss。均完成對應清理；自有資源、listener 與 pending RAF 歸零。證據為 test-results/immersive-startup-overlap-final/results.json。SwiftShader 同 canvas 讀回 KHR_parallel_shader_compile=false，不能宣稱真驗有該擴充裝置的失連分支。
+
+修正後另預先固定五組反向 BA，先候選、再基準，完整執行後才判讀，不追加個別樣本直到出現理想結果。原計時器與條件不變，量測器 SHA-256 為 881bcea46a53ea90a09837f66d08c9f4bc280f5866b99910da4a4d3ea7d17bc0。
+
+| 指標 | 基準中位與範圍 | 候選中位與範圍 |
+|---|---|---|
+| 首畫面已繪出且可互動 | 3314 ms，3268–3581 | 2948 ms，2805–3282 |
+| World API 就緒 | 2328 ms，2304–2369 | 2357 ms，2350–2683 |
+| 100 人對話狀態就緒 | 82 ms，12–84 | 82 ms，13–82 |
+| 任務結果與場景物件就緒 | 559 ms，357–674 | 610 ms，518–823 |
+
+兩批各十次都保有 22 島、100 人、6 個真任務物件與 loaded Publication FontFaces；page、console、requestfailed、HTTP error 都為零。最終反向批次五對首互動也都縮短；任務中位較高，不省略這個觀察，也不單憑此判定回歸。背景其他專案無法隔離，hostLoadAtStart 已記錄，所以數字只適用本模擬條件，不能承諾所有實體手機固定改善幅度。
+
+原始探索批次在 test-results/immersive-startup-ab/，最終反向批次在 test-results/immersive-startup-ba-final/。探索批次的五張候選代表畫面與基準 RGB 像素及 PNG SHA 相同，見 visual-parity.json；不把一個代表畫面外推成全島藝術驗收。
+
+可重跑反向比較（兩個目錄須先各自 production build）：
+
+```sh
+PERF_FIRST=after PERF_OUTPUT=test-results/immersive-startup-ba-final node tests/immersive-performance-ab.mjs /tmp/decision-startup-baseline-87b205a /tmp/decision-startup-candidate-b07732a
+```
+
+另一次不列入成績的 post-profile 仍見 onFirstUse 取樣約 517 ms，見 test-results/immersive-startup-diagnostic-after-overlap/summary.json。不能直接把與先前取樣的差當成 shader 加速比例。首次載入仍未達兩秒，且 API 之前的下載／初始化與之後的首用 program 都仍有等待；NPC API 狀態及一項任務不代表全站每個按鈕延遲已驗。

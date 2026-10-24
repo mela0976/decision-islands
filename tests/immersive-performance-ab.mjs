@@ -11,12 +11,16 @@ const [before, after] = process.argv.slice(2);
 assert.ok(before && after, 'Provide two directories containing frozen production builds');
 const harness = fileURLToPath(new URL('./immersive-performance-series.mjs', import.meta.url));
 const output = resolve(process.env.PERF_OUTPUT || 'test-results/immersive-performance-ab');
+const firstSide = process.env.PERF_FIRST || 'before';
+assert.ok(['before', 'after'].includes(firstSide), 'PERF_FIRST must be before or after');
+const sides = [['before', before], ['after', after]];
+if (firstSide === 'after') sides.reverse();
 const harnessSha256 = createHash('sha256').update(await readFile(harness)).digest('hex');
 const runs = [];
 await mkdir(output, { recursive: true });
 
 for (let pair = 1; pair <= 5; pair++) {
-  for (const [side, directory] of [['before', before], ['after', after]]) {
+  for (const [side, directory] of sides) {
     const target = resolve(directory);
     const destination = resolve(output, `${pair}-${side}`);
     const { stdout, stderr } = await execute(process.execPath, [harness], {
@@ -30,7 +34,7 @@ for (let pair = 1; pair <= 5; pair++) {
     const result = series.runs[0];
     assert.equal(result.status, 'passed');
     runs.push({ pair, side, directory: target, evidence: destination, ...result });
-    await writeFile(`${output}/runs.json`, JSON.stringify({ harnessSha256, runs }, null, 2));
+    await writeFile(`${output}/runs.json`, JSON.stringify({ harnessSha256, firstSide, runs }, null, 2));
     console.log(JSON.stringify({ pair, side, firstInteractiveMs: result.firstInteractiveMs, errors: result.errors }));
   }
 }
@@ -51,5 +55,5 @@ const summary = Object.fromEntries(['before', 'after'].map(side => {
     errorCount: selected.reduce((sum, run) => sum + Object.values(run.errors).reduce((count, errors) => count + errors.length, 0), 0),
   }];
 }));
-await writeFile(`${output}/summary.json`, JSON.stringify({ harnessSha256, summary }, null, 2));
+await writeFile(`${output}/summary.json`, JSON.stringify({ harnessSha256, firstSide, summary }, null, 2));
 console.log(JSON.stringify(summary, null, 2));

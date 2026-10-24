@@ -282,3 +282,16 @@ throughput checkpoint: n/a, read-only investigation
 | production build、入口與離線快取 | 隔離快照 decision-integration.c7LwVK 建置通過；immersive-entry-integration-B/results.json 證明 28 項核心快取、11 字型、2 CDN、根及子路徑離線重開。測試清單補回 arrival-events.js，沒有放寬快取驗收。 |
 
 本追記尚未代表最新公開 CI／瀏覽器驗收。兩秒啟動、完整鍵盤路徑及逐字內容校對的原有證據限制仍保留。
+
+## 後續整合追記：鍵盤路徑與啟動等待
+
+保留上方歷史基準及公開驗收限制，不把新證據倒填為舊版本已完成。
+
+- 鍵盤切片 2234e93 的 390×844／1280×800 真 Tab、Shift+Tab、Enter、Space、Escape、PageDown 已完成。可在原文中段停留、記筆記、完成主角情境、推薦 P01→P04、返回 P01→I01。手機真 tap 維持相同按鈕尺寸，沒有 pageerror。證據是 test-results/immersive-keyboard-path/results.json；不是 DOM focus 或 click 代按。這補上先前 Phase6 代表完整鍵盤路徑的間接證據。所有人物名單與實體螢幕閱讀器仍不在本次驗收範圍。
+- 啟動切片整合 e0351fb／557ca2b，先提交可見材質，再等待原刊字型及 redraw。獨立審查拒絕了會等待所有字型 settle 的原候選，最終修正有一字型拒絕且另一永久 pending 的真測試。四案例自有資源、listener、RAF 均釋放；見 test-results/immersive-startup-overlap-final/results.json。
+- 五次反向交錯的基準首互動中位 3314 ms，候選 2948 ms，詳見 IMMERSIVE-PERFORMANCE.md 與 test-results/immersive-startup-ba-final/。這是固定模擬條件的改善，不能宣稱全站兩秒或所有操作加速。任務中位略高的旗標保留。
+- 最終整合 production build 通過，built entry 離線重開通過，核心快取 28 項、字型 11、CDN 模組 2、missingOptional=[]。當前仍有完整 22 島及 3232 字代表原文；離線 P01 編輯貼圖累計 4，dispose 自有資源歸零。見 test-results/immersive-entry/results.json。該測試未限速的 1721 ms 不替代上述受限環境結果。
+- intro 改為原生 modal 後，built preview 的兩尺寸 cover／tower／coasts／world、完成後釋放、不重播及真略過均通過；見 test-results/immersive-intro/results.json。手機 tower 圖已人工檢視，字幕、略過及焦點可見。
+- 原生及根快取版本分別更新為 2026-10-24.14／v10；node --test tests/immersive-cache.test.mjs 9 項及 tests/browser-cache.test.mjs 18 項通過。更新不清除 localStorage 筆記。
+
+本追記撰寫時尚未推送這批整合修改。公開 Pages／CI 由後續讀回確認；兩秒目標仍未達，不將整體目標標記完成。
