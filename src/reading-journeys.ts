@@ -3,6 +3,7 @@ import type { I18nText, JourneyAudienceId, JourneyConnectionKind, JourneyDefinit
 import { MISSION_ROUNDS } from './journey-mission-content';
 import { MISSION_VISUALS } from './mission-visual-content';
 import { MISSION_3D_ACTIONS } from './mission-3d-actions';
+import { MISSION_CHOICE_HINTS } from './mission-choice-hints';
 import { validateMissionVisual } from './mission-visual-validation';
 
 const t = (zh: string, en: string): I18nText => ({ zh, en });
@@ -134,9 +135,13 @@ export const JOURNEY_2026: JourneyDefinition = {
         if (!visual) throw new Error('curated mission needs a visual scene');
         const actions = MISSION_3D_ACTIONS[mission.id];
         if (!actions) throw new Error('curated mission needs physical actions');
+        const hints = MISSION_CHOICE_HINTS[mission.id];
+        if (!hints) throw new Error('curated mission needs choice hints');
         const choices = Object.fromEntries(Object.entries(visual.choices).map(([id, frame]) => {
           if (!actions[id]?.length) throw new Error('curated choice needs physical actions');
-          return [id, { ...frame, actions: actions[id] }];
+          const changeHints = hints[id as 'a' | 'b'];
+          if (!changeHints?.length) throw new Error('curated choice needs change hints');
+          return [id, { ...frame, actions: actions[id], changeHints }];
         }));
         return { ...entry, mission: { ...mission, visual: { ...visual, choices } } };
       }) };

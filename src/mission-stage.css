@@ -128,41 +128,51 @@
   align-items: center;
   box-sizing: border-box;
   display: flex;
-  height: 44px;
-  max-height: 44px;
-  overflow: hidden;
-  white-space: nowrap;
+  height: auto;
+  min-height: 44px;
+  padding: 6px 13px;
+  overflow: visible;
+  white-space: normal;
 }
+.mission-stage figcaption[data-cue-active='true']:has([data-change-cue-label] + [data-change-cue-label]) { min-height: 60px; }
 .mission-stage-change-cue {
-  align-items: center;
-  display: inline-flex;
-  gap: 5px;
+  display: grid;
+  gap: 3px;
+  width: 100%;
   max-width: 100%;
   min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
+  overflow: visible;
+  white-space: normal;
 }
 .mission-stage-change-cue-context,
 .mission-stage-change-cue [data-change-cue-label] {
   box-sizing: border-box;
   font-size: 12px;
   line-height: 1.2;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
+  overflow-wrap: anywhere;
 }
 .mission-stage-change-cue-context {
-  flex: 0 0 auto;
+  align-self: center;
   font-weight: 700;
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  padding-right: 5px;
+}
+.mission-stage-change-cue:has(.mission-stage-change-cue-context) {
+  grid-template-columns: max-content minmax(0, 1fr);
+}
+.mission-stage-change-cue:has(.mission-stage-change-cue-context) [data-change-cue-label] {
+  grid-column: 2;
 }
 .mission-stage-change-cue [data-change-cue-label] {
   background: color-mix(in srgb, var(--holiday-secondary, #789181) 16%, var(--holiday-paper, #fff8ef));
   border: 1px solid color-mix(in srgb, var(--holiday-secondary, #789181) 38%, transparent);
   border-radius: 999px;
   color: var(--holiday-ink, #304d47);
-  flex: 1 1 auto;
   min-width: 0;
-  padding: 3px 7px;
-  text-align: center;
+  padding: 2px 7px;
+  text-align: left;
 }
 .mission-stage-cue-announcement {
   border: 0;
@@ -182,7 +192,7 @@
   .mission-stage-label { font-size: 18px; }
   .mission-stage figcaption { padding: 8px 12px 10px; font-size: 11px; }
   .mission-stage figcaption[data-cue-active='true'] { padding: 6px 10px; }
-  .mission-stage-change-cue [data-change-cue-label] { padding: 3px 5px; }
+  .mission-stage-change-cue [data-change-cue-label] { padding: 2px 5px; }
 }
 
 @media (max-width: 380px) {

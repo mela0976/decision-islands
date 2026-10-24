@@ -54,3 +54,32 @@ test('visibility, shape and scale changes are detected without marking invisible
   const hidden={...initial,entities:initial.entities.map(entity=>entity.id==='phone'?{...entity,opacity:0}:entity)};
   assert.deepEqual(resolveMissionChangeCue(input(hidden)),{entityIds:['phone'],labels:[{zh:'道具增減',en:'Props appear or disappear'}]});
 });
+
+test('specific hints describe the visible comparison direction and only real changed entities', () => {
+  const after = structuredClone(initial);
+  after.entities = after.entities.map(entity => entity.id === 'phone' ? {...entity,x:40} : entity);
+  after.changeHints = [
+    {entityIds:['phone'],before:{zh:'手機仍放在桌面中央',en:'The phone remains at the center'},after:{zh:'手機移向家長，先看內容再分享',en:'Move the phone to the parent for review'}},
+    {entityIds:['book'],before:text('The book is unopened'),after:text('Read the book together')},
+  ];
+  const selected = input(after);
+  assert.deepEqual(resolveMissionChangeCue(selected), {entityIds:['phone'],labels:[after.changeHints[0].after]});
+  assert.deepEqual(resolveMissionChangeCue({...selected,comparisonView:'before'}), {entityIds:['phone'],labels:[after.changeHints[0].before]});
+  assert.deepEqual(resolveMissionChangeCue({...selected,choiceId:null,previewChoiceId:'a'}).labels, [after.changeHints[0].after]);
+  const unchanged = {...after,entities:initial.entities};
+  assert.deepEqual(resolveMissionChangeCue(input(unchanged)), {entityIds:[],labels:[]});
+});
+
+test('specific hints include removed entities and never imply SVG action-only changes', () => {
+  const removed = {...initial,entities:initial.entities.filter(entity=>entity.id!=='book'),changeHints:[{entityIds:['book'],before:text('Keep the book on the table'),after:text('Remove the book before sharing')}]};
+  assert.deepEqual(resolveMissionChangeCue(input(removed),'svg'), {entityIds:['book'],labels:[removed.changeHints[0].after]});
+  const action = {...initial,actions:[{actor:'person',target:'other',prop:'phone',kind:'review'}],changeHints:[{entityIds:['person'],before:text('The parent waits'),after:text('The parent reviews the shared content')}]};
+  assert.deepEqual(resolveMissionChangeCue(input(action),'svg'), {entityIds:[],labels:[]});
+  assert.deepEqual(resolveMissionChangeCue(input(action)).labels,[action.changeHints[0].after]);
+});
+
+test('future book visuals with a reused mission key keep their own neutral fallback', () => {
+  const after = {...initial,entities:initial.entities.map(entity=>entity.id==='phone'?{...entity,x:40}:entity)};
+  const future = {...input(after),key:'shared-memory-1'};
+  assert.deepEqual(resolveMissionChangeCue(future), {entityIds:['phone'],labels:[{zh:'道具位置改變',en:'Props change position'}]});
+});

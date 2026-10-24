@@ -67,6 +67,11 @@ export function resolveMissionChangeCue(input: MissionStageInput, renderer: 'web
     if (from!.kind !== to!.kind) add(actor ? '人物外觀改變' : '道具外觀改變', actor ? 'Person appearance changes' : 'Prop appearance changes');
     if (start.scale !== end.scale || start.opacity !== end.opacity) add(actor ? '人物外觀改變' : '道具外觀改變', actor ? 'Person appearance changes' : 'Prop appearance changes');
   }
+  if (after.changeHints !== undefined) {
+    const changed = new Set(entityIds);
+    const view = input.comparisonView === 'before' ? 'before' : 'after';
+    return { entityIds, labels: after.changeHints.filter(hint => hint.entityIds.some(id => changed.has(id))).slice(0, 2).map(hint => hint[view]) };
+  }
   const ordered = [...labels.values()].sort((a, b) => Number(b.visibility) - Number(a.visibility));
   const actorLabel = ordered.find(item => item.actor), propLabel = ordered.find(item => !item.actor);
   const selectedLabels = actorLabel && propLabel ? [actorLabel, propLabel] : ordered.slice(0, 2);

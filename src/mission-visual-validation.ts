@@ -26,6 +26,17 @@ export function validateMissionVisual(visual: MissionVisualDefinition, choices: 
       if (entity.pose !== undefined && !['idle', 'present', 'listen', 'work', 'walk'].includes(entity.pose)) throw new Error('unknown mission pose');
       if (entity.label) text(entity.label);
     }
+    if (frame.changeHints !== undefined) {
+      if (!Array.isArray(frame.changeHints) || frame.changeHints.length > 2) throw new Error('invalid mission change hints');
+      const hintEntities = new Set([...visual.initial.entities.map(entity => entity.id), ...entities]);
+      for (const hint of frame.changeHints) {
+        if (!hint || !Array.isArray(hint.entityIds) || !hint.entityIds.length || hint.entityIds.some((value: string) => typeof value !== 'string' || !value.trim() || !hintEntities.has(value))) throw new Error('invalid mission change hint entities');
+        for (const label of [hint.before, hint.after]) {
+          text(label);
+          if ([...label.zh].length > 18 || [...label.en].length > 48) throw new Error('mission change hint text too long');
+        }
+      }
+    }
     const flows = new Set<string>();
     for (const flow of frame.flows) {
       id(flow.id, flows);
