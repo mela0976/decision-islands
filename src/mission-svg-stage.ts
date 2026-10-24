@@ -1,4 +1,4 @@
-import type { MissionStage, MissionStageInput, MissionSetting, MissionPropKind, MissionSceneEntity } from './mission-stage-types';
+import type { MissionStage, MissionStageInput, MissionSetting, MissionPropKind, MissionSceneEntity, MissionVisualFrame } from './mission-stage-types';
 import './mission-stage.css';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -134,8 +134,13 @@ function svgElement<K extends keyof SVGElementTagNameMap>(name: K, attrs: Record
   return node;
 }
 const position = (entity: MissionSceneEntity) => `translate(${entity.x * 7.2}px, ${entity.y * 3.6}px) scale(${entity.scale ?? 1})`;
+const poseRotation = (pose: MissionSceneEntity['pose']) => pose === 'present' ? -7 : pose === 'work' ? 5 : pose === 'listen' ? -3 : 0;
 
-export function createSvgMissionStage(host: HTMLElement, language: 'zh'|'en'): MissionStage {
+export interface SvgMissionStage extends MissionStage {
+  replay(): void;
+}
+
+export function createSvgMissionStage(host: HTMLElement, language: 'zh'|'en'): SvgMissionStage {
   const prefix = `mission-stage-${++sequence}`;
   const stage = document.createElement('figure');
   stage.className = 'mission-stage';
@@ -164,6 +169,7 @@ export function createSvgMissionStage(host: HTMLElement, language: 'zh'|'en'): M
   let animations: Animation[] = [];
   let active = true, motion = true, disposed = false;
   let lastSignature = '', missionKey = '', currentSetting: MissionSetting | null = null;
+  let currentInput: MissionStageInput | null = null, currentFrame: MissionVisualFrame | null = null;
   const media = window.matchMedia('(prefers-reduced-motion: reduce)');
   const cancel = () => { animations.forEach(animation => animation.cancel()); animations = []; stage.dataset.animating = 'false'; };
   const stop = () => cancel();
@@ -183,11 +189,17 @@ export function createSvgMissionStage(host: HTMLElement, language: 'zh'|'en'): M
     update(input: MissionStageInput) {
       if (disposed) return;
       const choice = input.previewChoiceId ?? input.choiceId;
-      const frame = choice ? input.definition.choices[choice] ?? input.definition.initial : input.definition.initial;
-      const signature = JSON.stringify([input.key, input.definition.setting, choice, Boolean(input.previewChoiceId), frame]);
-      if (signature === lastSignature) return;
+      const comparisonView = input.comparisonView ?? 'after';
+      const frame = comparisonView === 'before' || !choice ? input.definition.initial : input.definition.choices[choice] ?? input.definition.initial;
+      const signature = JSON.stringify([input.key, input.definition.setting, choice, Boolean(input.previewChoiceId), comparisonView, frame]);
+      currentInput = input;
+      currentFrame = frame;
+      if (signature === lastSignature) {
+        if (input.animate === false) cancel();
+        return;
+      }
       const sameMission = input.key === missionKey && input.definition.setting === currentSetting;
-      const canAnimate = sameMission && choice !== null && active && motion && !media.matches && !document.hidden;
+      const canAnimate = sameMission && choice !== null && comparisonView === 'after' && input.animate !== false && active && motion && !media.matches && !document.hidden;
       const visible = new Map<string,{transform:string;opacity:string}>();
       if (canAnimate) for (const [id,node] of entities) {
         const style = getComputedStyle(node);
@@ -198,6 +210,7 @@ export function createSvgMissionStage(host: HTMLElement, language: 'zh'|'en'): M
       missionKey = input.key;
       stage.dataset.choiceId = choice ?? '';
       stage.dataset.preview = String(Boolean(input.previewChoiceId));
+      stage.dataset.comparisonView = comparisonView;
       stage.dataset.animating = String(canAnimate);
       svg.dataset.setting = input.definition.setting;
       if (!sameMission) {
@@ -207,7 +220,14 @@ export function createSvgMissionStage(host: HTMLElement, language: 'zh'|'en'): M
       currentSetting = input.definition.setting;
       title.textContent = input.definition.title[language];
       desc.textContent = frame.description[language];
-      caption.textContent = `${language === 'zh' ? '情境演示' : 'Scene demonstration'}${input.previewChoiceId ? (language === 'zh' ? ' · 預覽' : ' · Preview') : ''} · ${frame.description[language]}`;
+      const label = comparisonView === 'before' && choice
+        ? (language === 'zh' ? (input.previewChoiceId ? '選擇前（預覽）' : '選擇前') : (input.previewChoiceId ? 'Before choice (preview)' : 'Before choice'))
+        : input.previewChoiceId
+          ? (language === 'zh' ? '另一種做法（預覽）' : 'Alternative choice (preview)')
+          : input.choiceId
+            ? (language === 'zh' ? '你選的做法' : 'Your choice')
+            : (language === 'zh' ? '情境演示' : 'Scene demonstration');
+      caption.textContent = `${label}：${frame.description[language]}`;
       const present = new Set(frame.entities.map(entity=>entity.id));
       for (const [id,node] of entities) if (!present.has(id)) { node.remove(); entities.delete(id); }
       for (const entity of [...frame.entities].sort((a,b)=>a.y-b.y)) {
@@ -230,7 +250,7 @@ export function createSvgMissionStage(host: HTMLElement, language: 'zh'|'en'): M
         const use = node.querySelector('use')!;
         const asset = isActorKind(entity.kind) ? `${entity.kind}-${entity.pose ?? 'idle'}` : entity.kind;
         use.setAttribute('href',`#${prefix}-${asset}`);
-        const pose = entity.pose === 'present' ? -7 : entity.pose === 'work' ? 5 : entity.pose === 'listen' ? -3 : 0;
+        const pose = poseRotation(entity.pose);
         use.style.transform = `rotate(${pose}deg)`;
         node.querySelector('text')!.textContent = entity.label?.[language] ?? '';
         entityLayer.append(node);
@@ -252,6 +272,26 @@ export function createSvgMissionStage(host: HTMLElement, language: 'zh'|'en'): M
         flowLayer.append(point);
         if (canAnimate) animate(path,[{strokeDasharray:'1',strokeDashoffset:'1',opacity:0},{strokeDasharray:'1',strokeDashoffset:'0',opacity:1}],1250);
       }
+    },
+    replay() {
+      const choice = currentInput?.previewChoiceId ?? currentInput?.choiceId;
+      if (disposed || !currentInput || !currentFrame || !choice || currentInput.comparisonView === 'before' || !active || !motion || media.matches || document.hidden) return;
+      cancel();
+      stage.dataset.animating = 'true';
+      const initial = new Map(currentInput.definition.initial.entities.map(entity => [entity.id, entity]));
+      for (const entity of currentFrame.entities) {
+        const node = entities.get(entity.id);
+        if (!node) continue;
+        const start = initial.get(entity.id);
+        const startPosition = start ? position(start) : position({...entity,x:entity.x-3});
+        animate(node,[{transform:startPosition,opacity:start?.opacity ?? 0},{transform:position(entity),opacity:entity.opacity ?? 1}]);
+        const use = node.querySelector('use');
+        if (use) animate(use,[{transform:`rotate(${poseRotation(start?.pose)}deg)`},{transform:`rotate(${poseRotation(entity.pose)}deg)`}],1000);
+      }
+      for (const path of flowLayer.querySelectorAll<SVGPathElement>('[data-scene-flow]')) {
+        animate(path,[{strokeDasharray:'1',strokeDashoffset:'1',opacity:0},{strokeDasharray:'1',strokeDashoffset:'0',opacity:1}],1250);
+      }
+      if (!animations.length) stage.dataset.animating = 'false';
     },
     setActive(value) { active = value; if (!value) stop(); },
     setMotion(value) { motion = value; if (!value) stop(); },
