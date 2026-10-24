@@ -4,7 +4,7 @@ import { chromium } from '@playwright/test';
 import { createServer } from 'vite';
 
 test('illustrated mission stage moves, settles, retargets, and respects lifecycle', async () => {
-  const server = await createServer({ server: { port: 0, host: '127.0.0.1' } });
+  const server = await createServer({ server: { port: 0, host: '127.0.0.1', hmr: false } });
   await server.listen();
   const address = server.httpServer.address();
   const browser = await chromium.launch({ headless: true });
@@ -16,7 +16,7 @@ test('illustrated mission stage moves, settles, retargets, and respects lifecycl
     await page.evaluate(async () => {
       const {createMissionStage} = await import('/src/mission-stage.ts');
       const text = value => ({zh:value,en:value});
-      const frame = (x, pose='idle') => ({description:text(`人物移動到 ${x}`),entities:[{id:'person',kind:'adult',x,y:75,pose,label:text('使用者')},{id:'assistant',kind:'robot',x:70,y:75},{id:'phone',kind:'phone',x:50,y:65,opacity:x===25?.3:1}],flows:x===25?[]:[{id:'share',from:'person',to:'assistant',kind:'share'}]});
+      const frame = (x, pose='idle') => ({description:text(`人物移動到 ${x}`),entities:[{id:'person',kind:'adult',x,y:75,pose,label:text('使用者')},{id:'assistant',kind:'robot',x:70,y:75},{id:'phone',kind:'phone',x:50,y:65,opacity:x===25?.3:1},{id:'stop',kind:'stop',x:45,y:72}],flows:x===25?[]:[{id:'share',from:'person',to:'assistant',kind:'share'}]});
       window.definition = {setting:'home',title:text('<家庭情境>'),initial:frame(25),choices:{a:frame(55,'present'),b:frame(35,'walk')}};
       window.input = {key:'family',definition:window.definition,choiceId:null,previewChoiceId:null};
       window.stage = createMissionStage(document.querySelector('#fixture'),'zh');
@@ -25,6 +25,11 @@ test('illustrated mission stage moves, settles, retargets, and respects lifecycl
     const initial = await page.locator('[data-scene-entity="person"]').evaluate(node=>({transform:getComputedStyle(node).transform}));
     assert.equal(await page.locator('svg[data-setting="home"]').count(),1);
     assert.equal(await page.locator('svg title').textContent(),'<家庭情境>');
+    const stopAsset = await page.locator('[data-scene-entity="stop"]').evaluate(node=>{
+      const symbol = document.querySelector(node.querySelector('use').getAttribute('href'));
+      return {kind:node.dataset.kind,fill:symbol.querySelector('rect').getAttribute('fill'),label:symbol.querySelector('text').textContent};
+    });
+    assert.deepEqual(stopAsset,{kind:'stop',fill:'#d9534f',label:'STOP'});
     await page.evaluate(()=>{window.personNode=document.querySelector('[data-scene-entity="person"]');window.input.choiceId='a';window.stage.update(window.input);});
     await page.waitForTimeout(250);
     const mid = await page.locator('[data-scene-entity="person"]').evaluate(node=>({x:new DOMMatrix(getComputedStyle(node).transform).m41,animations:document.getAnimations().length}));
@@ -57,6 +62,46 @@ test('illustrated mission stage moves, settles, retargets, and respects lifecycl
       await page.evaluate(setting=>{window.input={...window.input,key:setting,definition:{...window.definition,setting},choiceId:'a'};window.stage.update(window.input);},setting);
       assert.equal(await page.locator(`svg[data-setting="${setting}"]`).count(),1);
       assert.equal(await page.evaluate(()=>document.getAnimations().length),0,'new mission starts at its terminal frame');
+    }
+    await page.emulateMedia({reducedMotion:'reduce'});
+    const poses = ['idle','present','listen','work','walk'];
+    const actors = ['adult','child','elder','robot'];
+    const poseAssets = await page.evaluate(({poses,actors}) => {
+      const ids = {adult:'person',child:'child',elder:'elder',robot:'assistant'};
+      const positions = {adult:25,child:42,elder:56,robot:70};
+      const props = window.input.definition.initial.entities.filter(entity=>!actors.includes(entity.kind));
+      const snapshots = {};
+      for (const pose of poses) {
+        const entities = actors.map(kind=>({id:ids[kind],kind,x:positions[kind],y:75,pose})).concat(props);
+        const choiceId = `actor-${pose}`;
+        const frame = {...window.input.definition.initial,entities};
+        window.input.definition = {...window.input.definition,choices:{...window.input.definition.choices,[choiceId]:frame}};
+        window.input.choiceId = choiceId;
+        window.stage.update(window.input);
+        snapshots[pose] = {};
+        for (const kind of actors) {
+          const node = document.querySelector(`[data-scene-entity="${ids[kind]}"]`);
+          const href = node.querySelector('use').getAttribute('href');
+          const symbol = document.querySelector(href);
+          snapshots[pose][kind] = {
+            href,
+            kind:node.dataset.kind,
+            pose:node.dataset.pose,
+            geometry:Array.from(symbol.querySelectorAll('path'),path=>path.getAttribute('d')),
+          };
+        }
+      }
+      return snapshots;
+    },{poses,actors});
+    for (const kind of actors) {
+      const references = poses.map(pose=>poseAssets[pose][kind].href);
+      const geometry = poses.map(pose=>JSON.stringify(poseAssets[pose][kind].geometry));
+      assert.equal(new Set(references).size,poses.length,`${kind} selects a symbol for each pose`);
+      assert.equal(new Set(geometry).size,poses.length,`${kind} pose symbols contain distinct SVG paths`);
+      for (const pose of poses) {
+        assert.equal(poseAssets[pose][kind].kind,kind,`${kind} keeps its base data kind`);
+        assert.equal(poseAssets[pose][kind].pose,pose,`${kind} exposes its selected pose`);
+      }
     }
     await page.evaluate(()=>{window.stage.dispose();window.stage.update(window.input);});
     assert.equal(await page.locator('.mission-stage').count(),0);

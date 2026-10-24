@@ -32,17 +32,80 @@ function room(setting: MissionSetting): string {
   return shell + details[setting];
 }
 
-function person(kind: 'adult'|'child'|'elder'): string {
+type PersonKind = 'adult'|'child'|'elder';
+type ActorKind = PersonKind|'robot';
+type ActorPose = NonNullable<MissionSceneEntity['pose']>;
+type MissionPropAssetKind = Exclude<MissionPropKind,ActorKind>;
+type PoseVariants = Record<ActorPose,string>;
+type ActorAssets = Record<ActorKind,PoseVariants>;
+
+const ACTOR_KINDS: readonly ActorKind[] = ['adult','child','elder','robot'];
+const ACTOR_POSES: readonly ActorPose[] = ['idle','present','listen','work','walk'];
+const ACTOR_KIND_SET: ReadonlySet<string> = new Set(ACTOR_KINDS);
+
+const personPoses: Record<ActorPose,{
+  arms: [string,string];
+  hands: [[number,number],[number,number]];
+  legs: string;
+}> = {
+  idle: {arms:['M-18 -61L-25 -47L-23 -32','M18 -61L26 -47L24 -32'],hands:[[-23,-32],[24,-32]],legs:'M-11 -27l-3 27h9l6 -27zm16 0 3 27h9l-2 -29z'},
+  present: {arms:['M-18 -61L-25 -47L-23 -32','M18 -61L28 -53L41 -49L53 -49'],hands:[[-23,-32],[53,-49]],legs:'M-11 -27l-3 27h9l6 -27zm16 0 3 27h9l-2 -29z'},
+  listen: {arms:['M-18 -61L-25 -47L-23 -32','M18 -61L25 -68L20 -75'],hands:[[-23,-32],[20,-75]],legs:'M-11 -27l-3 27h9l6 -27zm16 0 3 27h9l-2 -29z'},
+  work: {arms:['M-18 -61L-24 -52L-13 -43','M18 -61L24 -52L13 -43'],hands:[[-13,-43],[13,-43]],legs:'M-11 -27l-3 27h9l6 -27zm16 0 3 27h9l-2 -29z'},
+  walk: {arms:['M-18 -61L-27 -53L-33 -43','M18 -61L27 -54L33 -63'],hands:[[-33,-43],[33,-63]],legs:'M-11 -27l-12 12 -5 14h10l13 -15zm16 0 10 10 2 16H8L-1 -14z'},
+};
+
+const robotPoses: Record<ActorPose,{
+  arms: [string,string];
+  elbows: [[number,number],[number,number]];
+  hands: [[number,number],[number,number]];
+  legs: [string,string];
+  knees: [[number,number],[number,number]];
+}> = {
+  idle: {arms:['M-22 -50L-30 -39L-34 -29','M22 -50L30 -39L34 -29'],elbows:[[-30,-39],[30,-39]],hands:[[-34,-29],[34,-29]],legs:['M-12 -22L-14 -1','M12 -22L14 -1'],knees:[[-13,-12],[13,-12]]},
+  present: {arms:['M-22 -50L-30 -39L-34 -29','M22 -50L31 -43L43 -40L53 -40'],elbows:[[-30,-39],[31,-43]],hands:[[-34,-29],[53,-40]],legs:['M-12 -22L-14 -1','M12 -22L14 -1'],knees:[[-13,-12],[13,-12]]},
+  listen: {arms:['M-22 -50L-30 -39L-34 -29','M22 -50L31 -58L29 -68'],elbows:[[-30,-39],[31,-58]],hands:[[-34,-29],[29,-68]],legs:['M-12 -22L-14 -1','M12 -22L14 -1'],knees:[[-13,-12],[13,-12]]},
+  work: {arms:['M-22 -50L-28 -42L-13 -35','M22 -50L28 -42L13 -35'],elbows:[[-28,-42],[28,-42]],hands:[[-13,-35],[13,-35]],legs:['M-12 -22L-14 -1','M12 -22L14 -1'],knees:[[-13,-12],[13,-12]]},
+  walk: {arms:['M-22 -50L-31 -43L-37 -33','M22 -50L31 -43L37 -54'],elbows:[[-31,-43],[31,-43]],hands:[[-37,-33],[37,-54]],legs:['M-12 -22L-23 -13L-27 -1','M12 -22L22 -13L20 -1'],knees:[[-22,-13],[21,-13]]},
+};
+
+function person(kind: PersonKind, pose: ActorPose): string {
   const child = kind === 'child', elder = kind === 'elder';
   const skin = child ? '#d8a07e' : elder ? '#d8ad91' : '#bd8868';
   const shirt = child ? '#cc8d59' : elder ? '#9b879f' : '#648f8e';
-  return `<ellipse cx="0" cy="1" rx="23" ry="6" fill="#344d4a" opacity=".16"/><path d="M-11 -27l-3 27h9l8 -27m5 0l3 27h9l-2 -29" fill="#435866"/><path d="M-18 -64q18 -13 36 0l4 38h-43z" fill="${shirt}"/><path d="M-19 -60l-10 28 7 3 12 -24m27 -6 13 21 -6 5 -17 -21" stroke="${skin}" stroke-width="8" stroke-linecap="round" fill="none"/><circle cy="-81" r="17" fill="${skin}"/><path d="M-17 -81q-4 -25 19 -20 20 0 16 24l-8 -12 -19 -1z" fill="${elder?'#e5e2d6':'#4c4440'}"/><path d="M-12 -77h4m11 0h4" stroke="#4a4641" stroke-width="2" stroke-linecap="round"/><path d="M-3 -68q4 3 7 -1" fill="none" stroke="#795444" stroke-width="1.7"/>${elder?'<path d="M-15 -80h12v9h-12zm17 0h12v9H2zM-3 -76h5" fill="none" stroke="#687175" stroke-width="1.6"/>':''}${child?'<path d="M-11 -48h23v5h-23z" fill="#e9d7a8"/>':''}`;
+  const gesture = personPoses[pose];
+  const arms = gesture.arms.map(path=>`<path d="${path}" stroke="${skin}" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`).join('');
+  const hands = gesture.hands.map(([x,y])=>`<circle cx="${x}" cy="${y}" r="3.2" fill="${skin}"/>`).join('');
+  const fingers = pose === 'present' ? `<path d="M53 -52v-5m4 5v-6m4 7v-5" stroke="${skin}" stroke-width="2" stroke-linecap="round"/>` : '';
+  const figure = `<ellipse cx="0" cy="1" rx="23" ry="6" fill="#344d4a" opacity=".16"/><path d="${gesture.legs}" fill="#435866"/><path d="M-18 -64q18 -13 36 0l4 38h-43z" fill="${shirt}"/>${arms}<circle cy="-81" r="17" fill="${skin}"/><path d="M-17 -81q-4 -25 19 -20 20 0 16 24l-8 -12 -19 -1z" fill="${elder?'#e5e2d6':'#4c4440'}"/><path d="M-12 -77h4m11 0h4" stroke="#4a4641" stroke-width="2" stroke-linecap="round"/><path d="M-3 -68q4 3 7 -1" fill="none" stroke="#795444" stroke-width="1.7"/>${hands}${fingers}${elder?'<path d="M-15 -80h12v9h-12zm17 0h12v9H2zM-3 -76h5" fill="none" stroke="#687175" stroke-width="1.6"/>':''}${child?'<path d="M-11 -48h23v5h-23z" fill="#e9d7a8"/>':''}`;
+  return child ? `<g transform="scale(.75)">${figure}</g>` : figure;
 }
-function assets(): Record<MissionPropKind,string> {
+
+function robot(pose: ActorPose): string {
+  const gesture = robotPoses[pose];
+  const legs = gesture.legs.map((path,index)=>`<path d="${path}" stroke="#698b92" stroke-width="9" stroke-linecap="round" fill="none"/><circle cx="${gesture.knees[index][0]}" cy="${gesture.knees[index][1]}" r="3.5" fill="#c9deda" stroke="#698b92" stroke-width="2"/>`).join('');
+  const arms = gesture.arms.map((path,index)=>`<path d="${path}" stroke="#8aacaf" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none"/><circle cx="${gesture.elbows[index][0]}" cy="${gesture.elbows[index][1]}" r="4" fill="#d4e5df" stroke="#698b92" stroke-width="2"/><circle cx="${gesture.hands[index][0]}" cy="${gesture.hands[index][1]}" r="4" fill="#d4e5df" stroke="#698b92" stroke-width="2"/>`).join('');
+  const fingers = pose === 'present' ? '<path d="M53 -43v-5m4 5v-6m4 7v-5" stroke="#698b92" stroke-width="2" stroke-linecap="round"/>' : '';
+  return `<ellipse cy="2" rx="24" ry="6" fill="#344d4a" opacity=".16"/>${legs}<rect x="-22" y="-59" width="44" height="39" rx="10" fill="#c4dddd" stroke="#6e959a" stroke-width="2"/>${arms}${fingers}<rect x="-25" y="-94" width="50" height="34" rx="12" fill="#f3f4df" stroke="#6e959a" stroke-width="2"/><rect x="-17" y="-85" width="34" height="15" rx="7" fill="#577a83"/><circle cx="-8" cy="-78" r="3" fill="#def3db"/><circle cx="8" cy="-78" r="3" fill="#def3db"/><path d="M0 -94v-8" stroke="#6e959a" stroke-width="3"/><circle cy="-104" r="4" fill="#cc9874"/><path d="M-7 -43h14m-7 -7v14" stroke="#6e959a" stroke-width="3"/>`;
+}
+
+function variants(build: (pose: ActorPose) => string): PoseVariants {
+  return {idle:build('idle'),present:build('present'),listen:build('listen'),work:build('work'),walk:build('walk')};
+}
+
+const actorAssets: ActorAssets = {
+  adult: variants(pose=>person('adult',pose)),
+  child: variants(pose=>person('child',pose)),
+  elder: variants(pose=>person('elder',pose)),
+  robot: variants(robot),
+};
+
+function isActorKind(kind: MissionPropKind): kind is ActorKind { return ACTOR_KIND_SET.has(kind); }
+
+function assets(): Record<MissionPropAssetKind,string> {
   return {
-    adult:person('adult'), child:`<g transform="scale(.75)">${person('child')}</g>`, elder:person('elder'),
-    robot:'<ellipse cy="2" rx="24" ry="6" fill="#344d4a" opacity=".16"/><path d="M-12 -22v22m24 -22v22" stroke="#698b92" stroke-width="9"/><rect x="-22" y="-59" width="44" height="39" rx="10" fill="#c4dddd" stroke="#6e959a" stroke-width="2"/><path d="M-24 -50l-11 18m59 -18 12 18" stroke="#8aacaf" stroke-width="9" stroke-linecap="round"/><rect x="-25" y="-94" width="50" height="34" rx="12" fill="#f3f4df" stroke="#6e959a" stroke-width="2"/><rect x="-17" y="-85" width="34" height="15" rx="7" fill="#577a83"/><circle cx="-8" cy="-78" r="3" fill="#def3db"/><circle cx="8" cy="-78" r="3" fill="#def3db"/><path d="M0 -94v-8" stroke="#6e959a" stroke-width="3"/><circle cy="-104" r="4" fill="#cc9874"/><path d="M-7 -43h14m-7 -7v14" stroke="#6e959a" stroke-width="3"/>',
     phone:`${rect(-15,-57,30,55,'#536773',5)}${rect(-11,-51,22,39,'#d5e9e8',2)}${line(-6,-42,6,-42,'#8ab1b0',3)}${line(-6,-33,4,-33,'#c7a67a',3)}<circle cy="-7" r="2" fill="#c8d9d8"/>`,
+    stop:'<ellipse cy="2" rx="30" ry="6" fill="#344d4a" opacity=".13"/><rect x="-28" y="-59" width="56" height="56" rx="9" fill="#d9534f" stroke="#993f44" stroke-width="3"/><rect x="-17" y="-45" width="34" height="12" rx="2" fill="#fff3dd"/><text x="0" y="-16" text-anchor="middle" fill="#fff3dd" font-family="sans-serif" font-size="10" font-weight="700" letter-spacing="1">STOP</text>',
     screen:`${rect(-38,-57,76,46,'#506c79',4)}${rect(-33,-52,66,35,'#d4e8e7',2)}${line(0,-11,0,-2,'#506c79',5)}${rect(-18,-3,36,5,'#506c79')}${line(-23,-36,-7,-25,'#91b7ad',4)}${line(-7,-25,16,-43,'#91b7ad',4)}`,
     document:`<path d="M-23 -61h33l14 14V0h-47z" fill="#faf7e9" stroke="#b5baae" stroke-width="2"/><path d="M10 -61v15h14" fill="#d9dfd1"/>${[0,1,2,3].map(i=>line(-13,-37+i*9,13-i*3,-37+i*9,'#9baea6',2)).join('')}`,
     book:`<path d="M-34 -48q19 -8 34 0 16 -8 34 0v45Q16 -10 0 -3q-16 -7 -34 0z" fill="#f6ecd4" stroke="#a78566" stroke-width="2"/><path d="M0 -48v45" stroke="#bfaf8d" stroke-width="2"/>${line(-25,-35,-8,-32,'#b4b29c',2)}${line(8,-32,25,-35,'#b4b29c',2)}${line(-25,-24,-8,-21,'#b4b29c',2)}${line(8,-21,25,-24,'#b4b29c',2)}`,
@@ -83,6 +146,11 @@ export function createMissionStage(host: HTMLElement, language: 'zh'|'en'): Miss
   for (const [kind,art] of Object.entries(assets())) {
     const symbol = svgElement('g',{id:`${prefix}-${kind}`});
     symbol.innerHTML = art;
+    defs.append(symbol);
+  }
+  for (const kind of ACTOR_KINDS) for (const pose of ACTOR_POSES) {
+    const symbol = svgElement('g',{id:`${prefix}-${kind}-${pose}`});
+    symbol.innerHTML = actorAssets[kind][pose];
     defs.append(symbol);
   }
   const backdrop = svgElement('g',{'aria-hidden':'true'});
@@ -160,7 +228,8 @@ export function createMissionStage(host: HTMLElement, language: 'zh'|'en'): Miss
         node.style.transform = position(entity);
         node.style.opacity = String(entity.opacity ?? 1);
         const use = node.querySelector('use')!;
-        use.setAttribute('href',`#${prefix}-${entity.kind}`);
+        const asset = isActorKind(entity.kind) ? `${entity.kind}-${entity.pose ?? 'idle'}` : entity.kind;
+        use.setAttribute('href',`#${prefix}-${asset}`);
         const pose = entity.pose === 'present' ? -7 : entity.pose === 'work' ? 5 : entity.pose === 'listen' ? -3 : 0;
         use.style.transform = `rotate(${pose}deg)`;
         node.querySelector('text')!.textContent = entity.label?.[language] ?? '';
