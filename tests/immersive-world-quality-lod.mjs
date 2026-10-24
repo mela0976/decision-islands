@@ -54,11 +54,14 @@ try {
   assert.equal(all.preparedIslandCount, 22, 'every full authored island remains available');
   assert.equal(all.detailedIslandCount, 1);
   assert.equal(errors.length, 0, errors.join('\n'));
-  const resource = await page.evaluate(() => { const w = window.immersive.world; const before = w.getRenderState(); w.dispose(); w.dispose(); return { before, after: w.getRenderState() }; });
+  const resource = await page.evaluate(() => { const w = window.immersive.world; const before = w.getRenderState(), labels = w.getLabelResourceState(); w.dispose(); w.dispose(); return { before, labels, after: w.getRenderState() }; });
+  assert.equal(resource.labels.uniqueMaterialCount, resource.labels.count, 'each live label keeps its own material');
+  assert.equal(resource.labels.untrackedMaterialCount, 0, 'speech deletion cannot overwrite another live label disposal owner');
   assert.equal(resource.after.disposed, true);
   assert.equal(resource.after.ownedTextureCount, 0);
   assert.equal(resource.after.ownedGeometryCount, 0);
   assert.equal(resource.after.ownedMaterialCount, 0);
+  assert.equal(resource.after.textureCount, 0, 'renderer releases the shadow-map texture as well as owned textures');
   assert.ok(resource.after.releasedResources.textures > 0);
   await mkdir('test-results/immersive-world-quality', { recursive: true });
   await writeFile('test-results/immersive-world-quality/lod.json', JSON.stringify({ initialLOD: initial.islandLOD, visitedCount: all.visited.length, resource, errors }, null, 2));

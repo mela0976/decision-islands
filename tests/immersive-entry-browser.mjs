@@ -2,6 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { preview } from 'vite';
 import { chromium } from '@playwright/test';
+import { editorialTextureKey } from '../public/immersive/editorial-textures.js';
 const server = await preview({ preview: { host: '127.0.0.1', port: 0, strictPort: false } });
 const browser = await chromium.launch({ headless: true, args: ['--enable-webgl', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 async function closeServerWithTimeout(timeoutMs = 5000) {
@@ -77,22 +78,31 @@ try {
   await page.locator('#reader form .close').click();
   const builtP01Id = await page.evaluate(() => window.immersive.data.islands.find(candidate => candidate.id === 'P01')?.articleId);
   assert.ok(builtP01Id, 'the built edition resolves P01 through its canonical island record');
+  const beforeBuiltP01 = await page.evaluate(() => ({ state: window.immersive.world.getState(), render: window.immersive.world.getRenderState() }));
+  assert.equal(beforeBuiltP01.state.preparedIslandCount, 1, 'built offline entry prepares only the initial island');
+  assert.equal(beforeBuiltP01.render.editorialTextureCount, 1, 'built entry prepares the current proposal texture');
   await page.evaluate(id => window.immersive.visit(id, null, false), builtP01Id);
   await page.waitForFunction(id => window.immersive.world.getState().current === id, builtP01Id);
   await page.waitForFunction(() => window.immersive.world.getRenderState().renderedFrames >= 8);
   const builtP01 = await page.evaluate(() => ({
     state: window.immersive.world.getState(),
     render: window.immersive.world.getRenderState(),
+    configs: window.immersive.data.visualThemes.find(t => t.chapterId === 'people').editorialMotifs.P01,
   }));
   const builtMotifs = builtP01.state.editorialMotifs.map(motif => motif.motifId);
   for (const motif of ['flowerPaper', 'sourcePortrait', 'simulatedPortrait']) assert.ok(builtMotifs.includes(motif), `built offline P01 renders ${motif}`);
-  assert.ok(builtP01.render.editorialTextureCount >= 6, 'the built offline world loads shared editorial textures');
+  const requiredP01Keys = Object.values(builtP01.configs).map(editorialTextureKey);
+  const expectedBuiltKeys = new Set([...beforeBuiltP01.render.editorialTextureKeys, ...requiredP01Keys]);
+  assert.deepEqual([...builtP01.render.editorialTextureKeys].sort(), [...expectedBuiltKeys].sort(), 'built P01 loads the required flower and two portraits without preparing unrelated scenes');
+  assert.equal(builtP01.render.editorialTextureCount, expectedBuiltKeys.size);
+  assert.equal(builtP01.state.preparedIslandCount, 2);
   await mkdir('test-results/immersive-editorial/built', { recursive: true });
   await page.locator('#world').screenshot({ path: 'test-results/immersive-editorial/built/390-P01-offline-built.png' });
   const disposedBuiltWorld = await page.evaluate(() => {
     window.immersive.world.dispose();
     return window.immersive.world.getRenderState();
   });
+  assert.deepEqual(disposedBuiltWorld.editorialTextureKeys, []);
   assert.equal(disposedBuiltWorld.editorialTextureCount, 0, 'built P01 releases shared textures on dispose');
   assert.equal(disposedBuiltWorld.ownedTextureCount, 0);
   assert.equal(disposedBuiltWorld.ownedMaterialCount, 0);

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { addContactRig, createCharacterEvents } from './character-events.js';
+import { addContactRig, createCharacterEvents, aimHand, resetContactRig } from './character-events.js';
 import { createArrivalEvents } from './arrival-events.js';
 import { createEditorialTextureFactory, editorialTextureKey } from './editorial-textures.js';
 
@@ -67,6 +67,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
   const materials = new Map();
   const textures = new Set();
   const labels = new Set();
+  let labelSerial = 0;
   const editorialTextures = createEditorialTextureFactory(THREE, data.visualThemes, textures);
   let disposedResources = null;
   const random = mulberry32(202601);
@@ -195,7 +196,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     };
     draw();
     const texture = new THREE.CanvasTexture(surface); texture.colorSpace = THREE.SRGBColorSpace; textures.add(texture);
-    const mat = new THREE.SpriteMaterial({ map: texture, depthTest: false }); materials.set(`label-${materials.size}`, mat);
+    const mat = new THREE.SpriteMaterial({ map: texture, depthTest: false }); materials.set(`label-${labelSerial++}`, mat);
     const sprite = new THREE.Sprite(mat); sprite.userData.screenWidth = width; sprite.userData.aspect = surface.height / surface.width; sprite.userData.redraw = () => { draw(); texture.needsUpdate = true; }; sprite.renderOrder = 3; labels.add(sprite); return sprite;
   }
   const sea = mesh(scene, 'cylinder', '#79b9bd', [0, -0.9, 0], [230, 0.35, 230]);
@@ -226,6 +227,61 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     mesh(parent, 'ball', color, [x + .5, 2.8, z + .2], [.7, .8, .7]);
     mesh(parent, 'ball', color, [x - .45, 2.9, z - .1], [.7, .9, .65]);
   }
+  function microPick(object, island, objectId) { tag(object, island, 'microevent', objectId); }
+  function addDoorAndChair(island) {
+    const g = island.detail;
+    const hinge = new THREE.Group(); hinge.position.set(-4.1, 1.05, .05); g.add(hinge);
+    const door = mesh(hinge, 'box', '#9caa8c', [.65, 1.1, 0], [1.3, 2.2, .12]);
+    const handle = mesh(hinge, 'ball', '#b18b46', [1.12, 1.05, .16], [.09, .09, .09]);
+    for (const object of [door, handle]) microPick(object, island, 'studio-door');
+    for (const side of [0, 1.4]) mesh(g, 'box', '#d4bf9e', [-4.2 + side, 2.25, .05], [.12, 2.45, .25]);
+    mesh(g, 'box', '#d4bf9e', [-3.5, 3.5, .05], [1.55, .16, .25]);
+    const chair = new THREE.Group(); chair.position.set(2.8, 0, 3.5); g.add(chair);
+    const seat = mesh(chair, 'box', '#af997b', [0, 1.55, 0], [1.05, .18, .9]);
+    mesh(chair, 'box', '#aa9273', [0, 2.1, -.4], [1.05, 1, .15]);
+    for (const x of [-.4, .4]) for (const z of [-.3, .3]) mesh(chair, 'box', '#817763', [x, 1.22, z], [.09, .6, .09]);
+    for (const object of chair.children) microPick(object, island, 'studio-chair');
+    const doorName = label('工作室門把', '#263f42', 90); doorName.position.set(-3.5, 3.85, .1); g.add(doorName);
+    const chairName = label('阿綺的思考椅', '#263f42', 96); chairName.position.set(3.7, 2.8, 3.5); g.add(chairName);
+    island.furniture = { hinge, handle, seat, chair };
+  }
+  function addCultureWindow(island) {
+    const g = island.detail;
+    const window = new THREE.Group(); window.position.set(4.5, 1.5, .8); g.add(window);
+    mesh(window, 'box', '#839ba1', [0, -.15, 0], [5.8, .22, 2.1]);
+    const waterMaterial = new THREE.MeshStandardMaterial({ color: '#7dc2c5', transparent: true, opacity: .3, roughness: .25, depthWrite: false, side: THREE.DoubleSide });
+    materials.set('culture-window-water', waterMaterial);
+    const water = mesh(window, 'box', '#7dc2c5', [0, 1.2, 0], [5.8, .05, 2.1]); water.material = waterMaterial;
+    for (const z of [-1, 1]) mesh(window, 'box', '#80adb1', [0, 1.19, z], [5.8, .06, .05]);
+    const resistance = ['怕出錯', '部門隔閡', '缺少指引'].map((name, i) => {
+      const object = mesh(window, 'box', ['#b18a97', '#a67585', '#bd9f9d'][i], [-1.8 + i * 1.8, .45, 0], [1.15, .95, .7]);
+      microPick(object, island, `culture-resistance-${i}`);
+      return object;
+    });
+    const top = label('水面上：導入進度', '#263f42', 112); top.position.set(0, 1.75, -.5); window.add(top);
+    const bottom = label('水面下：組織阻力', '#59464e', 112); bottom.position.set(0, -.1, 1.2); window.add(bottom);
+    island.cultureWindow = { window, water, resistance, selected: null };
+  }
+  function addKnowledgeGraph(island) {
+    const g = island.detail;
+    const definitions = [['facts', '來源', [1, 4.7, -.8]], ['voice', '品牌', [4, 5.1, -1.7]], ['answer', '答案', [2.4, 3.4, .7]], ['experience', '體驗', [5.2, 3.8, .7]]];
+    const nodes = definitions.map(([id, name, position], i) => {
+      const object = mesh(g, i === 2 ? 'ring' : 'ball', ['#b29d75', '#809b79', '#709ca2', '#c39d85'][i], position, i === 2 ? [.6, .6, .12] : [.35, .35, .35]);
+      microPick(object, island, `knowledge-${id}`);
+      const sign = label(name, '#263f42', 64); sign.position.fromArray(position).y += .7; g.add(sign);
+      sign.userData.pick = object.userData.pick; pickables.push(sign);
+      return { id, name, object, restScale: object.scale.clone() };
+    });
+    const edges = [['facts', 'answer', '可核對來源'], ['voice', 'answer', '保留品牌觀點'], ['experience', 'answer', '核對真實體驗']];
+    const links = edges.map(([from, to, relation], i) => {
+      const a = nodes.find(node => node.id === from).object.position;
+      const b = nodes.find(node => node.id === to).object.position;
+      const line = mesh(g, 'cylinder', '#8a9e95', a.clone().lerp(b, .5).toArray(), [.045, a.distanceTo(b), .045]);
+      line.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+      return { from, to, relation, line };
+    });
+    island.knowledgeGraph = { nodes, links, selected: null };
+  }
   function buildScene(island, index) {
     const { detail: g, color, canonical: id } = island;
     const accent = color;
@@ -233,6 +289,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     switch (id) {
       case 'I01':
         building(g, -2, -2, 5, 3.8, 3, '#f2eadd'); table(g, 1, 1);
+        addDoorAndChair(island);
         core = mesh(g, 'box', '#414d51', [1, 2.7, .8], [1.5, 1.3, .15], -.2);
         addEditorialSurface(core, island, 'proposal', { width: .82, height: .82, z: .52 });
         for (let n = 0; n < 7; n++) mesh(g, 'box', '#fffaf0', [-3 + n * .55, 1.2 + n * .18, 2.5], [.45, .12, 1.4], n * .08); break;
@@ -319,8 +376,8 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
         for (let n = 0; n < 7; n++) for (const side of [-1, 1]) mesh(g, 'box', side < 0 ? '#d4b29e' : accent, [side * n * .55, 1.15 + n * .12, -3 + n], [1, .2, .8], side * .3);
         core = mesh(g, 'ring', '#9d8491', [0, 3, -2], [1.1, 1.1, 1.1]); break;
       case 'M05':
-        mesh(g, 'cylinder', '#8f9ea3', [0, .1, 0], [5.2, .4, 4.2]);
-        for (let n = 0; n < 7; n++) mesh(g, 'box', '#bba6b3', [-3 + n, .6, 0], [.2, 1 + n % 3 * .5, 4], .3);
+        addCultureWindow(island);
+        for (let n = 0; n < 3; n++) mesh(g, 'box', '#bba6b3', [-3 + n, 1.4, -1.8], [.2, .7 + n % 3 * .3, 2], .3);
         core = mesh(g, 'ball', '#e6c3cf', [0, 2.8, 0], [1.6, 1.6, 1.6]); break;
       case 'A01':
         for (let n = 0; n < 3; n++) building(g, -3 + n * 3, -2, 2.4, 2 + n * .5, 2.3, '#d4e2d9');
@@ -340,7 +397,8 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
             paperFlower(g, island, x, z, palettes[n % palettes.length], n);
           }
         }
-        core = mesh(g, 'ring', '#6d9198', [0, 2.6, 0], [1.4, 1.4, 1.4]); break;
+        core = mesh(g, 'ring', '#6d9198', [0, 2.6, 0], [1.4, 1.4, 1.4]);
+        addKnowledgeGraph(island); break;
       case 'A04':
         building(g, -2, -2, 4.5, 2.8, 2.8, '#d5dace'); table(g, 1, 1);
         for (let n = 0; n < 4; n++) mesh(g, 'box', ['#d1b7b8', accent, '#d6cb9d', '#c1c8ad'][n], [-2.5 + n * 1.7, 2.5, -1], [1.3, 1.7, .1], n * .1);
@@ -475,7 +533,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
   function playArrival({ source = 'bell' } = {}) {
     if (journey || disposed) return false;
     if (source === 'arrival' && current.interaction && !current.interaction.before) return false;
-    cancelArrival(true); characterEvents.cancel(); encounter = null; setSpeech('');
+    cancelMicroevent(); cancelDeparture(); cancelArrival(true); characterEvents.cancel(); encounter = null; setSpeech('');
     if (current.interaction && !current.interaction.before) {
       arrivalResult = { island: current, payload: { ...current.interaction } };
       current.outcome.visible = false;
@@ -551,10 +609,12 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
   const recommendationGroup = new THREE.Group(); scene.add(recommendationGroup);
   let recommendations = [], recommendationObjects = [];
   let current = entries[0], journey = null, disposed = false, mode = 'story', frame = 0, time = 0, last = performance.now(), hover = null, audio = null, sound = false, active = !document.hidden, externallyActive = true, renderedFrames = 0, shadowRestoreTimer, firstDrawAt = null, firstDrawShadowCasting = null, shadowRestoredAt = null;
+  let microevent = null, departure = null, departureLimitLabel = null;
   let previewed = null, encounter = null, speech = null, season = 'christmas', interactionPose = null;
   updateCrowd(0);
   const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
   function clearRecommendations() {
+    delete document.body.dataset.islandPreview;
     for (const object of recommendationObjects) {
       if (object.isLine) object.geometry.dispose();
       const index = pickables.indexOf(object); if (index >= 0) pickables.splice(index, 1);
@@ -577,10 +637,45 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
       materials.get(key).color.set(destination.color);
       const line = new THREE.Line(geo, materials.get(key)); line.computeLineDistances(); recommendationGroup.add(line); recommendationObjects.push(line);
       const marker = mesh(recommendationGroup, 'ring', destination.color, destination.root.position.clone().add(new THREE.Vector3(0, 1.3, 0)).toArray(), [7.8, 6.5, 7.8]); marker.rotation.x = Math.PI / 2; tag(marker, destination, 'island', 'recommended-destination'); recommendationObjects.push(marker);
-      const object = destination.landmark.clone(); object.position.copy(destination.root.position).add(new THREE.Vector3(0, 5, 0)); object.scale.multiplyScalar(1.3); object.visible = false; recommendationGroup.add(object); tag(object, destination, 'island', 'destination-preview'); recommendationObjects.push(object);
+      const object = new THREE.Group(); object.userData.previewKind = destination.canonical; object.position.copy(destination.root.position).add(new THREE.Vector3(0, 5, 0)); object.scale.setScalar(1.3); object.visible = false; recommendationGroup.add(object); tag(object, destination, 'island', 'destination-preview'); recommendationObjects.push(object);
       recommendations.push({ ...edge, sourceArticleId: current.articleId, targetArticleId: destination.articleId, canonical: destination.canonical, curve, object, marker });
     }
     updateLOD(journey?.destination); return recommendations.length;
+  }
+  function buildPreview(group, island) {
+    const part = (type, color, position, scale) => { const object = mesh(group, type, color, position, scale); tag(object, island, 'island', 'destination-preview'); recommendationObjects.push(object); return object; };
+    const paper = '#f4e7c9', ink = '#567473', accent = island.color;
+    const panel = (x, y, z, w = 1, h = 1.2) => part('box', paper, [x, y, z], [w, h, .1]);
+    const link = (a, b) => { const from = new THREE.Vector3(...a), to = new THREE.Vector3(...b); const object = part('cylinder', ink, from.clone().lerp(to, .5).toArray(), [.06, from.distanceTo(to), .06]); object.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), to.sub(from).normalize()); };
+    switch (island.canonical) {
+      case 'I01': panel(0, .6, 0, 1.5, 1); part('box', '#b99b75', [0, -.1, .3], [2.4, .15, 1.2]); panel(.8, .2, .4, .5, .2); break;
+      case 'I02': for (const x of [-1.2, 1.2]) part('box', accent, [x, .3, 0], [.7, 1.1, 1]); for (let i = 0; i < 5; i++) part('box', paper, [-.8 + i * .4, .2, 0], [.32, .13, .7]); break;
+      case 'P01': {
+        const photo = panel(0, .3, 0, 1.65, 1.3);
+        const surface = new THREE.Mesh(geometry('editorial-plane'), editorialMaterial(editorialConfig(island, 'sourcePortrait'))); surface.position.z = .52; surface.scale.set(.85, .85, 1); photo.add(surface);
+        for (const x of [-.65, .65]) part('ring', '#a58653', [x, -.5, .1], [.2, .2, .1]);
+        break;
+      }
+      case 'P02': for (const x of [-1, 0, 1]) { panel(x, .3, 0, .8, 1.1); part('box', accent, [x, .9, .2], [.9, .15, .5]); } break;
+      case 'P03': for (let i = 0; i < 4; i++) { part('box', accent, [-1.2 + i * .8, -.4 + i * .3, 0], [.6, .4 + i * .2, .6]); if (i) link([-2 + i * .8, -.2 + i * .3, 0], [-1.2 + i * .8, .1 + i * .3, 0]); } break;
+      case 'P04': for (let i = 0; i < 5; i++) { part('box', '#b99b75', [-1.2 + i * .6, .2 * Math.sin(i / 4 * Math.PI), 0], [.5, .15, .8]); part('box', ink, [-1.2 + i * .6, .65, .4], [.05, 1.1, .05]); } panel(.9, 1, 0, .7, .8); break;
+      case 'P05': part('cylinder', '#87b8aa', [0, .3, 0], [.5, 1.3, .5]); part('cylinder', '#d4b780', [0, 1, 0], [.53, .2, .53]); panel(.9, .4, 0, .6, .9); break;
+      case 'P06': part('cylinder', accent, [0, -.3, 0], [1.4, .2, 1]); panel(0, .5, -.6, 1.8, 1.2); for (const x of [-1.2, 1.2]) for (const z of [.4, 1]) part('box', '#b99b75', [x, -.1, z], [.4, .3, .4]); break;
+      case 'P07': panel(0, .5, 0, .8, 1.5); for (const x of [-1, 1]) { panel(x, .6, .2, .6, .4); link([x, .2, .2], [0, .2, 0]); } break;
+      case 'P08': for (const x of [-1.1, 1.1]) { part('box', ink, [x, 0, 0], [.1, 1.6, .1]); panel(x, .9, 0, 1, 1.2); } break;
+      case 'P09': part('box', '#a47b5c', [0, .3, 0], [1.8, 1.2, .7]); part('ring', ink, [-.4, .3, .4], [.33, .33, .1]); for (let i = 0; i < 3; i++) part('box', paper, [.45, .5 - i * .2, .4], [.5, .06, .05]); break;
+      case 'M01': for (const x of [-.7, .7]) { panel(x, .5, 0, 1.1, 1.4); part(x < 0 ? 'ball' : 'box', accent, [x, .5, .1], [.3, .45, .1]); } panel(0, -.5, .3, 2.5, .2); break;
+      case 'M02': for (let i = 0; i < 5; i++) { const a = i * Math.PI * .4, point = [Math.cos(a) * 1.2, 0, Math.sin(a) * 1.2]; part('box', paper, point, [.55, .2, .55]); link([0, 0, 0], point); } break;
+      case 'M03': part('cylinder', ink, [0, .3, 0], [.08, 2, .08]); part('box', accent, [0, 1.25, 0], [2.7, .12, .12]); for (const x of [-1.1, 1.1]) { link([x, 1.25, 0], [x, .1, 0]); part('cylinder', paper, [x, .05, 0], [.6, .1, .6]); } break;
+      case 'M04': for (const side of [-1, 1]) for (let i = 0; i < 4; i++) part('box', side < 0 ? paper : accent, [side * i * .4, -.2 + i * .15, i * .5], [.5, .13, .4]); break;
+      case 'M05': part('box', '#85bcc0', [0, .6, 0], [2.8, .07, 1.2]); for (const x of [-.8, 0, .8]) part('box', '#ac8396', [x, 0, 0], [.4, .8, .4]); break;
+      case 'A01': part('box', accent, [0, 0, 0], [2.5, .7, 1]); panel(-.7, .8, -.3, 1, .7); part('ball', '#d5b393', [.8, .9, 0], [.25, .3, .25]); break;
+      case 'A02': part('ball', '#d5b393', [-.8, .5, 0], [.35, .4, .35]); part('box', ink, [.8, .5, 0], [.6, .8, .5]); link([-.8, 0, 0], [.8, 0, 0]); break;
+      case 'A03': for (const point of [[-1, .8, 0], [1, .8, 0], [0, -.2, .4]]) { part('ball', accent, point, [.3, .3, .3]); link([0, .4, 0], point); } break;
+      case 'A04': for (let i = 0; i < 3; i++) { const card = panel(-1 + i, .5, 0, .7, 1.2); card.material = material(['#d1b7b8', accent, '#d6cb9d'][i]); } part('ring', ink, [1, -.4, .2], [.25, .25, .1]); break;
+      case 'A05': for (const x of [-1, 1]) { part('box', paper, [x, 0, 0], [1.3, .15, .8]); part(x < 0 ? 'ball' : 'cylinder', accent, [x, .5, 0], [.3, .6, .3]); } link([-1, .6, 0], [1, .6, 0]); break;
+      case 'A06': for (let i = 0; i < 3; i++) part('box', accent, [-1 + i, 0, 0], [.6, .15, .6]); part('box', '#ba856f', [.5, .6, 0], [.1, 1.4, 1]); panel(-1, .7, 0, .6, .8); break;
+    }
   }
   function prepareDetail(island) {
     if (island.baseline) return;
@@ -601,17 +696,141 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
       island.simplified.visible = nearby;
       island.silhouette.visible = !full && !nearby;
       showSign(island, mode === 'explore' || full || island.articleId === previewed);
+      if (canvas.clientWidth < 700 && !active && previewed) island.sign.visible = false;
       island.highlight.visible = island.articleId === previewed;
       island.exploredLight.visible = island.visited;
     }
-    for (const route of recommendations) route.object.visible = route.targetArticleId === previewed;
+    for (const route of recommendations) {
+      route.object.visible = route.targetArticleId === previewed;
+      if (route.object.visible && !route.object.children.length) buildPreview(route.object, islands.get(route.targetArticleId));
+      if (route.object.visible && !active) {
+        const distance = camera.position.distanceTo(controls.target) * .6;
+        const height = distance * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+        const mobile = canvas.clientWidth < 700;
+        const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+        const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+        route.object.position.copy(camera.position).addScaledVector(camera.getWorldDirection(new THREE.Vector3()), distance).addScaledVector(right, mobile ? 0 : height * camera.aspect * .8).addScaledVector(up, mobile ? height * .43 : 0);
+        route.object.rotation.y = camera.rotation.y;
+        route.object.scale.setScalar(mobile ? Math.min(1.1, height * camera.aspect * .42) : Math.min(1.3, height * .24));
+      } else {
+        route.object.position.copy(islands.get(route.targetArticleId).root.position).add(new THREE.Vector3(0, 5, 0)); route.object.rotation.y = 0; route.object.scale.setScalar(1.3);
+      }
+    }
+  }
+  function cancelMicroevent() {
+    if (!microevent) return;
+    restore(microevent.baseline); resetContactRig(microevent.actor); microevent = null;
+  }
+  function runMicroevent(objectId) {
+    if (journey || disposed) return false;
+    cancelMicroevent(); cancelArrival(true); characterEvents.cancel();
+    const actor = actors.find(actor => actor.habit === 'pen');
+    if (objectId.startsWith('knowledge-') && current.knowledgeGraph) {
+      const graph = current.knowledgeGraph, id = objectId.slice(10);
+      const node = graph.nodes.find(node => node.id === id); if (!node) return false;
+      graph.selected = id;
+      graph.nodes.forEach(node => node.object.scale.copy(node.restScale).multiplyScalar(node.id === id ? 1.3 : 1));
+      const choice = current.sceneData.interaction.outcomes.find(choice => choice.choiceId === id);
+      const source = current.sceneData.sourceGrounding;
+      const text = id === 'answer' ? '答案連到來源、品牌觀點與實際體驗，三條線都要能核對。' : `${node.name}：${choice.text}`;
+      setEncounter(actor.id); setSpeech(text);
+      onArrivalCaption({ text: `${text} 原刊依據：${source?.rationale || ''}`, actorId: actor.id }, { complete: true, source: 'microevent', articleId: current.articleId });
+      return true;
+    }
+    if (objectId.startsWith('culture-') && current.cultureWindow) {
+      const window = current.cultureWindow;
+      const index = objectId === 'culture-window' ? ((window.selected ?? -1) + 1) % 3 : Number(objectId.slice(-1));
+      window.selected = index;
+      window.resistance.forEach((object, i) => { object.position.y = i === index ? 1.15 : .45; object.rotation.y = i === index ? -.35 : 0; });
+      const text = ['怕做錯不會寫在導入進度上，先讓顧慮浮上來。', '跨部門的牆還在，工具上線不代表協作已經通了。', '缺少指引時，先說清楚誰能決定、卡住找誰。'][index];
+      setEncounter(actor.id); setSpeech(text);
+      onArrivalCaption({ text, actorId: actor.id }, { complete: true, source: 'microevent', articleId: current.articleId });
+      return true;
+    }
+    if (!current.furniture || !['studio-door', 'studio-chair'].includes(objectId)) return false;
+    setEncounter(null); setSpeech('');
+    const furniture = current.furniture;
+    microevent = { kind: objectId, actor, baseline: capture(actor.root), start: actor.root.position.clone(), elapsed: 0, complete: false, hingeStart: furniture.hinge.rotation.y, hingeTarget: furniture.hinge.rotation.y < -.5 ? 0 : -1.25, contact: false };
+    actor.prop.visible = false; actor.hands.forEach(hand => hand.forearm.visible = true);
+    updateMicroevent(0);
+    if (reducedMotion) updateMicroevent(10);
+    return true;
+  }
+  function updateMicroevent(dt) {
+    if (!microevent) return;
+    const e = microevent, furniture = current.furniture;
+    e.elapsed = Math.min(2.6, e.elapsed + dt);
+    const smooth = t => THREE.MathUtils.smoothstep(t, 0, 1);
+    const approach = smooth(e.elapsed / .75), action = smooth((e.elapsed - .85) / 1.1);
+    const door = e.kind === 'studio-door';
+    const target = door ? new THREE.Vector3(-2.65, 1.1, 1.1) : new THREE.Vector3(2.8, 1.1, 4.6);
+    e.actor.root.position.lerpVectors(e.start, target, approach);
+    e.actor.root.rotation.y = door ? Math.PI : 0;
+    e.actor.state = door ? 'open-door' : 'sit';
+    if (door) {
+      furniture.hinge.rotation.y = THREE.MathUtils.lerp(e.hingeStart, e.hingeTarget, action);
+      furniture.handle.updateWorldMatrix(true, true);
+      const grip = furniture.handle.getWorldPosition(new THREE.Vector3());
+      const relaxed = e.actor.root.localToWorld(new THREE.Vector3(.34, .43, 0));
+      aimHand(e.actor, 1, relaxed.lerp(grip, approach));
+      e.contact = e.elapsed >= .75;
+    } else {
+      const seatTop = furniture.seat.position.y + furniture.seat.scale.y / 2;
+      e.actor.root.position.z = THREE.MathUtils.lerp(4.6, 3.5, action);
+      e.actor.root.position.y = THREE.MathUtils.lerp(1.1, seatTop - .34 * 1.4, action);
+      e.actor.legs.forEach(leg => { leg.rotation.x = -Math.PI / 2 * action; leg.position.z = .23 * action; });
+      const support = furniture.chair.localToWorld(new THREE.Vector3(.43, seatTop, .25));
+      aimHand(e.actor, 1, e.actor.root.localToWorld(new THREE.Vector3(.34, .43, 0)).lerp(support, action));
+      e.contact = action === 1;
+    }
+    e.complete = e.elapsed === 2.6;
+  }
+  function cancelDeparture() {
+    if (!departure) return;
+    departure.prop.removeFromParent();
+    restore(departure.baseline); resetContactRig(departure.actor); departure = null;
+  }
+  function startDeparture(destination) {
+    const pair = `${current.canonical}-${destination.canonical}`;
+    const definition = {
+      'P01-P04': { habit: 'note', type: 'box', color: '#fff0ce', scale: [.7, .55, .05], end: [3.8, 1.1, 5], caption: '映蓁拿著仍有疑點的照片，走到海岸邊。' },
+      'P05-A06': { habit: 'phone', type: 'cylinder', color: '#87b8aa', scale: [.22, .55, .22], end: [2.3, 1.1, 4.7], caption: '小岳拿著商品走出店外，還想知道下一步誰來做。' },
+      'M01-M03': { habit: 'note', type: 'box', color: '#e5c2d0', scale: [.8, .6, .05], caption: '映蓁先翻過結果卡，背面還有資料限制與未知。' },
+    }[pair];
+    if (!definition) return;
+    const actor = actors.find(actor => actor.habit === definition.habit);
+    const baseline = capture(actor.root);
+    const prop = mesh(actor.root, definition.type, definition.color, [.5, 1, .6], definition.scale);
+    for (let i = 0; i < 3; i++) mesh(prop, 'box', '#698178', [0, .25 - i * .22, .52], [.65 - i * .1, .07, .04]);
+    if (pair === 'M01-M03') {
+      mesh(prop, 'box', '#ab746c', [0, .12, -.52], [.7, .1, .04]);
+      mesh(prop, 'box', '#ab746c', [0, -.15, -.52], [.45, .1, .04]);
+      departureLimitLabel ||= label('限制與未知', '#59464e', 92); departureLimitLabel.position.set(0, 0, -.6); prop.add(departureLimitLabel); departureLimitLabel.visible = false;
+    }
+    departure = { pair, actor, baseline, prop, start: actor.root.position.clone(), end: definition.end ? new THREE.Vector3(...definition.end) : actor.root.position.clone(), progress: 0, caption: definition.caption };
+    actor.prop.visible = false; actor.hands.forEach(hand => hand.forearm.visible = true);
+    onArrivalCaption({ text: definition.caption, actorId: actor.id }, { complete: false, source: 'departure', articleId: current.articleId });
+    updateDeparture(0);
+  }
+  function updateDeparture(progress) {
+    const e = departure; e.progress = progress;
+    const move = THREE.MathUtils.smoothstep(progress, 0, 1);
+    e.actor.root.position.lerpVectors(e.start, e.end, move);
+    if (e.pair !== 'M01-M03') {
+      e.actor.root.rotation.y = Math.atan2(e.end.x - e.start.x, e.end.z - e.start.z);
+      e.actor.legs.forEach((leg, i) => { leg.rotation.x = progress < 1 ? Math.sin(progress * Math.PI * 4 + i * Math.PI) * .35 : 0; });
+    } else { e.prop.rotation.y = Math.PI * move; departureLimitLabel.visible = progress > .55; }
+    e.actor.state = 'depart-with-prop';
+    e.prop.updateWorldMatrix(true, true);
+    aimHand(e.actor, 1, e.prop.getWorldPosition(new THREE.Vector3()));
   }
   function placeCast() {
-    cancelArrival(false); characterEvents.cancel();
+    cancelMicroevent(); cancelDeparture(); cancelArrival(false); characterEvents.cancel();
     cast.position.copy(current.root.position);
     interactionPose = null; scenarioCrowdPose = null; encounter = null; setSpeech('');
     const protagonist = current.sceneData?.protagonistId;
     for (const actor of actors) {
+      actor.nameLabel.visible = canvas.clientWidth >= 700 && current.canonical !== 'A03';
       actor.base.set(...[[-2.8, 1.1, 2], [-.4, 1.1, 3.7], [1.7, 1.1, 1.4], [3.6, 1.1, 3.2]][actors.indexOf(actor)]);
       if (actor.id === protagonist) actor.base.set(current.coreRest.x - 1.5, 1.1, Math.max(1.4, current.coreRest.z + 1.6));
       actor.root.position.copy(actor.base); actor.state = 'arrive'; actor.expression = 'neutral'; actor.stateUntil = time + 1; actor.reaction = time + 1.4;
@@ -634,7 +853,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
       controls.update(); updateLOD(); return true;
     }
     scene.fog.near = 155; scene.fog.far = 340; camera.far = 700; camera.updateProjectionMatrix();
-    cancelArrival(false); characterEvents.cancel();
+    cancelMicroevent(); cancelDeparture(); cancelArrival(false); characterEvents.cancel();
     journey = null; controls.enabled = true; carry.visible = false; previewed = null; hover = null; clearRecommendations(); setEncounter(null); selectCarry(destination, relation);
     const portrait = canvas.clientWidth < 700;
     const endTarget = destination.root.position.clone().add(new THREE.Vector3(0, portrait ? -3.2 : 1.2, 0));
@@ -644,9 +863,10 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
       for (const stage of STAGES.slice(0, 4)) emitStage(stage, destination, relation);
       camera.position.copy(endPosition); controls.target.copy(endTarget); finish(destination); emitStage('arrival', destination, relation); controls.update(); return true;
     }
+    startDeparture(destination);
     const start = camera.position.clone(), startTarget = controls.target.clone();
     const middle = start.clone().lerp(endPosition, .5); middle.y += current.chapter === destination.chapter ? 6 : 15; middle.x += 4;
-    journey = { destination, relation, elapsed: 0, duration: current.chapter === destination.chapter ? 1.8 : 3.6, phase: -1,
+    journey = { destination, relation, elapsed: 0, exitDuration: departure ? (current.chapter === destination.chapter ? .6 : .9) : 0, duration: current.chapter === destination.chapter ? 1.8 : 3.6, phase: -1,
       position: new THREE.CatmullRomCurve3([start, start.clone().lerp(middle, .5), middle, endPosition]),
       target: new THREE.CatmullRomCurve3([startTarget, startTarget.clone().lerp(endTarget, .3).add(new THREE.Vector3(0, 2, 0)), endTarget]) };
     controls.enabled = false; return true;
@@ -667,6 +887,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     if (!start || Math.hypot(event.clientX - start.x, event.clientY - start.y) > 7) return;
     const hit = pick(event); if (!hit) return;
     if (hit.kind === 'island' || hit.articleId !== current.articleId) onIslandSelect(hit.articleId);
+    else if (hit.kind === 'microevent') { runMicroevent(hit.objectId); onObjectSelect(hit); }
     else if (hit.objectId === 'scene-bell') { playArrival({ source: 'bell' }); onObjectSelect(hit); }
     else { cancelArrival(true); applyInteraction(hit.articleId, { kind: hit.kind }); onObjectSelect(hit); }
     chime();
@@ -682,7 +903,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     for (const item of snapshot) { const object = item.object; object.position.copy(item.position); object.quaternion.copy(item.quaternion); object.scale.copy(item.scale); object.visible = item.visible; if (item.material) object.material = item.material; }
   }
   function matches(snapshot) { return snapshot.every(s => s.object.position.equals(s.position) && s.object.quaternion.equals(s.quaternion) && s.object.scale.equals(s.scale) && s.object.visible === s.visible && s.object.material === s.material); }
-  function preview(articleId) { previewed = islands.has(articleId) ? articleId : entries.find(i => i.canonical === articleId)?.articleId || null; updateLOD(journey?.destination); return previewed; }
+  function preview(articleId) { previewed = islands.has(articleId) ? articleId : entries.find(i => i.canonical === articleId)?.articleId || null; if (previewed) document.body.dataset.islandPreview = 'true'; else delete document.body.dataset.islandPreview; updateLOD(journey?.destination); if (!active && !disposed) { renderer.render(scene, camera); renderedFrames++; } return previewed; }
   function setSeason(value = 'christmas') {
     season = ['christmas', 'halloween', 'easter', 'none'].includes(String(value).toLowerCase()) ? String(value).toLowerCase() : 'christmas';
     for (const island of entries) {
@@ -725,7 +946,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
   function setMode(value) {
     mode = value === 'explore' ? 'explore' : 'story';
     if (mode === 'story') { focus(current.articleId, { animate: !reducedMotion }); return; }
-    journey = null; controls.enabled = true; carry.visible = false; clearRecommendations(); previewed = null; setEncounter(null);
+    cancelMicroevent(); cancelDeparture(); journey = null; controls.enabled = true; carry.visible = false; clearRecommendations(); previewed = null; setEncounter(null);
     const bounds = new THREE.Box3(); for (const island of entries) bounds.expandByPoint(island.root.position);
     const center = bounds.getCenter(new THREE.Vector3()); const extent = bounds.getSize(new THREE.Vector3());
     const distance = Math.max(extent.z + 20, (extent.x + 20) / Math.max(.4, camera.aspect)) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) * 1.1;
@@ -870,6 +1091,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
   }
   function applyInteraction(articleId, payload = {}) {
     const island = islands.get(articleId); if (!island) return false;
+    cancelMicroevent();
     prepareDetail(island);
     const kind = payload.kind || island.sceneData?.interactionType;
     const supported = ['sourceverification', 'purchase', 'attention', 'memory', 'persona', 'judgment', 'journey', 'delegation'];
@@ -957,13 +1179,15 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     if (!sound) return;
     try { audio ||= new (window.AudioContext || window.webkitAudioContext)(); audio.resume(); const oscillator = audio.createOscillator(), gain = audio.createGain(); oscillator.type = 'sine'; oscillator.frequency.setValueAtTime(392, audio.currentTime); oscillator.frequency.exponentialRampToValueAtTime(587, audio.currentTime + .15); gain.gain.setValueAtTime(.025, audio.currentTime); gain.gain.exponentialRampToValueAtTime(.001, audio.currentTime + .35); oscillator.connect(gain).connect(audio.destination); oscillator.start(); oscillator.stop(audio.currentTime + .35); } catch { sound = false; }
   }
-  function resize() { if (disposed) return; const bounds = canvas.getBoundingClientRect(); const width = Math.max(1, bounds.width), height = Math.max(1, bounds.height); renderer.setSize(width, height, false); camera.aspect = width / height; camera.fov = width < 700 ? 46 : 40; camera.updateProjectionMatrix(); for (const actor of actors) actor.nameLabel.visible = width >= 700; }
+  function resize() { if (disposed) return; const bounds = canvas.getBoundingClientRect(); const width = Math.max(1, bounds.width), height = Math.max(1, bounds.height); renderer.setSize(width, height, false); camera.aspect = width / height; camera.fov = width < 700 ? 46 : 40; camera.updateProjectionMatrix(); for (const actor of actors) actor.nameLabel.visible = width >= 700 && current.canonical !== 'A03'; }
   function visibility() { active = externallyActive && !document.hidden; last = performance.now(); }
   function tick(now) {
     if (disposed) return; frame = requestAnimationFrame(tick);
     const dt = Math.min((now - last) / 1000, .05); last = now; if (!active) return; time += dt;
     if (journey) {
-      const j = journey; j.elapsed += dt; const t = Math.min(j.elapsed / j.duration, 1); const phase = Math.min(3, Math.floor(t * 5));
+      const j = journey; j.elapsed += dt;
+      if (departure) updateDeparture(Math.min(1, j.elapsed / j.exitDuration));
+      const t = Math.min(Math.max(0, j.elapsed - j.exitDuration) / j.duration, 1); const phase = Math.min(3, Math.floor(t * 5));
       while (j.phase < phase) emitStage(STAGES[++j.phase], j.destination, j.relation);
       const sailT = THREE.MathUtils.smoothstep(t, .16, .93);
       camera.position.copy(j.position.getPoint(sailT)); controls.target.copy(j.target.getPoint(sailT)); camera.lookAt(controls.target);
@@ -972,7 +1196,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     } else controls.update();
     if (!reducedMotion) {
       for (const actor of actors) {
-        if (arrivalEvents.hasParticipant(actor.id) || characterEvents.hasParticipant(actor.id) || (!characterEvents.hasEvent() && interactionPose) || (encounter?.characterId === actor.id && encounter.npcIndex === null)) continue;
+        if (microevent?.actor === actor || departure?.actor === actor || arrivalEvents.hasParticipant(actor.id) || characterEvents.hasParticipant(actor.id) || (!characterEvents.hasEvent() && interactionPose) || (encounter?.characterId === actor.id && encounter.npcIndex === null)) continue;
         const phase = time * actor.pace + actor.phase;
         if (time > actor.stateUntil) { actor.state = ['observe', 'walk', 'think', 'compare'][Math.floor(time / (3 + actor.pace) + actor.phase) % 4]; actor.stateUntil = time + 2.5 + actor.pace; }
         const walking = actor.state === 'walk';
@@ -992,6 +1216,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
       updateCrowd(time);
     }
     characterEvents.update(dt, reducedMotion);
+    updateMicroevent(dt);
     arrivalEvents.update(dt);
     const point = new THREE.Vector3();
     for (const sprite of labels) {
@@ -1028,14 +1253,16 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     skipTransition() { return journey ? focus(journey.destination.articleId, { animate: false, relation: journey.relation }) : false; },
     cancelTransition() { return journey ? focus(current.articleId, { animate: false }) : false; },
     setPopulation(count) { crowd.count = Math.max(10, Math.min(100, Math.round(Number(count) || 10))); crowdHeads.count = crowd.count; crowdHair.count = crowd.count; crowdEyes.count = crowd.count * 2; updateCrowd(reducedMotion ? 0 : time); },
-    setReducedMotion(value) { reducedMotion = Boolean(value); if (reducedMotion) { characterEvents.update(0, true); arrivalEvents.skip(); } if (reducedMotion && journey) focus(journey.destination.articleId, { animate: false, relation: journey.relation }); },
-    setActive(value) { externallyActive=Boolean(value);visibility(); },
+    setReducedMotion(value) { reducedMotion = Boolean(value); if (reducedMotion) { updateMicroevent(10); characterEvents.update(0, true); arrivalEvents.skip(); } if (reducedMotion && journey) focus(journey.destination.articleId, { animate: false, relation: journey.relation }); },
+    setActive(value) { externallyActive=Boolean(value);visibility();if (externallyActive && previewed) preview(null); },
+    getMicroeventTargets() { return pickables.filter(object => object.userData.pick?.articleId === current.articleId && object.userData.pick.kind === 'microevent' && (object.isMesh || object.isSprite)).map(object => { const world = object.localToWorld(new THREE.Vector3(object.geometry?.type === 'TorusGeometry' ? 1 : 0, 0, 0)); const screen = world.clone().project(camera), rect = canvas.getBoundingClientRect(); return { ...object.userData.pick, world: world.toArray(), screen: { x: rect.left + (screen.x + 1) * rect.width / 2, y: rect.top + (1 - screen.y) * rect.height / 2 } }; }); },
     getCharacterContactState() { return characterEvents.state(); },
     getNPCState(index) { const seed=crowdSeeds[index]; if(!seed||index>=crowd.count)return null;const effective=seed.pauseStartedAt===null?Math.max(0,time-seed.pausedTotal):Math.max(0,seed.pauseStartedAt-seed.pausedTotal);const angle=seed.angle+effective*seed.speed;const position=new THREE.Vector3(Math.cos(angle)*seed.radius,1.45,Math.sin(angle)*seed.radius).add(cast.position);const screen=position.clone().project(camera),rect=canvas.getBoundingClientRect();return {index,angle,speed:seed.speed,walkPhase:(effective+index)%(Math.PI*2),paused:seed.pauseStartedAt!==null,position:{x:position.x,y:position.y,z:position.z},screen:{x:rect.left+(screen.x+1)*rect.width/2,y:rect.top+(1-screen.y)*rect.height/2,z:screen.z}}; },
     getCharacterScreenState() { return actors.map(actor=>{const position=actor.root.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0,1.5,0));const screen=position.project(camera),rect=canvas.getBoundingClientRect();return {id:actor.id,name:actor.name,screen:{x:rect.left+(screen.x+1)*rect.width/2,y:rect.top+(1-screen.y)*rect.height/2,z:screen.z}};}); },
-    getRenderState() { return {active,renderedFrames,disposed,setupMs,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,textureCount:renderer.info.memory.textures,ownedTextureCount:textures.size,editorialTextureCount:editorialTextures.cacheSize,ownedMaterialCount:materials.size,ownedGeometryCount:geometries.size,releasedResources:disposedResources,programCount:renderer.info.programs?.length||0,shadowEnabled:renderer.shadowMap.enabled,shadowCasting:sunlight.castShadow,firstDrawShadowCasting,shadowRestoreMs:shadowRestoredAt===null||firstDrawAt===null?null:shadowRestoredAt-firstDrawAt}; },
+    getLabelResourceState() { const owned = new Set(materials.values()), live = [...labels]; return { count: live.length, uniqueMaterialCount: new Set(live.map(sprite => sprite.material)).size, untrackedMaterialCount: live.filter(sprite => !owned.has(sprite.material)).length }; },
+    getRenderState() { return {active,renderedFrames,disposed,setupMs,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,textureCount:renderer.info.memory.textures,ownedTextureCount:textures.size,editorialTextureCount:editorialTextures.cacheSize,editorialTextureKeys:editorialTextures.keys,ownedMaterialCount:materials.size,ownedGeometryCount:geometries.size,releasedResources:disposedResources,programCount:renderer.info.programs?.length||0,shadowEnabled:renderer.shadowMap.enabled,shadowCasting:sunlight.castShadow,firstDrawShadowCasting,shadowRestoreMs:shadowRestoredAt===null||firstDrawAt===null?null:shadowRestoredAt-firstDrawAt}; },
     setSound(enabled) { sound = Boolean(enabled); if (sound) chime(); },
-    getState() { return { arrivalEvent: arrivalEvents.state(), characterEvent: characterEvents.state(), current: current.articleId, currenttarget: journey?.destination.articleId || current.articleId, currentTarget: journey?.destination.articleId || current.articleId, mode, population: crowd.count, reducedMotion, transitioning: Boolean(journey), stage: journey ? STAGES[Math.max(0, journey.phase)] : 'arrival', renderedislandcount: entries.length, renderedIslandCount: entries.length, detailedIslandCount: entries.filter(i => i.detail.visible).length, silhouetteIslandCount: entries.filter(i => i.silhouette.visible).length, simplifiedIslandCount: entries.filter(i => i.simplified.visible).length, preparedIslandCount: entries.filter(i => i.baseline).length, islandLOD: entries.map(i => ({ articleId: i.articleId, canonical: i.canonical, level: i.detail.visible ? 'full' : i.simplified.visible ? 'simplified' : 'silhouette', prepared: Boolean(i.baseline) })), editorialMotifs: current.editorialSurfaces.map(object => object.userData.editorialMotif).filter(Boolean), characters: actors.map(a => ({ id: a.id, name: a.name, nameLabelVisible: a.nameLabel.visible, state: a.state, habit: a.habit, expression: a.expression, position: a.root.position.toArray() })), previewed, recommendations: recommendations.map(route => ({ sourceArticleId: route.sourceArticleId, targetArticleId: route.targetArticleId, relationType: route.relationType, editorialReason: route.editorialReason, transitionQuestion: route.transitionQuestion, canonical: route.canonical, previewVisible: route.object.visible, points: [0, .5, 1].map(t => route.curve.getPoint(t).toArray()) })), carry: { kind: carryKind, visible: carry.visible, morph: carryMorph, phase: journey ? STAGES[Math.max(0, journey.phase)] : 'arrival', shapes: carryKind === 'photo-evidence-bridge' ? { photoScale: photo.scale.toArray(), evidenceCards: evidenceCards.map(o => ({ position: o.position.toArray(), rotationX: o.rotation.x, visible: o.visible })) } : carryKind === 'product-service-journey' ? { productScale: product.scale.toArray(), listRotationX: list.rotation.x, serviceSteps: serviceSteps.map(o => ({ position: o.position.toArray(), scale: o.scale.x, visible: o.visible })) } : carryKind === 'model-limits-scale' ? { cardFlip: modelCard.rotation.y, frameworkScale: scaleFrame.scale.x } : {}, objectCount: carryKind ? carryForms.get(carryKind).getObjectsByProperty('isMesh', true).length : 0 }, coastLinks, exploredLightCount: entries.filter(i => i.exploredLight.visible).length, season, decoratedIslandCount: entries.filter(i => i.decorations.children.length).length, encounter: encounter ? { ...encounter } : null, speech: speech?.userData.text || arrivalEvents.state()?.caption?.text || '', interaction: current.interaction ? { ...current.interaction, baselineRestored: current.interaction.before && matches(current.baseline) && matches(current.actorBaseline), propPosition: current.core.position.toArray(), propRotation: current.core.rotation.toArray().slice(0, 3), outcomeObjectCount: current.outcome.children.length, scenarioObjects: current.outcome.children.filter(object => object.userData.scenarioVisualEffectId === current.interaction.effectId).map(object => ({ effectId: object.userData.scenarioVisualEffectId, propId: object.userData.scenarioPropId, action: object.userData.scenarioAction, geometry: object.geometry?.type || null, position: object.position.toArray(), rotation: object.rotation.toArray().slice(0, 3), scale: object.scale.toArray() })) } : null, camera: { position: camera.position.toArray(), target: controls.target.toArray() }, visited: entries.filter(i => i.visited).map(i => i.articleId), drawCalls: renderer.info.render.calls }; },
-    dispose() { if (disposed) return; disposed = true; cancelArrival(false); characterEvents.cancel(); cancelAnimationFrame(frame); if (shadowRestoreTimer) clearTimeout(shadowRestoreTimer); clearRecommendations(); controls.dispose(); canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointerup', onUp); canvas.removeEventListener('pointermove', onMove); canvas.removeEventListener('pointerleave', onLeave); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('resize', resize); disposedResources = { geometries: geometries.size, materials: materials.size, textures: textures.size, editorialTextures: editorialTextures.cacheSize }; for (const geo of geometries.values()) geo.dispose(); for (const mat of materials.values()) mat.dispose(); for (const texture of textures) texture.dispose(); editorialTextures.dispose(); geometries.clear(); materials.clear(); textures.clear(); labels.clear(); for (const object of [crowd, crowdHeads, crowdHair, crowdEyes]) object.dispose(); renderer.dispose(); audio?.close(); scene.clear(); },
+    getState() { return { microevent: microevent ? { kind: microevent.kind, elapsed: microevent.elapsed, complete: microevent.complete, contact: microevent.contact, actorPosition: microevent.actor.root.position.toArray(), hingeAngle: current.furniture?.hinge.rotation.y, seatTop: current.furniture ? current.furniture.seat.position.y + current.furniture.seat.scale.y / 2 : null, hipY: microevent.actor.root.position.y + .34 * 1.4, handDistance: microevent.kind === 'studio-door' ? microevent.actor.hands[1].palm.getWorldPosition(new THREE.Vector3()).distanceTo(current.furniture.handle.getWorldPosition(new THREE.Vector3())) : null } : null, departure: departure ? { pair: departure.pair, progress: departure.progress, actorId: departure.actor.id, actorPosition: departure.actor.root.position.toArray(), propPosition: departure.prop.getWorldPosition(new THREE.Vector3()).toArray(), propRotation: departure.prop.rotation.toArray().slice(0, 3), caption: departure.caption } : null, cultureWindow: current.cultureWindow ? { waterY: current.cultureWindow.water.position.y, resistance: current.cultureWindow.resistance.map(object => ({ y: object.position.y, height: object.scale.y })), selected: current.cultureWindow.selected } : null, knowledgeGraph: current.knowledgeGraph ? { selected: current.knowledgeGraph.selected, nodes: current.knowledgeGraph.nodes.map(({ id, name }) => ({ id, name })), links: current.knowledgeGraph.links.map(({ from, to, relation }) => ({ from, to, relation })), source: current.sceneData.sourceGrounding } : null, arrivalEvent: arrivalEvents.state(), characterEvent: characterEvents.state(), current: current.articleId, currenttarget: journey?.destination.articleId || current.articleId, currentTarget: journey?.destination.articleId || current.articleId, mode, population: crowd.count, reducedMotion, transitioning: Boolean(journey), stage: journey ? STAGES[Math.max(0, journey.phase)] : 'arrival', renderedislandcount: entries.length, renderedIslandCount: entries.length, detailedIslandCount: entries.filter(i => i.detail.visible).length, silhouetteIslandCount: entries.filter(i => i.silhouette.visible).length, simplifiedIslandCount: entries.filter(i => i.simplified.visible).length, preparedIslandCount: entries.filter(i => i.baseline).length, islandLOD: entries.map(i => ({ articleId: i.articleId, canonical: i.canonical, level: i.detail.visible ? 'full' : i.simplified.visible ? 'simplified' : 'silhouette', prepared: Boolean(i.baseline) })), editorialMotifs: current.editorialSurfaces.map(object => object.userData.editorialMotif).filter(Boolean), characters: actors.map(a => ({ id: a.id, name: a.name, nameLabelVisible: a.nameLabel.visible, state: a.state, habit: a.habit, expression: a.expression, position: a.root.position.toArray() })), previewed, recommendations: recommendations.map(route => ({ sourceArticleId: route.sourceArticleId, targetArticleId: route.targetArticleId, relationType: route.relationType, editorialReason: route.editorialReason, transitionQuestion: route.transitionQuestion, canonical: route.canonical, previewVisible: route.object.visible, previewKind: route.object.userData.previewKind, previewMeshes: route.object.getObjectsByProperty('isMesh', true).length, points: [0, .5, 1].map(t => route.curve.getPoint(t).toArray()) })), carry: { kind: carryKind, visible: carry.visible, morph: carryMorph, phase: journey ? STAGES[Math.max(0, journey.phase)] : 'arrival', shapes: carryKind === 'photo-evidence-bridge' ? { photoScale: photo.scale.toArray(), evidenceCards: evidenceCards.map(o => ({ position: o.position.toArray(), rotationX: o.rotation.x, visible: o.visible })) } : carryKind === 'product-service-journey' ? { productScale: product.scale.toArray(), listRotationX: list.rotation.x, serviceSteps: serviceSteps.map(o => ({ position: o.position.toArray(), scale: o.scale.x, visible: o.visible })) } : carryKind === 'model-limits-scale' ? { cardFlip: modelCard.rotation.y, frameworkScale: scaleFrame.scale.x } : {}, objectCount: carryKind ? carryForms.get(carryKind).getObjectsByProperty('isMesh', true).length : 0 }, coastLinks, exploredLightCount: entries.filter(i => i.exploredLight.visible).length, season, decoratedIslandCount: entries.filter(i => i.decorations.children.length).length, encounter: encounter ? { ...encounter } : null, speech: speech?.userData.text || arrivalEvents.state()?.caption?.text || '', interaction: current.interaction ? { ...current.interaction, baselineRestored: current.interaction.before && matches(current.baseline) && matches(current.actorBaseline), propPosition: current.core.position.toArray(), propRotation: current.core.rotation.toArray().slice(0, 3), outcomeObjectCount: current.outcome.children.length, scenarioObjects: current.outcome.children.filter(object => object.userData.scenarioVisualEffectId === current.interaction.effectId).map(object => ({ effectId: object.userData.scenarioVisualEffectId, propId: object.userData.scenarioPropId, action: object.userData.scenarioAction, geometry: object.geometry?.type || null, position: object.position.toArray(), rotation: object.rotation.toArray().slice(0, 3), scale: object.scale.toArray() })) } : null, camera: { position: camera.position.toArray(), target: controls.target.toArray() }, visited: entries.filter(i => i.visited).map(i => i.articleId), drawCalls: renderer.info.render.calls }; },
+    dispose() { if (disposed) return; disposed = true; cancelMicroevent(); cancelDeparture(); cancelArrival(false); characterEvents.cancel(); cancelAnimationFrame(frame); if (shadowRestoreTimer) clearTimeout(shadowRestoreTimer); clearRecommendations(); controls.dispose(); canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointerup', onUp); canvas.removeEventListener('pointermove', onMove); canvas.removeEventListener('pointerleave', onLeave); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('resize', resize); disposedResources = { geometries: geometries.size, materials: materials.size, textures: textures.size, editorialTextures: editorialTextures.cacheSize }; for (const geo of geometries.values()) geo.dispose(); for (const mat of materials.values()) mat.dispose(); for (const texture of textures) texture.dispose(); editorialTextures.dispose(); geometries.clear(); materials.clear(); textures.clear(); labels.clear(); for (const object of [crowd, crowdHeads, crowdHair, crowdEyes]) object.dispose(); sunlight.shadow.dispose(); renderer.dispose(); audio?.close(); scene.clear(); },
   };
 }

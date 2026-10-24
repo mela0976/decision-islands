@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'vite';
 import { chromium } from '@playwright/test';
+import { editorialTextureKey } from '../public/immersive/editorial-textures.js';
 
 const outputDir = 'test-results/immersive-editorial/after';
 const server = await createServer({ server: { host: '127.0.0.1', port: 0, strictPort: false } });
@@ -53,19 +54,23 @@ try {
     if (await page.locator('#explore-tip').isVisible()) await page.locator('#hide-explore-tip').click();
     await mkdir(outputDir, { recursive: true });
 
+    const expectedCacheKeys = new Set();
     for (const scene of scenes) {
       const articleId = articleIds[scene.canonicalId];
       await page.evaluate(id => window.immersive.visit(id, null, false), articleId);
       await page.waitForFunction(id => window.immersive.world.getState().current === id, articleId);
       await page.waitForFunction(() => window.immersive.world.getRenderState().renderedFrames >= 8);
       await page.waitForTimeout(180);
-      const state = await page.evaluate(() => ({ world: window.immersive.world.getState(), render: window.immersive.world.getRenderState() }));
+      const state = await page.evaluate(id => { const api = window.immersive, island = api.data.islands.find(i => i.articleId === id); return { world: api.world.getState(), render: api.world.getRenderState(), configs: api.data.visualThemes.find(t => t.chapterId === island.chapterId).editorialMotifs[island.id] }; }, articleId);
       assert.equal(state.world.current, articleId);
       assert.equal(state.world.detailedIslandCount, 1, `${scene.canonicalId} keeps detail objects on the focused island`);
       const motifIds = state.world.editorialMotifs.map(motif => motif.motifId);
       for (const motif of scene.motifs) assert.ok(motifIds.includes(motif), `${scene.canonicalId} presents ${motif}`);
       assert.equal(state.render.disposed, false);
-      assert.ok(state.render.editorialTextureCount >= 6, 'all shared editorial CanvasTextures are cached before rendering');
+      for (const config of Object.values(state.configs)) expectedCacheKeys.add(editorialTextureKey(config));
+      assert.deepEqual([...state.render.editorialTextureKeys].sort(), [...expectedCacheKeys].sort(), `${scene.canonicalId} prepares exactly the visited motifs and shares repeated keys`);
+      assert.equal(state.render.editorialTextureCount, expectedCacheKeys.size);
+      if (scene.canonicalId === 'I01') assert.equal(state.world.preparedIslandCount, 1, 'initial textures do not require building all islands');
 
       const canvasFile = `${outputDir}/${viewport.width}-${scene.canonicalId}-${articleId}.png`;
       const pageFile = `${outputDir}/${viewport.width}-${scene.canonicalId}-${articleId}-page.png`;
@@ -74,6 +79,7 @@ try {
       records.push({ canonicalId: scene.canonicalId, articleId, viewport, camera: state.world.camera, motifs: state.world.editorialMotifs, render: state.render, canvasFile, pageFile, sha256: hash(canvasImage) });
     }
 
+    assert.ok(expectedCacheKeys.size >= 6, 'all six authored scenes together prepare the shared editorial vocabulary');
     const textureState = await page.evaluate(() => {
       const world = window.immersive.world;
       world.dispose();
@@ -82,6 +88,7 @@ try {
     assert.equal(textureState.disposed, true);
     assert.equal(textureState.ownedTextureCount, 0);
     assert.equal(textureState.editorialTextureCount, 0);
+    assert.deepEqual(textureState.editorialTextureKeys, []);
     assert.equal(textureState.ownedMaterialCount, 0);
     assert.equal(textureState.ownedGeometryCount, 0);
     assert.ok(textureState.releasedResources.editorialTextures >= 6);

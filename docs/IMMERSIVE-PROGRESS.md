@@ -134,3 +134,33 @@ throughput checkpoint。先驗三個代表動作，再回歸既有 68 選項，�
 兩層 worker 更新為 `2026-10-24.12` 與 `v8`。`node --test tests/immersive-cache.test.mjs` 的 9 項通過。built、root cache 邊界、斷網與相同條件三次手機效能比較由主協調者在凍結 A commit 隔離建置後驗收。
 
 本切片依 Model the Domain，以 island 的 prepared baseline 和互斥 LOD 群組集中生命週期。Sequence work into verifiable units 使 A 凍結後才開始場景改動 B。Test Behavior, Not Implementation 使 fixture 透過公開 world API 驗證可見層級、返回結果與釋放。葉節點內完成 how 與 architect 梳理，不再委派或執行 arena。當次查無可選 deslop 外掛，沒有宣稱完成其審查。
+
+## 2026-10-24 世界有限缺口收束切片 B
+
+M05 將組織顧慮做成岸側可見水窗，保留水線上導入進度及水線下三個阻力物件。點實體阻力物會把對應顧慮抬出水面，並在既有對白區說明。A03 保留答案花園，補上來源、品牌、答案、體驗四個實體節點和三條關係線。點節點可讀既有 facts、voice、experience 結果及 sourceGrounding 依據。常駐只留四個短名，關係說明在選取後呈現，沒有建立第二套圖譜資料。
+
+I01 工作室門把與思考椅使用既有接觸 rig。阿綺先走近並伸手接門把，門鉸才轉到 −1.25 弧度。坐下時身體下緣停在椅面上，手指向座面，腿轉為坐姿。這些是 world 內的 microevent，不開遊戲或改閱讀足跡。離島、開始任務、事件重播及 dispose 會恢復人物姿態。
+
+三個指定航線沿原 transition 增加有限的來源出場。P01 的映蓁帶照片走向海岸；P05 的小岳拿商品走出店外；M01 的映蓁翻過結果卡，背面顯示限制與未知。它們共用原 cast、手掌 rig 和 world tick。結束後接回原 carry 形變、曲線和目標 arrival，不改 68 個遊戲結果或 arrival controller。
+
+A 的低階 landmark 曾讓推薦預覽退成簡單幾何，本切片修回這個不變量。推薦只在真 hover 或 focus 時建立輕量語意物件，包含照片、商品、天平、舞台等 22 個既有場景語意。這不會準備目的地完整場景。閱讀暫停時，preview 只繪製一幀，主相機不動；桌面物件放在閱讀窗右側，手機放在上方，手機島名暫藏以免擋住物件。`body[data-island-preview=true]` 是與 app CSS 唯一共用狀態。blur、閱讀關閉、旅程開始、清推薦及 dispose 都會清除。app 與 CSS 由另一位唯一寫入者整合。
+
+`node tests/immersive-world-quality-browser.mjs` 的 source Chromium SwiftShader 完整結果在 `test-results/immersive-world-quality/quality.json`，13 筆、errors=[]。1280×800 和 390×844 均實際點擊門把、椅子、一個代表水下阻力及四個圖譜實體節點。兩尺寸門把接觸誤差約 1.42e−14，門起轉前已接觸；椅面和人物下緣高度同為 1.64。M05 原三選項 fear、guidance、silo 均保有獨立 scenario objects，三個 arrival beat 保留。三條航線從真目錄、實際動態設定及 DATA 推薦按鈕出發，核對真問題和理由，取來源動作、carry、目標 cause，並透過返回來源島控制回到正確文章。
+
+同一 fixture 的六個桌面 hover 或手機 focus 預覽均驗不增加 preparedIslandCount，P01、P05、M03 分別是 4、3、6 個 mesh 的語意物件。六組 clear 前後 reader.scrollTop 實測相同，筆記草稿保留，清除後 renderedFrames 維持不動。`QUALITY_PREVIEWS_ONLY=1 node tests/immersive-world-quality-browser.mjs` 可獨立重跑預覽，結果寫入 `previews.json`；`QUALITY_ROUTES_ONLY=1` 可獨立重跑三條路線，將來源動作採樣於 80% 後，結果寫入 `routes.json`。這些定向模式不代替完整矩陣的已存結果。
+
+兩尺寸圖片與三條航線的 departure、carry、arrival 圖均在 `test-results/immersive-world-quality/`。主協調者已檢視修正後 M05、A03 桌面和 P01 桌面真 hover。初版水窗位於遮擋區、A03 文字牌重疊和手機天平被島名遮擋的開發圖不作最終驗收。
+
+定向資料、arrival 與兩層 cache 的 38 項通過；cache 最終版本 `2026-10-24.13` 和 `v9` 再驗 27 項通過。`node tests/immersive-world-quality-lod.mjs` 於 B 後保有 A 的 lazy、三層、返島結果、重玩、22 島可進入和所有持有資源歸零。本葉節點未建置、未離線重載、未推送或部署 B。最新 built、兩層離線快照、真正手機首 tap 導航與公開讀回由主協調者及 app 寫入者整合，未將 source fixture 當成全部正式驗收。
+
+A 的同條件效能比較由主協調者另存，本切片不重寫成達到兩秒。B 增加必要人物與可用性內容後，仍需以最後整合版保留實測範圍及未達標狀態。沒有重跑整個 legacy npm test，也沒有聲稱全 22 島逐幕藝術或全身碰撞驗收完成。
+
+末輪手機預覽以真鍵盤 Tab 從筆記欄移到推薦按鈕，先將實體滑鼠移出閱讀窗，避免 scroll 後另一個按鈕收到真 mouseenter 覆蓋鍵盤目標。`QUALITY_PREVIEWS_ONLY=1 QUALITY_PREVIEW_WIDTH=390 node tests/immersive-world-quality-browser.mjs` 通過 3/3，最新結果為 `previews-390.json`。P01、P05、M03 清除前後 scrollTop 分別為 888/888、902/902、996/996，草稿均保留。最新三張 390-DOM-hover 圖中，推薦按鈕在閱讀 scrollport 內且有真鍵盤焦點，語意物件在上方可見區。CSS 寫入者的手機 reader 使用穩定 58dvh，不因 focus 或 hover 改變尺寸；其真 mouse/touch 首 tap 證據由主協調者另外整合。
+
+A 的既有 editorial 與 built entry 測試原本逐島要求先有至少六張紋理，會錯把 lazy 初始狀態判失敗。本輪最小修正這兩檔，透過 `getRenderState().editorialTextureKeys` 比較每個已訪場景的必要配置和精確累計 key 集合。P01/P04 的同來源 key 共用、六島總詞彙和最終 dispose 檢查保留。built entry 要先證明只準備初始島及其一張 proposal 紋理，再驗首次 P01 只加入花朵與兩張人像所需 key，準備島數為二。這不是將舊的六張門檻改成無條件通過。built entry 的實際執行仍交由主協調者在最後隔離建置驗證。
+
+最後 `node tests/immersive-editorial-browser.mjs` 通過六島×兩尺寸、12 筆、24 張圖、errors=[]。每個尺寸的 editorial cache 依實際訪島為 1、4、5、6、6、7 個 key；P01/P04 的來源共用仍成立，原 P01/P04 手機機位未改。最後 LOD 回歸也通過新增 renderer textureCount 歸零。方向光 shadow map 明確 dispose，label 材質改用單調序號，避免動態 speech 刪除後依 Map 大小重用 key。
+
+renderer 的 owned geometry、material、texture 和共享 editorial cache 均為零，renderer textureCount 也為零。`renderer.info.programs` 在有投影的執行後仍保留六筆 Three 內部 shader 記錄，本切片不宣稱此觀測陣列為零。[Three r160 WebGLShadowMap](https://github.com/mrdoob/three.js/blob/r160/src/renderers/webgl/WebGLShadowMap.js) 持有內部 depth/distance 材質，[WebGLPrograms.dispose](https://github.com/mrdoob/three.js/blob/r160/src/renderers/webgl/WebGLPrograms.js) 只清 custom shader cache。沒有呼叫私有 program.destroy 或額外觸發 WebGL context loss 來改寫該數字。
+
+最後 LOD fixture 另透過專用 `getLabelResourceState()` 讀回每個 live label 都有獨立材質，untrackedMaterialCount=0，並驗兩次 dispose 無例外。這項定向檢查不放入每幀效能 getter。
