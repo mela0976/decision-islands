@@ -56,7 +56,7 @@ root.innerHTML = `
   <div class="experience">
     <div id="world" aria-label="決策群島互動場景"></div>
     <header class="masthead">
-      <a class="brand" href="#" aria-label="決策群島首頁"><span class="brand-mark">決策<br>群島<span class="brand-dot">.</span></span><span class="brand-meta">決策智慧<br><b>2026</b></span></a>
+      <a class="brand" href="#" aria-label="決策群島首頁"><span class="brand-mark">決策<br>群島<span class="brand-dot">.</span></span><span class="brand-meta">決策智慧<b>2026</b></span></a>
       <div class="top-actions"><button id="my-reading" class="icon-button">${t('我的任務', 'My tasks')}</button><label class="season-picker"><span>${t('節慶', 'Season')}</span><select id="season" aria-label="${t('選擇節慶', 'Choose a season')}">${(Object.keys(HOLIDAYS) as Season[]).map(value => `<option value="${value}" ${value === explorerState.season ? 'selected' : ''}>${HOLIDAYS[value].title[language]}</option>`).join('')}</select></label><button id="motion" class="icon-button" aria-pressed="${motion}">${motion ? '◌ 動態開啟' : '◌ 動態暫停'}</button><button id="overview" class="icon-button">⌖ 全景</button><button id="toggle-library" class="icon-button" aria-controls="library">☷ 目錄</button></div>
     </header>
     <section class="welcome" aria-labelledby="welcome-title">
