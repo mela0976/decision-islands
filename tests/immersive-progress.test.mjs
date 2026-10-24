@@ -63,3 +63,6 @@ test('restore and failed-save retries preserve repeated ordered route events',()
 test('save merges untouched mode, read and stamp changes from another tab',()=>{
  const storage=memory(),a=createProgress(storage),b=createProgress(storage);a.state.mode='explore';a.state.introSeen=true;a.toggle('read','2026-01');a.stamp('proof');b.state.notes['2026-02']='筆記';b.save();const saved=createProgress(storage).state;assert.equal(saved.mode,'explore');assert.equal(saved.introSeen,true);assert.deepEqual(saved.read,['2026-01']);assert.deepEqual(saved.stamps,['proof']);
 });
+test('preview agent stamps migrate to delegation without losing other collected stamps',()=>{
+ const storage=memory();storage.setItem('decision-immersive-progress-v1',JSON.stringify({stamps:['agent','trust','delegation','governance']}));const p=createProgress(storage);assert.deepEqual(p.state.stamps,['delegation','trust','governance']);p.save();assert.deepEqual(createProgress(storage).state.stamps,['delegation','trust','governance']);assert.deepEqual(parseProgress({stamps:['agent']}).stamps,['delegation']);
+});

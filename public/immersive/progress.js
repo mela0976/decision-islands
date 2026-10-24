@@ -4,7 +4,7 @@ export function parseProgress(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('備份格式不正確');
   const notes = Object.create(null);
   for (const [id, text] of Object.entries(value.notes || {})) if (/^2026-\d{2}$/.test(id) && typeof text === 'string') notes[id] = text.slice(0, 8000);
-  return { version: 1, read: uniqueStrings(value.read), bookmarks: uniqueStrings(value.bookmarks), stamps: uniqueStrings(value.stamps), routes: (Array.isArray(value.routes)?value.routes.filter(route=>typeof route==='string'):[]).slice(-30), notes, last: typeof value.last === 'string' ? value.last : '2026-01', mode: value.mode === 'explore' ? 'explore' : 'story', introSeen: value.introSeen === true };
+  return { version: 1, read: uniqueStrings(value.read), bookmarks: uniqueStrings(value.bookmarks), stamps: uniqueStrings(uniqueStrings(value.stamps).map(id => id === 'agent' ? 'delegation' : id)), routes: (Array.isArray(value.routes)?value.routes.filter(route=>typeof route==='string'):[]).slice(-30), notes, last: typeof value.last === 'string' ? value.last : '2026-01', mode: value.mode === 'explore' ? 'explore' : 'story', introSeen: value.introSeen === true };
 }
 const setFields = ['read', 'bookmarks', 'stamps'];
 const scalarFields = ['last', 'mode', 'introSeen'];
