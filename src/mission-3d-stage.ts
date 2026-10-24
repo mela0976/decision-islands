@@ -24,8 +24,9 @@ function handPosition(entry: Entity): THREE.Vector3 {
 function terminalPose(entity: MissionSceneEntity, frame: MissionVisualFrame): Pose {
   const joints = Array<number>(18).fill(0);
   const action = frame.actions?.find(item => item.actor === entity.id);
+  const receivedAction = frame.actions?.find(item => item.target === entity.id && item.actor !== entity.id);
   const flow = frame.flows.find(item => item.from === entity.id || item.to === entity.id);
-  const otherId = action?.target ?? (flow && (flow.from === entity.id ? flow.to : flow.from));
+  const otherId = action?.target ?? receivedAction?.actor ?? (flow && (flow.from === entity.id ? flow.to : flow.from));
   const other = frame.entities.find(item => item.id === otherId);
   const point = position(entity), target = other ? position(other) : null;
   if (ACTORS.has(entity.kind)) {
@@ -41,6 +42,7 @@ function terminalPose(entity: MissionSceneEntity, frame: MissionVisualFrame): Po
   if (pose === 'present' || action?.kind === 'show' || action?.kind === 'handoff' || (flow && flow.from === entity.id)) { joints[9] = -1.05; joints[11] = -.24; joints[3] = -.07; }
   if (pose === 'work' || action?.kind === 'operate' || action?.kind === 'review') { joints[6] = -.95; joints[9] = -.95; joints[3] = .16; joints[0] = .22; }
   if (pose === 'listen' || (flow && flow.to === entity.id)) { joints[0] = .13; joints[2] = .08; joints[6] = -.32; }
+  if (receivedAction && ACTORS.has(entity.kind)) { joints[0] = .16; joints[6] = receivedAction.kind === 'handoff' ? -.85 : -.36; joints[9] = -.38; }
   if (action?.kind === 'pause' || (!action && flow?.kind === 'pause')) { joints[9] = -.9; joints[11] = -.65; joints[3] = -.12; }
   return { position: point, yaw, joints, scale: (entity.scale ?? 1) * (ACTORS.has(entity.kind) ? 1.45 : 1.35), opacity: entity.opacity ?? 1 };
 }
@@ -73,6 +75,7 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
   let viewportWidth = 720, viewportHeight = 360;
   const entities = new Map<string, Entity>();
   const signals: Signal[] = [];
+  const effects: {root: THREE.Group; action: string; target: string}[] = [];
   const privateMaterials = new Map<THREE.Material, { opacity: number; transparent: boolean }>();
   const originalMaterials = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
   const removeEntity = (entry: Entity) => {
@@ -88,13 +91,15 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
   const owned = new Set<THREE.BufferGeometry | THREE.Material>();
   const disposeSignals = () => {
     signals.forEach(signal => scene.remove(signal.root));
+    effects.forEach(effect => scene.remove(effect.root)); effects.length = 0;
     signals.length = 0;
     owned.forEach(resource => resource.dispose());
     owned.clear();
   };
   const cancel = () => { if (raf) cancelAnimationFrame(raf); raf = 0; canvas.dataset.animating = 'false'; };
+  const restingPhase = (): Mission3DSnapshot['phase'] => current?.comparisonView !== 'before' && (current?.previewChoiceId != null || current?.choiceId != null) ? 'result' : 'ready';
   const publishPhase = (next: Mission3DSnapshot['phase']) => {
-    const detail = {phase: next, choiceId: current?.previewChoiceId ?? current?.choiceId ?? null, preview: current?.previewChoiceId != null};
+    const detail = {phase: next, choiceId: current?.previewChoiceId ?? current?.choiceId ?? null, preview: current?.previewChoiceId != null, comparisonView: current?.comparisonView ?? 'after'};
     const metadata = JSON.stringify(detail);
     phase = next; canvas.dataset.phase = phase;
     if (metadata === phaseMetadata) return;
@@ -121,13 +126,33 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
     camera.zoom = 1;
     camera.left = -1; camera.right = 1; camera.top = 1; camera.bottom = -1;
     camera.updateProjectionMatrix(); camera.updateMatrixWorld(true);
-    for (const entry of entities.values()) if (entry.model.root.visible && (entry.model.root.userData.opacity ?? 1) > .04) box.union(projectedBounds(entry.model.root));
+    const selectedId = current?.previewChoiceId ?? current?.choiceId;
+    const compared = current?.comparisonView != null && selectedId != null;
+    if (compared && current) {
+      for (const comparedFrame of [current.definition.initial, current.definition.choices[selectedId!] ?? current.definition.initial]) {
+        for (const definition of comparedFrame.entities) {
+          if ((definition.opacity ?? 1) <= .04) continue;
+          const entry = entities.get(definition.id);
+          if (!entry) continue;
+          const end = terminalPose(definition, comparedFrame);
+          const model = entry.definition.kind === definition.kind ? entry.model : assets!.entity(definition.kind, definition.id);
+          const measurement = {...entry, model};
+          const saved = readPose(measurement), savedVisible = model.root.visible;
+          model.root.position.copy(end.position); model.root.rotation.y = end.yaw; model.root.scale.setScalar(end.scale);
+          jointNames.forEach((name, index) => model.joints?.[name].rotation.set(...end.joints.slice(index * 3, index * 3 + 3) as [number, number, number]));
+          model.root.visible = true; box.union(projectedBounds(model.root));
+          model.root.position.copy(saved.position); model.root.rotation.y = saved.yaw; model.root.scale.setScalar(saved.scale);
+          jointNames.forEach((name, index) => model.joints?.[name].rotation.set(...saved.joints.slice(index * 3, index * 3 + 3) as [number, number, number]));
+          model.root.visible = savedVisible;
+        }
+      }
+    } else for (const entry of entities.values()) if (entry.model.root.visible && (entry.model.root.userData.opacity ?? 1) > .04) box.union(projectedBounds(entry.model.root));
     if (box.isEmpty()) return;
     const center = box.getCenter(new THREE.Vector2()), size = box.getSize(new THREE.Vector2());
     const aspect = viewportWidth / viewportHeight;
     const topMargin = Math.min(.36, 54 / viewportHeight), bottomMargin = .06;
     const selected = current?.previewChoiceId != null || current?.choiceId != null;
-    const framing = selected ? mix(1.12, 1, smooth(progress / .34)) : 1.12;
+    const framing = compared ? 1 : selected ? mix(1.12, 1, smooth(progress / .34)) : 1.12;
     const halfHeight = Math.max(size.y / (2 * (1 - topMargin - bottomMargin)), size.x / (2 * aspect * .88), 1.6) * framing;
     center.y += halfHeight * (topMargin - bottomMargin);
     camera.left = center.x - halfHeight * aspect; camera.right = center.x + halfHeight * aspect;
@@ -147,7 +172,7 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
   const fail = () => {
     failed = true; cancel(); progress = 1;
     entities.forEach(entry => apply(entry, 1)); applySignals(1);
-    publishPhase(current?.previewChoiceId != null || current?.choiceId != null ? 'result' : 'ready');
+    publishPhase(restingPhase());
     canvas.dataset.renderer = 'fallback';
     onFallback?.(true);
   };
@@ -224,6 +249,7 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
     });
   };
   const applySignals = (t: number) => {
+    effects.forEach(effect => { effect.root.visible = t >= .30; });
     for (const signal of signals) {
       const travel = smooth((t - .42) / .37);
       signal.token.position.lerpVectors(signal.from, signal.to, travel);
@@ -232,7 +258,7 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
       signal.token.scale.setScalar(signal.kind === 'pause' ? 1 : .8 + Math.sin(Math.PI * travel) * .3);
     }
   };
-  const settle = () => { cancel(); progress = 1; entities.forEach(entry => apply(entry, 1)); applySignals(1); publishPhase(current?.previewChoiceId != null || current?.choiceId != null ? 'result' : 'ready'); render(); };
+  const settle = () => { cancel(); progress = 1; entities.forEach(entry => apply(entry, 1)); applySignals(1); publishPhase(restingPhase()); render(); };
   const canAnimate = () => active && motion && !media.matches && !document.hidden && host.isConnected && !!renderer && !failed;
   const tick = (now: number) => {
     raf = 0;
@@ -246,6 +272,25 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
   const buildSignals = () => {
     disposeSignals();
     if (!frame) return;
+    if (current?.comparisonView != null && current.comparisonView !== 'before' && (current.previewChoiceId ?? current.choiceId) != null) {
+      const focused = new Set<string>();
+      for (const action of frame.actions ?? []) for (const id of [action.target, action.prop]) {
+        if (!id || focused.has(id)) continue;
+        const entry = entities.get(id);
+        if (!entry || entry.end.opacity <= .04) continue;
+        focused.add(id);
+        const root = new THREE.Group(); root.name = `action-focus-${id}`;
+        // Props sit on the work surface; a floor marker would disappear under its table.
+        root.position.copy(entry.end.position); root.position.y += ACTORS.has(entry.definition.kind) ? .025 : .012;
+        const discGeometry = new THREE.CircleGeometry(.49, 32); owned.add(discGeometry);
+        const discMaterial = new THREE.MeshBasicMaterial({color: 0xe8bd72, side: THREE.DoubleSide, transparent: true, opacity: .32, depthWrite: false}); owned.add(discMaterial);
+        const disc = new THREE.Mesh(discGeometry, discMaterial); disc.rotation.x = -Math.PI / 2; root.add(disc);
+        const geometry = new THREE.RingGeometry(.49, .59, 32); owned.add(geometry);
+        const material = new THREE.MeshBasicMaterial({color: 0xc4a05e, side: THREE.DoubleSide, transparent: true, opacity: .8, depthWrite: false}); owned.add(material);
+        const ring = new THREE.Mesh(geometry, material); ring.rotation.x = -Math.PI / 2; root.add(ring);
+        scene.add(root); effects.push({root, action: action.kind, target: id});
+      }
+    }
     for (const flow of frame.flows) {
       const source = entities.get(flow.from), target = entities.get(flow.to);
       if (!source || !target) continue;
@@ -280,9 +325,16 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
       const nextRoom = assets.room(current.definition.setting);
       room = nextRoom; scene.add(nextRoom); setting = current.definition.setting;
     }
-    const present = new Set(frame.entities.map(entity => entity.id));
+    const selectedId = current.previewChoiceId ?? current.choiceId;
+    const definitions = new Map(frame.entities.map(entity => [entity.id, entity]));
+    if (current.comparisonView != null && selectedId != null) {
+      for (const compared of [current.definition.initial, current.definition.choices[selectedId] ?? current.definition.initial]) for (const entity of compared.entities) {
+        if (!definitions.has(entity.id)) definitions.set(entity.id, {...entity, opacity: 0});
+      }
+    }
+    const present = new Set(definitions.keys());
     for (const [id, entry] of entities) if (!present.has(id)) { removeEntity(entry); entities.delete(id); }
-    for (const definition of frame.entities) {
+    for (const definition of definitions.values()) {
       let entry = entities.get(definition.id);
       if (entry && entry.definition.kind !== definition.kind) { removeEntity(entry); entities.delete(definition.id); entry = undefined; }
       const end = terminalPose(definition, frame);
@@ -326,17 +378,18 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
     update(input) {
       if (disposed) return;
       const choice = input.previewChoiceId ?? input.choiceId;
-      const nextFrame = choice ? input.definition.choices[choice] ?? input.definition.initial : input.definition.initial;
+      const nextFrame = input.comparisonView === 'before' ? input.definition.initial : choice ? input.definition.choices[choice] ?? input.definition.initial : input.definition.initial;
       const physicalEntities = nextFrame.entities.map(({id, kind, x, y, scale, opacity, pose}) => [id, kind, x, y, scale ?? 1, opacity ?? 1, pose ?? 'idle']).sort((a, b) => String(a[0]).localeCompare(String(b[0])));
       const physicalFlows = nextFrame.flows.map(({id, from, to, kind}) => [id, from, to, kind]).sort((a, b) => a[0].localeCompare(b[0]));
-      const nextSignature = JSON.stringify([input.key, input.definition.setting, physicalEntities, physicalFlows, nextFrame.actions ?? []]);
+      const nextSignature = JSON.stringify([input.key, input.definition.setting, physicalEntities, physicalFlows, nextFrame.actions ?? [], input.comparisonView ?? null, input.comparisonView != null ? choice : null]);
       current = input;
+      canvas.dataset.comparisonView = input.comparisonView ?? 'after';
       canvas.setAttribute('aria-label', `${input.definition.title[language]} · ${nextFrame.description[language]}`);
-      if (nextSignature === signature) { publishPhase(progress === 1 ? choice != null ? 'result' : 'ready' : phase); return; }
+      if (nextSignature === signature) { if (input.animate === false && progress < 1) settle(); else publishPhase(progress === 1 ? restingPhase() : phase); return; }
       focus.set(0, .65, 0);
       aimCamera();
       camera.updateProjectionMatrix();
-      const animate = missionKey === input.key && setting === input.definition.setting && choice !== null;
+      const animate = input.animate !== false && input.comparisonView !== 'before' && missionKey === input.key && setting === input.definition.setting && choice !== null;
       if (missionKey !== input.key) { cameraYaw = .55; aimCamera(); }
       cancel(); signature = nextSignature; missionKey = input.key; frame = nextFrame;
       initialize(); sync(animate);
@@ -344,7 +397,7 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
     setActive(value) { if (disposed) return; active = value; if (!value) settle(); else if (!renderer && current) { initialize(); sync(false); } },
     setMotion(value) { if (disposed) return; motion = value; if (!value) settle(); },
     replay() {
-      if (disposed || !current || !frame || !canAnimate()) return;
+      if (disposed || !current || !frame || current.comparisonView === 'before' || !canAnimate()) return;
       for (const [id, entry] of entities) {
         const initial = current.definition.initial.entities.find(entity => entity.id === id);
         entry.start = initial ? terminalPose(initial, current.definition.initial) : {...entry.end, position: entry.end.position.clone(), joints: [...entry.end.joints], opacity: 0};
@@ -352,7 +405,9 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
       entities.forEach(entry => apply(entry, 0)); applySignals(0); render(); begin();
     },
     snapshot(): Mission3DSnapshot {
-      return {mode: renderer && !failed ? 'webgl' : 'fallback', animating: !!raf, progress, phase, entities: [...entities].map(([id, entry]) => {
+      return {mode: renderer && !failed ? 'webgl' : 'fallback', animating: !!raf, progress, phase, comparisonView: current?.comparisonView ?? 'after', choiceId: current?.choiceId ?? null, previewChoiceId: current?.previewChoiceId ?? null,
+        camera: {position: camera.position.toArray(), left: camera.left, right: camera.right, top: camera.top, bottom: camera.bottom},
+        effects: effects.map(effect => ({kind: 'action-focus', action: effect.action, target: effect.target, position: effect.root.position.toArray()})), entities: [...entities].map(([id, entry]) => {
         const bounds = projectedBounds(entry.model.root), size = bounds.getSize(new THREE.Vector2());
         return {id, kind: entry.definition.kind, position: entry.model.root.position.toArray(), rotation: entry.model.root.rotation.toArray().slice(0, 3) as number[], visible: entry.model.root.visible, joints: readPose(entry).joints, projected: {left: (bounds.min.x + 1) / 2 * viewportWidth, right: (bounds.max.x + 1) / 2 * viewportWidth, top: (1 - bounds.max.y) / 2 * viewportHeight, bottom: (1 - bounds.min.y) / 2 * viewportHeight, width: size.x / 2 * viewportWidth, height: size.y / 2 * viewportHeight}};
       }), flowCount: signals.length, renderCount};

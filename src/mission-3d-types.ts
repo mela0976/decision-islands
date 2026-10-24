@@ -23,6 +23,11 @@ export interface Mission3DSnapshot {
   animating: boolean;
   progress: number;
   phase: 'ready' | 'approach' | 'interact' | 'result';
+  comparisonView: 'before' | 'after';
+  choiceId: string | null;
+  previewChoiceId: string | null;
+  camera: { position: number[]; left: number; right: number; top: number; bottom: number };
+  effects: {kind: 'action-focus'; action: string; target: string; position: number[]}[];
   entities: {id: string; kind: string; position: number[]; rotation: number[]; visible: boolean; joints: number[]; projected: {left: number; top: number; right: number; bottom: number; width: number; height: number}}[];
   flowCount: number;
   renderCount: number;

@@ -43,6 +43,8 @@ export interface MissionStageInput {
   definition: MissionVisualDefinition;
   choiceId: string | null;
   previewChoiceId: string | null;
+  comparisonView?: 'before' | 'after';
+  animate?: boolean;
 }
 export interface MissionStage {
   update(input: MissionStageInput): void;

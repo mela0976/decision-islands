@@ -21,6 +21,81 @@ const setup = async (page, origin) => {
 };
 const snapshot = page => page.evaluate(() => window.stage.snapshot());
 const person = state => state.entities.find(entity => entity.id === 'person');
+const canvasPixels = async page => page.screenshot({clip: await page.locator('canvas').boundingBox()});
+
+test('before/after comparison preserves answers, fixes framing, and renders actual scene differences', async () => {
+  const server = await createServer({server:{port:0,host:'127.0.0.1',hmr:false}}); await server.listen();
+  const browser = await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
+  try {
+    const page = await browser.newPage({viewport:{width:1000,height:600}});
+    await page.clock.install(); await page.clock.pauseAt(new Date());
+    await setup(page,`http://127.0.0.1:${server.httpServer.address().port}`);
+    await page.evaluate(() => {window.stage.setActive(true);window.input.comparisonView='after';window.stage.update(window.input);window.input.choiceId='a';window.stage.update(window.input);});
+    assert.equal((await snapshot(page)).animating,true,'first selected action retains normal playback');
+    await page.clock.fastForward(2900);
+    assert.equal((await snapshot(page)).progress,1);
+    for (const width of [320,390,430,900]) {
+      await page.evaluate(width => {const host=document.querySelector('#fixture');host.style.width=`${width}px`;host.style.height=width<600?'272px':'450px';window.input={...window.input,comparisonView:'after',animate:false,previewChoiceId:'b'};window.stage.update(window.input);window.dispatchEvent(new Event('resize'));},width);
+      await page.clock.fastForward(32);
+      const afterPixels = await canvasPixels(page);
+      const after = await snapshot(page);
+      assert.equal(after.mode,'webgl');
+      assert.equal(after.choiceId,'a'); assert.equal(after.previewChoiceId,'b');
+      assert.ok(after.effects.some(effect=>effect.action==='pause' && effect.target==='stop'),'action focus names the specific paused target');
+      await page.evaluate(() => {window.input.comparisonView='before';window.stage.update(window.input);});
+      const before = await snapshot(page);
+      assert.equal(before.comparisonView,'before');
+      assert.equal(before.phase,'ready','before describes the initial scene even when an answer exists');
+      assert.equal(before.choiceId,'a'); assert.equal(before.previewChoiceId,'b','comparison never clears preview or answer');
+      assert.equal(await page.locator('canvas').getAttribute('data-comparison-view'),'before');
+      assert.deepEqual(before.camera,after.camera,'both states share exactly the same camera');
+      assert.notDeepEqual(person(before).position,person(after).position,'actor changes real world position');
+      assert.notDeepEqual(person(before).joints,person(after).joints,'actor changes actual joint pose');
+      assert.equal(before.effects.length,0,'initial scene has no selected action focus');
+      assert.notDeepEqual(await canvasPixels(page),afterPixels,'toggle changes real WebGL pixels');
+      assert.equal(before.animating,false,'manual comparison settles immediately');
+      await page.evaluate(() => window.stage.replay());
+      assert.equal((await snapshot(page)).animating,false,'before view does not replay a selected action');
+      await page.evaluate(() => {window.input.comparisonView='after';window.stage.update(window.input);});
+      const restored = await snapshot(page);
+      assert.deepEqual(restored.entities,after.entities,'return restores exact selected transforms');
+      assert.deepEqual(await canvasPixels(page),afterPixels,'return restores exact selected pixels');
+      const renders = restored.renderCount;
+      await page.clock.fastForward(300);
+      assert.equal((await snapshot(page)).renderCount,renders,'comparison has no idle RAF');
+      for (const state of [before,after]) for (const entity of state.entities.filter(entity=>entity.visible)) {
+        assert.ok(entity.projected.left>=-1 && entity.projected.right<=width+1,`comparison fits ${entity.id} at ${width}px`);
+        assert.ok(entity.projected.top>=53,`comparison respects the mobile toolbar exclusion for ${entity.id}`);
+      }
+    }
+    await page.evaluate(() => window.stage.replay());
+    assert.equal((await snapshot(page)).animating,true,'explicit replay remains available after manual comparison');
+    await page.clock.fastForward(1000);
+    await page.evaluate(() => window.stage.setActive(false));
+    const paused = await snapshot(page);
+    assert.equal(paused.progress,1); assert.equal(paused.animating,false);
+    await page.clock.fastForward(300);
+    assert.equal((await snapshot(page)).renderCount,paused.renderCount,'paused comparison releases RAF');
+    assert.equal(await page.locator('canvas').count(),1,'comparison reuses one canvas and context');
+    await page.evaluate(() => {
+      window.stage.setActive(true);
+      const definition=structuredClone(window.definition);
+      definition.choices.a.entities=definition.choices.a.entities.map(entity=>entity.id==='phone'?{...entity,kind:'screen'}:entity);
+      window.input={key:'kind-change',definition,choiceId:'a',previewChoiceId:null,comparisonView:'after',animate:false};
+      window.stage.update(window.input);
+    });
+    const kindAfter = await snapshot(page);
+    const kindPixels = await canvasPixels(page);
+    assert.equal(kindAfter.entities.find(entity=>entity.id==='phone').kind,'screen');
+    await page.evaluate(() => {window.input.comparisonView='before';window.stage.update(window.input);});
+    const kindBefore = await snapshot(page);
+    assert.equal(kindBefore.entities.find(entity=>entity.id==='phone').kind,'phone');
+    assert.deepEqual(kindBefore.camera,kindAfter.camera,'same-id geometry changes use each frame own model for common bounds');
+    await page.evaluate(() => {window.input.comparisonView='after';window.stage.update(window.input);});
+    assert.deepEqual(await canvasPixels(page),kindPixels,'returning to a changed kind restores exact pixels and materials');
+    await page.evaluate(() => window.stage.dispose());
+  } finally {await browser.close();await server.close();}
+});
 
 test('real WebGL mission actors articulate, interact, retarget, and stop rendering', async () => {
   const server = await createServer({server:{port:0,host:'127.0.0.1',hmr:false}});
