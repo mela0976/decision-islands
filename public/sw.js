@@ -14,13 +14,15 @@ function cachePolicy(request) {
   try { url = new URL(request.url); } catch { return 'network'; }
   if (url.origin !== self.location.origin || !url.pathname.startsWith(scopePath) || /\.pdf$/i.test(url.pathname)) return 'network';
   if (/(?:^|\/)(?:api|auth|private|notes?|session|token)(?:\/|$)/i.test(url.pathname)) return 'network';
-  for (const [name, value] of url.searchParams) {
-    if (name === 'v' && /^[A-Za-z0-9._-]{1,64}$/.test(value)) continue;
-    if (name === 'lang' && /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(value)) continue;
-    return 'network';
-  }
-
   const isScopeRoot = url.pathname === scopePath || url.pathname === `${scopePath}index.html`;
+  const isRootRedirectNavigation = request.mode === 'navigate' && url.pathname === scopePath;
+  if (!isRootRedirectNavigation) {
+    for (const [name, value] of url.searchParams) {
+      if (name === 'v' && /^[A-Za-z0-9._-]{1,64}$/.test(value)) continue;
+      if (name === 'lang' && /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(value)) continue;
+      return 'network';
+    }
+  }
   const isHtmlNavigation = request.mode === 'navigate' && /\.html?$/i.test(url.pathname);
   if (request.mode === 'navigate' && !isScopeRoot && !isHtmlNavigation) return 'network';
   const isShellNavigation = isScopeRoot || isHtmlNavigation;
@@ -35,10 +37,16 @@ function cachePolicy(request) {
 function canonicalCacheRequest(request) {
   let url;
   try { url = new URL(request.url); } catch { return null; }
-  const versionValues = url.searchParams.getAll('v');
-  const languageValues = url.searchParams.getAll('lang');
-  if (versionValues.length > 1 || languageValues.length > 1) return null;
-  url.searchParams.delete('v');
+  if (request.mode === 'navigate' && url.pathname === scopePath) {
+    // The main entry only redirects; campaign parameters do not change its body.
+    // Drop them from the cache key while the redirect script preserves them.
+    url.search = '';
+  } else {
+    const versionValues = url.searchParams.getAll('v');
+    const languageValues = url.searchParams.getAll('lang');
+    if (versionValues.length > 1 || languageValues.length > 1) return null;
+    url.searchParams.delete('v');
+  }
   return new Request(url.href, { method: 'GET', credentials: 'same-origin' });
 }
 

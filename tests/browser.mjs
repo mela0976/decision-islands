@@ -2,7 +2,7 @@ import { chromium } from '@playwright/test';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 
-const base=process.env.TEST_URL || 'http://127.0.0.1:4173/';
+const base=process.env.TEST_URL || 'http://127.0.0.1:4173/legacy.html';
 await mkdir('test-results',{recursive:true});
 const browser=await chromium.launch({headless:true});
 const results=[];

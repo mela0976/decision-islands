@@ -1,0 +1,55 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import assert from 'node:assert/strict';
+import { preview } from 'vite';
+import { chromium } from '@playwright/test';
+const server = await preview({ preview: { host: '127.0.0.1', port: 0, strictPort: false } });
+const browser = await chromium.launch({ headless: true, args: ['--enable-webgl', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+try {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
+  const origin = `http://127.0.0.1:${server.httpServer.address().port}`;
+  const startedAt = Date.now();
+  await page.goto(`${origin}/?campaign=entry#article`, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => location.pathname.endsWith('/immersive/'), { timeout: 5000 });
+  await page.waitForFunction(() => window.immersive?.world, { timeout: 30000 });
+  const mobileInteractiveMs = Date.now() - startedAt;
+  assert.equal(await page.evaluate(() => window.immersive.data.articles.length), 22);
+  assert.equal(new URL(page.url()).search, '?campaign=entry');
+  assert.equal(new URL(page.url()).hash, '#article');
+  await page.locator('#read').click();
+  await page.locator('#reader[open]').waitFor();
+  await page.locator('[data-depth="full"]').click();
+  const fullText = await page.locator('#reading-content').innerText();
+  assert.ok(fullText.length > 1000);
+  await page.waitForFunction(async () => (await navigator.serviceWorker?.getRegistrations() ?? []).some(registration => new URL(registration.scope).pathname === '/'));
+  await page.goto(`${origin}/`, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => location.pathname.endsWith('/immersive/'), { timeout: 5000 });
+  await page.waitForFunction(async () => {
+    const names = await caches.keys();
+    const shell = names.find(name => name.startsWith('decision-islands-shell:'));
+    if (!shell) return false;
+    const cache = await caches.open(shell);
+    return (await cache.keys()).some(request => new URL(request.url).pathname === '/');
+  }, { timeout: 10000 });
+  await page.context().setOffline(true);
+  await page.goto(`${origin}/?campaign=offline#article`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.waitForFunction(() => location.pathname.endsWith('/immersive/'), { timeout: 10000 });
+  await page.waitForFunction(() => window.immersive?.world, { timeout: 20000 });
+  assert.equal(new URL(page.url()).search, '?campaign=offline');
+  assert.equal(new URL(page.url()).hash, '#article');
+  await page.locator('#read').click();
+  await page.locator('[data-depth="full"]').click();
+  assert.equal(await page.locator('#reading-content').innerText(), fullText, 'the root URL reaches full source text offline');
+  const noJs = await browser.newContext({ javaScriptEnabled: false });
+  const noJsPage = await noJs.newPage();
+  await noJsPage.goto(`${origin}/`);
+  assert.equal(await noJsPage.locator('noscript a[href="./read/2026/index.html"]').count(), 1);
+  await noJs.close();
+  const results = { entryPath: '/', finalPath: new URL(page.url()).pathname, islandCount: await page.evaluate(() => window.immersive.data.islands.length), articleCharacters: fullText.length, mobileInteractiveMs, noJsSourceFallback: true };
+  results.rootOfflineReload = true;
+  await mkdir('test-results/immersive-entry', { recursive: true });
+  await writeFile('test-results/immersive-entry/results.json', JSON.stringify(results, null, 2));
+  console.log(JSON.stringify(results, null, 2));
+} finally {
+  await browser.close();
+  await new Promise(resolve => server.httpServer.close(resolve));
+}

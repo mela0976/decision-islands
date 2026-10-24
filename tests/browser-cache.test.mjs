@@ -317,6 +317,20 @@ test('Vite hashed filenames and only public v/lang query parameters use canonica
   assert.equal(pdf.intercepted, false);
 });
 
+test('root redirect navigation ignores campaign queries in its cache key while private data query remains network-only', async () => {
+  cacheBuckets.clear();
+  globalThis.fetch = async () => response(200, 'redirect entry');
+  const first = await dispatchFetch('https://app.example/project/?campaign=online', { mode: 'navigate', destination: 'document' });
+  assert.equal(first.result.body, 'redirect entry');
+  assert.ok(ownCache().entries.has('https://app.example/project/'));
+
+  globalThis.fetch = async () => { throw new Error('offline'); };
+  const offline = await dispatchFetch('https://app.example/project/?campaign=offline', { mode: 'navigate', destination: 'document' });
+  assert.equal(offline.result.body, 'redirect entry');
+  const privateQuery = await dispatchFetch('https://app.example/project/data/catalog.json?token=private');
+  assert.equal(privateQuery.intercepted, false);
+});
+
 test('resource seeding is bounded to 80 URLs and app-scoped cache cleanup leaves other caches intact', async () => {
   cacheBuckets.clear();
   let fetched = 0;
