@@ -68,6 +68,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
   const textures = new Set();
   const labels = new Set();
   let labelSerial = 0;
+  const labelPoint = new THREE.Vector3(), labelParentScale = new THREE.Vector3();
   const editorialTextures = createEditorialTextureFactory(THREE, data.visualThemes, textures);
   let disposedResources = null;
   const random = mulberry32(202601);
@@ -197,7 +198,23 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     draw();
     const texture = new THREE.CanvasTexture(surface); texture.colorSpace = THREE.SRGBColorSpace; textures.add(texture);
     const mat = new THREE.SpriteMaterial({ map: texture, depthTest: false }); materials.set(`label-${labelSerial++}`, mat);
-    const sprite = new THREE.Sprite(mat); sprite.userData.text = String(text); sprite.userData.font = `600 ${!speech && String(text).length <= 3 ? 88 : 42}px "Publication Latin", "Publication Sans TW", sans-serif`; sprite.userData.screenWidth = width; sprite.userData.aspect = surface.height / surface.width; sprite.userData.redraw = () => { draw(); texture.needsUpdate = true; }; sprite.renderOrder = 3; labels.add(sprite); return sprite;
+    const sprite = new THREE.Sprite(mat); sprite.userData.text = String(text); sprite.userData.font = `600 ${!speech && String(text).length <= 3 ? 88 : 42}px "Publication Latin", "Publication Sans TW", sans-serif`; sprite.userData.screenWidth = width; sprite.userData.aspect = surface.height / surface.width; sprite.userData.redraw = () => { draw(); texture.needsUpdate = true; }; sprite.renderOrder = 3; labels.add(sprite);
+    if (document.fonts) void Promise.resolve().then(() => document.fonts.load(sprite.userData.font, sprite.userData.text)).then(() => {
+      if (disposed || !labels.has(sprite)) return;
+      sprite.userData.redraw();
+      if (!active && renderedFrames > 0) {
+        let ancestor = sprite;
+        while (ancestor?.visible && ancestor !== scene) ancestor = ancestor.parent;
+        if (ancestor === scene && scene.visible) { sizeLabel(sprite); renderer.render(scene, camera); renderedFrames++; }
+      }
+    }).catch(() => undefined);
+    return sprite;
+  }
+  function sizeLabel(sprite) {
+    sprite.getWorldPosition(labelPoint);
+    const scale = (sprite.userData.screenWidth / Math.max(1, canvas.clientHeight)) * camera.position.distanceTo(labelPoint) * 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    const parentScale = sprite.parent?.getWorldScale(labelParentScale).x || 1;
+    sprite.scale.set(scale / parentScale, scale * sprite.userData.aspect / parentScale, 1);
   }
   const sea = mesh(scene, 'cylinder', '#79b9bd', [0, -0.9, 0], [230, 0.35, 230]);
   sea.receiveShadow = true;
@@ -1218,14 +1235,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     characterEvents.update(dt, reducedMotion);
     updateMicroevent(dt);
     arrivalEvents.update(dt);
-    const point = new THREE.Vector3();
-    for (const sprite of labels) {
-      sprite.getWorldPosition(point);
-      const distance = camera.position.distanceTo(point);
-      const scale = (sprite.userData.screenWidth / Math.max(1, canvas.clientHeight)) * distance * 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-      const parentScale = sprite.parent?.getWorldScale(new THREE.Vector3()).x || 1;
-      sprite.scale.set(scale / parentScale, scale * sprite.userData.aspect / parentScale, 1);
-    }
+    for (const sprite of labels) sizeLabel(sprite);
     renderer.render(scene, camera);
     if (renderedFrames === 0) { firstDrawAt = performance.now(); firstDrawShadowCasting = sunlight.castShadow; }
     renderedFrames++;
