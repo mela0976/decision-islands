@@ -1,0 +1,123 @@
+import assert from 'node:assert/strict';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { preview } from 'vite';
+import { chromium } from '@playwright/test';
+
+const server = await preview({ preview: { host: '127.0.0.1', port: 0 } });
+const browser = await chromium.launch({ headless: true, args: ['--enable-webgl', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const output = 'test-results/immersive-ux-journey';
+const journeys = [];
+await mkdir(output, { recursive: true });
+try {
+  for (const [name, viewport] of [['mobile', { width: 390, height: 844 }], ['desktop', { width: 1280, height: 800 }]]) {
+    const context = await browser.newContext({ viewport, reducedMotion: 'reduce' });
+    const page = await context.newPage();
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/?ux=${name}`, { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => window.immersive?.world, { timeout: 30000 });
+    await page.waitForFunction(() => window.immersive.world.getRenderState().renderedFrames > 0, { timeout: 10000 });
+    assert.equal(await page.locator('#explore-tip').isVisible(), true, `${name}: first-visit guide missing`);
+    await page.screenshot({ path: `${output}/${name}-home.png` });
+    const touchTargets = await page.locator('header button, #story .actions button, #story nav button').evaluateAll(elements => elements.map(element => ({ text: element.innerText, height: element.getBoundingClientRect().height })));
+    assert.ok(touchTargets.filter(target => !['全景', '← 上一座', '下一座 →'].includes(target.text)).every(target => target.height >= 44), `${name}: primary touch target below 44px`);
+    await page.locator('#hide-explore-tip').click();
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => window.immersive?.world, { timeout: 30000 });
+    assert.equal(await page.locator('#explore-tip').isVisible(), false, `${name}: dismissed guide returned`);
+
+    await page.locator('#map-toggle').click();
+    assert.equal(await page.locator('#map-toggle').getAttribute('aria-expanded'), 'true');
+    await page.locator('#settings-toggle').click();
+    assert.equal(await page.locator('#catalog').isVisible(), false, `${name}: catalog and settings overlap`);
+    assert.equal(await page.locator('#settings').isVisible(), true);
+    assert.equal(await page.locator('#map-toggle').getAttribute('aria-expanded'), 'false');
+    await page.locator('#map-toggle').click();
+    assert.equal(await page.locator('#settings').isVisible(), false);
+    assert.equal(await page.locator('#catalog').isVisible(), true);
+    await page.locator('#search').fill('沒有這筆文章');
+    const emptySearch = await page.locator('#article-list').innerText();
+    assert.match(emptySearch, /找不到/);
+    await page.screenshot({ path: `${output}/${name}-empty-search.png` });
+    await page.getByRole('button', { name: '清除搜尋' }).click();
+    await page.locator('#map-toggle').click();
+
+    await page.locator('#read').click();
+    await page.locator('[data-depth="summary"]').click();
+    const summaryCharacters = (await page.locator('#reading-content').innerText()).length;
+    await page.locator('[data-depth="full"]').click();
+    const fullCharacters = (await page.locator('#reading-content').innerText()).length;
+    assert.ok(fullCharacters > summaryCharacters, `${name}: reading-depth switch did not change text`);
+    await page.locator('#note').fill(`UX-${name}-persistent-note`);
+    await page.waitForFunction(() => document.querySelector('#note-status').textContent.includes('已儲存'));
+    await page.locator('#reader button.close').click();
+
+    await page.locator('#interact').click();
+    await page.waitForFunction(() => document.querySelector('#game').open);
+    const taskTitle = await page.locator('#game-title').innerText();
+    const scenario = await page.locator('#game-intro').innerText();
+    assert.ok(taskTitle.length <= 20, `${name}: task title is too long`);
+    assert.ok(scenario.length > 12);
+    await page.screenshot({ path: `${output}/${name}-mission.png` });
+    await page.locator('#game-controls button').last().click();
+    await page.waitForFunction(() => !document.querySelector('#game-after').hidden);
+    const resultCharacters = (await page.locator('#game-result').textContent()).length;
+    assert.ok(resultCharacters > 30);
+    const gameGeometry = await page.evaluate(() => {
+      const dialog = document.querySelector('#game').getBoundingClientRect();
+      const impact = document.querySelector('#game-impact').getBoundingClientRect();
+      const canvas = document.querySelector('#world').getBoundingClientRect();
+      const next = document.querySelector('#game-next').getBoundingClientRect();
+      return { dialog: { top: dialog.top, height: dialog.height, viewportHeight: innerHeight }, impact: { top: impact.top, bottom: impact.bottom }, canvas: { top: canvas.top, bottom: canvas.bottom }, next: { width: next.width, height: next.height }, controlsCollapsed: document.querySelector('#game-controls').hidden };
+    });
+    assert.equal(gameGeometry.controlsCollapsed, true, `${name}: choices should collapse after the outcome`);
+    if (viewport.width <= 650) assert.ok(gameGeometry.dialog.height <= gameGeometry.dialog.viewportHeight * 0.49, `${name}: mobile outcome sheet covers more than half the scene`);
+    assert.ok(gameGeometry.impact.bottom <= gameGeometry.dialog.top + gameGeometry.dialog.height, `${name}: impact prompt is outside the result panel`);
+    assert.ok(gameGeometry.next.height >= 44 && gameGeometry.next.width >= 44, `${name}: primary next-island action is not touchable`);
+    await page.screenshot({ path: `${output}/${name}-result.png` });
+    const resultBeforeReading = await page.locator('#game-impact').innerText();
+    await page.locator('#game-read').click();
+    await page.waitForFunction(() => document.querySelector('#reader').open && document.querySelector('#game').open);
+    assert.equal(await page.locator('#reader-title').innerText(), await page.locator('#island-title').innerText());
+    await page.locator('#reader button.close').click();
+    assert.equal(await page.locator('#game').evaluate(dialog => dialog.open), true, `${name}: reading closed the interaction`);
+    assert.equal(await page.locator('#game-impact').innerText(), resultBeforeReading, `${name}: returning from reading lost the outcome`);
+    await page.locator('#game-adjust').click();
+    assert.equal(await page.locator('#game-controls').isVisible(), true, `${name}: adjustment controls cannot be reopened`);
+    await page.locator('#game-adjust').click();
+    await page.locator('#compare').click();
+    assert.match(await page.locator('#compare').innerText(), /選擇後/);
+    await page.locator('#compare').click();
+    await page.locator('#replay').click();
+    await page.waitForFunction(() => document.querySelector('#game').open && document.querySelector('#game-after').hidden);
+    await page.locator('#game-controls button').last().click();
+    await page.waitForFunction(() => !document.querySelector('#game-after').hidden);
+    const originArticle = await page.evaluate(() => window.immersive.world.getState().current);
+    await page.locator('#game-next').click();
+    await page.waitForFunction(id => !document.querySelector('#game').open && window.immersive.world.getState().current !== id, originArticle, { timeout: 10000 });
+    const recommendedArticle = await page.evaluate(() => window.immersive.world.getState().current);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => window.immersive?.world, { timeout: 30000 });
+    await page.evaluate(id => window.immersive.visit(id, null, false), originArticle);
+    await page.locator('#read').click();
+    await page.waitForFunction(() => document.querySelector('#note').value.length > 0);
+    assert.equal(await page.locator('#note').inputValue(), `UX-${name}-persistent-note`);
+    await page.locator('#reader button.close').click();
+
+    await page.locator('#map-toggle').click();
+    await page.locator('#search').fill('no-matches');
+    await page.locator('#search').focus();
+    await page.keyboard.press('Tab');
+    const keyboardFocus = await page.evaluate(() => ({ id: document.activeElement.id, outline: getComputedStyle(document.activeElement).outlineStyle }));
+    assert.equal(keyboardFocus.outline, 'solid');
+    assert.equal(errors.length, 0, errors.join('\n'));
+    journeys.push({ name, viewport, firstVisitGuideDismissalPersists: true, emptySearchMessage: emptySearch, readDepthCharacters: { summary: summaryCharacters, full: fullCharacters }, noteSurvivesReload: true, taskTitle, scenario, resultCharacters, gameGeometry, compareAndContinue: { originArticle, recommendedArticle }, touchTargets, keyboardFocus, errors });
+    await context.close();
+  }
+  const evidence = { journeys };
+  await writeFile(`${output}/results.json`, JSON.stringify(evidence, null, 2));
+  console.log(JSON.stringify(journeys.map(({ name, viewport, readDepthCharacters, taskTitle, resultCharacters, compareAndContinue, keyboardFocus, errors }) => ({ name, viewport, readDepthCharacters, taskTitle, resultCharacters, compareAndContinue, keyboardFocus, errors })), null, 2));
+} finally {
+  await browser.close();
+  await new Promise(resolve => server.httpServer.close(resolve));
+}

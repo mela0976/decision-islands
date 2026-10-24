@@ -1,7 +1,7 @@
-function reportStatus(callback, state, scope) {
+function reportStatus(callback, state, scope, details) {
   if (typeof callback !== 'function') return;
   try {
-    callback(scope ? { state, scope } : { state });
+    callback({ state, ...(scope ? { scope } : {}), ...(details || {}) });
   } catch {
     // An optional status listener must not affect registration.
   }
@@ -38,7 +38,33 @@ export function initOfflineCache({ onStatus } = {}) {
     }
 
     Promise.resolve(registrationPromise)
-      .then(() => reportStatus(onStatus, 'registered', scopeUrl.href))
+      .then(registration => {
+        reportStatus(onStatus, 'registered', scopeUrl.href);
+        let reloadAfterUpdate = false;
+        const notifyWaiting = worker => {
+          if (worker?.state === 'installed' && serviceWorker.controller) {
+            reportStatus(onStatus, 'update-ready', scopeUrl.href, {
+              applyUpdate() {
+                reloadAfterUpdate = true;
+                worker.postMessage({ type: 'SKIP_WAITING' });
+                return true;
+              },
+            });
+          }
+        };
+        notifyWaiting(registration.waiting);
+        registration.addEventListener?.('updatefound', () => {
+          const installing = registration.installing;
+          installing?.addEventListener?.('statechange', () => notifyWaiting(installing));
+        });
+        serviceWorker.addEventListener?.('controllerchange', () => {
+          if (!reloadAfterUpdate) return;
+          reloadAfterUpdate = false;
+          windowRef.location.reload();
+        });
+        const checkForUpdate = () => registration.update?.().catch?.(() => {});
+        windowRef.addEventListener?.('focus', checkForUpdate);
+      })
       .catch(() => reportStatus(onStatus, 'failed'));
   };
 

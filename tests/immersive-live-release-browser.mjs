@@ -31,8 +31,8 @@ try {
   const choices = await page.locator('#game-controls button').allInnerTexts();
   assert.ok(choices.length > 0);
   await page.locator('#game-controls button').first().click();
-  await page.waitForFunction(() => document.querySelector('#game-result').innerText.trim().length > 0);
-  const result = (await page.locator('#game-result').innerText()).trim();
+  await page.waitForFunction(() => document.querySelector('#game-impact').innerText.trim().length > 0);
+  const result = (await page.locator('#game-impact').innerText()).trim();
   assert.ok(result.length > 20);
   assert.equal(errors.length, 0, errors.join('\n'));
 
@@ -46,7 +46,7 @@ try {
     interactionChoices: choices,
     interactionResult: result,
     browserErrors: errors,
-    deploymentCommit: '44500d4',
+    deploymentCommit: process.env.DEPLOYMENT_COMMIT || 'not-supplied',
   };
   await mkdir('test-results/immersive-live-release', { recursive: true });
   await writeFile('test-results/immersive-live-release/results.json', JSON.stringify(evidence, null, 2));

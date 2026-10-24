@@ -9,6 +9,9 @@ header{background:#faf7eff5;border:1px solid #cbd2c4;border-radius:14px;padding:
 aside,#story,dialog{background:var(--panel);border-color:#adb8a7;box-shadow:0 10px 35px #182f2924}
 #status{background:var(--panel);color:#263d32;border:1px solid #b6c0af;font-size:12px;top:99px;line-height:1.65;max-width:min(670px,90vw)}
 #status a{pointer-events:auto}
+#status .update-action{min-height:36px;margin-left:8px;padding:5px 10px;font-size:12px}
+.update-notice{position:sticky;top:0;z-index:3;padding:8px 10px;background:#e3ebdc;border:1px solid #73876f;border-radius:8px;font-size:13px;line-height:1.5}
+.update-notice button{min-height:40px;margin-left:8px;padding:5px 10px;font-size:12px}
 #chapter-label,.eyebrow,#article-list small,#byline,#note-status,#recommendations small{color:var(--muted-ink);font-weight:500}
 #chapter-label,.eyebrow{font-size:11px;letter-spacing:.1em}
 #article-list small,#byline,#note-status,#recommendations small{font-size:13px}
@@ -20,6 +23,10 @@ a{color:#244d3b;text-decoration-thickness:1.5px;text-underline-offset:3px}
 nav button{color:#304a3c;font-weight:500}
 #game-result{background:#edf0e5;border-left:3px solid #5c724f;padding:10px 12px;color:#223b2e;border-radius:4px}
 #game-result:empty{display:none}
+#game-impact{margin:8px 0;padding:10px 12px;background:#edf0e5;border-left:3px solid #5c724f;border-radius:4px;line-height:1.6;font-weight:600}
+#game-full-result{margin:6px 0;color:#304337;font-size:13px}
+#game-full-result summary{min-height:44px;padding:11px 4px;cursor:pointer;font-weight:600}
+#game-controls[hidden],#game-impact[hidden],#game-full-result[hidden],#game-adjust[hidden]{display:none}
 #travel-controls{position:fixed;z-index:4;top:145px;left:24px;background:#faf7ef;padding:8px;border:1px solid #adb8a7;border-radius:10px;box-shadow:0 6px 20px #182f2920}
 #travel-controls[hidden]{display:none}
 @media(max-width:650px){#travel-controls{top:138px;left:12px;padding:5px;font-size:12px}}
@@ -42,3 +49,16 @@ aside{top:135px;border-radius:16px}
 #stamp-list span.collected{color:#fffdf7;background:#304d3a;border-color:#304d3a}
 @media(min-width:900px){#story{bottom:88px}#story nav{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:8px 14px;background:#faf7ef;border:1px solid #aebba7;border-radius:40px;box-shadow:0 5px 20px #182f2920;gap:20px}#story nav button{min-width:100px}}
 @media(max-width:650px){header{left:8px;right:8px;top:8px;padding:7px 8px;border-radius:12px}.brand span{font-size:7px}.brand{font-size:22px}header button{font-size:11px;min-height:44px;padding:7px}#status{top:88px;left:12px;font-size:11px;max-width:calc(100vw - 24px);padding:5px 8px}#story{max-height:39dvh}#chapter-label{font-size:11px}#dialogue{font-size:15px;color:#182f29}aside{top:134px}body.fallback #story{top:153px}body.fallback #catalog{top:430px}#reading-content{font-weight:400}}
+#explore-tip{position:fixed;z-index:4;left:24px;top:145px;width:min(360px,calc(100vw - 48px));display:flex;align-items:center;gap:10px;padding:10px 12px;background:#faf7ef;border:1px solid #9eaa99;border-radius:10px;box-shadow:0 6px 20px #182d2818;color:#223a2f;font-size:14px;line-height:1.55}
+#explore-tip[hidden]{display:none}
+#explore-tip p{margin:0;flex:1}
+#explore-tip button{flex:none;min-width:82px}
+#article-list .catalog-empty{margin:12px 0;padding:16px;border:1px dashed #859486;border-radius:8px;background:#f1eee3;color:#233b30}
+#article-list .catalog-empty p{margin:0 0 12px;line-height:1.65}
+#game-next{background:#253f33;color:#fffdf7;border-color:#253f33}
+#game-next:hover{background:#183226;color:#fffdf7}
+#game-after[hidden]{display:none}
+#game-after:not([hidden]){display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;padding:8px 0;background:#faf7ef}
+#game-after button{min-height:44px;padding:7px 9px;font-size:12px}
+#game-after #game-next{grid-column:1/-1;font-size:14px;font-weight:650}
+@media(max-width:650px){#explore-tip{left:12px;top:133px;width:calc(100vw - 24px);padding:8px 10px;font-size:13px}#game{max-height:48dvh;padding:10px 16px}#game h2{font-size:17px;margin:4px 0}#game-intro{font-size:13px;line-height:1.45;margin:4px 0}#game-controls{font-size:13px;gap:4px}#game-impact{font-size:14px;line-height:1.5;margin:5px 0;padding:7px 9px}#game-full-result{font-size:12px}#game-full-result summary{min-height:40px;padding:9px 4px}#game-after:not([hidden]){grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;padding:5px 0}#game-after button{min-height:44px;padding:5px 2px;font-size:11px;line-height:1.25}#game-after #game-next{font-size:13px}}

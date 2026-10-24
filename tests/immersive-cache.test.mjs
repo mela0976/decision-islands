@@ -235,7 +235,7 @@ function currentCache() {
 }
 
 function currentCacheName() {
-  return [...cacheStorage.entries.keys()].find(name => name.startsWith(scopePrefix) && name.endsWith('2026-10-24.3'));
+  return [...cacheStorage.entries.keys()].find(name => name.startsWith(scopePrefix) && name.endsWith('2026-10-24.7'));
 }
 
 function coreUrls() {

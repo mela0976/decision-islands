@@ -1,5 +1,5 @@
 // Bump this value when any core asset changes so each release keeps one complete snapshot.
-const CACHE_VERSION = '2026-10-24.3';
+const CACHE_VERSION = '2026-10-24.7';
 const MAX_CACHE_ENTRIES = 60;
 const OPTIONAL_CACHE_TIMEOUT_MS = 5000;
 const APP_SCOPE = new URL(self.registration.scope);
@@ -233,6 +233,10 @@ self.addEventListener('activate', event => {
     }
     await self.clients.claim();
   })());
+});
+
+self.addEventListener('message', event => {
+  if (event.data?.type === 'SKIP_WAITING') event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener('fetch', event => {

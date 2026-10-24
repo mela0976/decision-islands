@@ -11,9 +11,27 @@ let storage;
 try { storage = localStorage; } catch { storage = { getItem() { throw Error('unavailable'); }, setItem() { throw Error('unavailable'); } }; }
 const progress = createProgress(storage, status);
 canPersist=()=>progress.persistent!==false;
-initOfflineCache({ onStatus: ({ state }) => {
+initOfflineCache({ onStatus: ({ state, applyUpdate }) => {
   if (state === 'failed') status('離線快取未能啟用；目前仍可正常閱讀。');
   else if (state === 'unavailable') status('此環境不支援離線快取；目前仍可正常閱讀。');
+  else if (state === 'update-ready') {
+    $('status').textContent = '新版本已準備好。套用時會保留你的閱讀紀錄與筆記。 ';
+    const applyUpdateNow = () => {
+      flushNote();
+      status('正在套用更新；閱讀紀錄與筆記會保留。');
+      applyUpdate();
+    };
+    button('套用更新', applyUpdateNow, $('status')).className = 'update-action';
+    for (const [dialogId, noticeId] of [['reader','reader-update'],['game','game-update']]) {
+      const dialog=$(dialogId);
+      if(!dialog.querySelector(`#${noticeId}`)){
+        const notice=document.createElement('p');notice.id=noticeId;notice.className='update-notice';notice.setAttribute('role','status');
+        notice.append(document.createTextNode('新版本已準備好，套用時會先保存筆記。 '));
+        button('套用更新',applyUpdateNow,notice);
+        dialog.querySelector('form')?.after(notice);
+      }
+    }
+  }
 } });
 let DATA, world, current, travelOrigin, depth = 'guide', noteTimer, gameState, soundContext, soundNodes = [], contextFailed=false;
 let reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -40,15 +58,27 @@ function renderCatalog() {
   if(!DATA)return;
   const query = $('search').value.trim().toLocaleLowerCase();
   $('article-list').replaceChildren();
+  let visibleCount = 0;
   for (const a of DATA.articles) {
     if ($('only-bookmarks').checked && !progress.state.bookmarks.includes(a.id)) continue;
     if (query && ![a.title, a.authors, ...(a.paragraphs || [])].join(' ').toLocaleLowerCase().includes(query)) continue;
+    visibleCount++;
     const b = button(`${progress.state.read.includes(a.id) ? '✓ ' : ''}${island(a.id).id} · ${a.title}`, () => { $('catalog').hidden = true; $('map-toggle').setAttribute('aria-expanded', 'false'); visit(a.id); }, $('article-list'));
     text('small', chapterNames[a.chapter], b);
     b.addEventListener('mouseenter', () => world?.preview?.(a.id));
     b.addEventListener('focus', () => world?.preview?.(a.id));
     b.addEventListener('mouseleave', () => world?.preview?.(null));
     b.addEventListener('blur', () => world?.preview?.(null));
+  }
+  if (!visibleCount) {
+    const empty = text('section', '', $('article-list')); empty.className = 'catalog-empty'; empty.setAttribute('role', 'status');
+    if ($('only-bookmarks').checked && !query) {
+      text('p', '還沒有收藏文章。關閉「只看收藏」，回到 22 篇文章。', empty);
+      button('顯示全部文章', () => { $('only-bookmarks').checked = false; renderCatalog(); }, empty);
+    } else {
+      text('p', `找不到「${$('search').value.trim()}」相關文章。`, empty);
+      button('清除搜尋', () => { $('search').value = ''; renderCatalog(); $('search').focus(); }, empty);
+    }
   }
   $('progress').textContent = `${canPersist()?'':'僅本次暫存 · '}已讀 ${progress.state.read.filter(id => article(id)).length} / 22 · 洞察印記 ${progress.state.stamps.length} · 筆記 ${Object.values(progress.state.notes).filter(Boolean).length} 篇`;
   if(!canPersist()&&$('reader').open)$('note-status').textContent='瀏覽器無法保存本次紀錄，請下載備份。';
@@ -124,7 +154,7 @@ function renderReading() {
     b.addEventListener('blur', () => world?.preview?.(null));
   });
 }
-function read() { if(!article(current))return;if($('game').open)$('game').close();flushNote(); renderReading(); $('reader').showModal();world?.setActive?.(false); }
+function read({ keepGame = false } = {}) { if(!article(current))return;if($('game').open&&!keepGame)$('game').close();flushNote(); renderReading(); $('reader').showModal();world?.setActive?.(false); }
 function flushNote() {
   clearTimeout(noteTimer);
   const id = $('note').dataset.articleId;
@@ -140,11 +170,11 @@ function openGame(object = null) {
   const previousInteraction=world?.getState().interaction;
   if(previousInteraction&&!previousInteraction.before)world.applyInteraction(id,{...previousInteraction,before:true});
   gameState = { articleId: id, kind, choices: [], result: null, before: false, characterId: object?.characterId || s?.protagonistId, npcIndex: object?.npcIndex ?? null, speech: dialogueForCharacter(object?.characterId || s?.protagonistId, s), token: Symbol(), started: performance.now() };
-  $('game-title').textContent = object?.characterId ? '和島上的朋友一起想一想' : s?.setting || article(id).title;
+  $('game-title').textContent = object?.characterId ? '和島上的朋友一起想一想' : s?.coreDevice?.label || article(id).title;
   $('game-intro').textContent = s?.lifeEvent || s?.interaction?.prompt;
   world?.setEncounter?.(gameState.characterId,gameState.npcIndex);
   world?.setSpeech?.(gameState.speech);
-  $('game-controls').replaceChildren(); $('game-result').textContent = ''; $('game-after').hidden = true;
+  $('game-controls').replaceChildren(); $('game-controls').hidden = false; $('game-result').textContent = ''; $('game-impact').textContent=''; $('game-impact').hidden=true; $('game-full-result').open=false; $('game-full-result').hidden=true; $('game-adjust').hidden=true; $('game-after').hidden = true;
   $('game-evidence')?.remove();
   $('story-ending')?.remove();
   $('game-visual').className = ''; $('game-visual').replaceChildren();
@@ -212,6 +242,12 @@ function finishGame(choices, result) {
   gameState.choices = choices; gameState.result = result; gameState.before = false;
   gameState.speech = physicalReaction;
   $('game-result').textContent = result;
+  $('game-impact').textContent = result.split(/[。！？]/).filter(Boolean).slice(0, 2).join('。') + '。';
+  $('game-impact').hidden = false;
+  $('game-full-result').hidden = false;
+  $('game-full-result').open = false;
+  $('game-controls').hidden = true;
+  $('game-adjust').hidden = false;
   world?.setSpeech?.(physicalReaction);
   $('game-visual').classList.add('changed'); $('game-after').hidden = false; $('compare').textContent = '查看選擇前';
   $('game-result').scrollIntoView({block:'nearest',behavior:reducedMotion?'instant':'smooth'});
@@ -223,6 +259,12 @@ function finishGame(choices, result) {
   const ending=DATA.storyRoutes[0]?.ending;
   if(ending?.articleId===gameState.articleId){const closing=text('section','',$('game-after'));closing.id='story-ending';text('p',ending.text,closing);button('帶著我的判斷回到阿綺的工作室',()=>{$('game').close();visit(ending.returnToArticleId);},closing);}
 }
+
+$('game-adjust').onclick=()=>{
+  $('game-controls').hidden=!$('game-controls').hidden;
+  $('game-adjust').textContent=$('game-controls').hidden?'調整選擇':'收合選擇';
+  if(!$('game-controls').hidden)$('game-controls').scrollIntoView({block:'nearest',behavior:reducedMotion?'instant':'smooth'});
+};
 
 async function intro() {
   if (progress.state.introSeen || reducedMotion) return;
@@ -253,8 +295,8 @@ document.querySelectorAll('[data-depth]').forEach(b => b.onclick = () => { flush
 for (const [id, offset] of [['previous',-1],['next',1]]) $(id).onclick = () => visit(DATA.articles[(DATA.articles.findIndex(a=>a.id===current)+22+offset)%22].id);
 function setMode(mode){progress.state.mode=mode==='explore'?'explore':'story';progress.save();$('mode').textContent=progress.state.mode==='story'?'故事探索':'自由閱讀';world?.setMode(progress.state.mode);}
 $('overview').onclick = () => { setMode('explore'); $('catalog').hidden = false; $('map-toggle').setAttribute('aria-expanded','true'); };
-$('map-toggle').onclick = () => { $('catalog').hidden = !$('catalog').hidden; $('settings').hidden = true; $('map-toggle').setAttribute('aria-expanded', String(!$('catalog').hidden)); };
-$('settings-toggle').onclick = () => { $('settings').hidden = !$('settings').hidden; $('catalog').hidden = true; };
+$('map-toggle').onclick = () => { $('catalog').hidden = !$('catalog').hidden; $('settings').hidden = true; $('map-toggle').setAttribute('aria-expanded', String(!$('catalog').hidden)); $('settings-toggle').setAttribute('aria-expanded', 'false'); };
+$('settings-toggle').onclick = () => { $('settings').hidden = !$('settings').hidden; $('catalog').hidden = true; $('map-toggle').setAttribute('aria-expanded', 'false'); $('settings-toggle').setAttribute('aria-expanded', String(!$('settings').hidden)); };
 $('search').oninput = renderCatalog; $('only-bookmarks').onchange = renderCatalog;
 $('mode').onclick = () => setMode(progress.state.mode === 'story' ? 'explore' : 'story');
 $('population').oninput = () => { $('population-value').value = $('population').value; world?.setPopulation(Number($('population').value)); };
@@ -264,8 +306,10 @@ $('sound').onchange = async () => {
   if (!$('sound').checked) { for (const n of soundNodes) { try { n.stop(); } catch {} } soundNodes = []; world?.setSound(false); return; }
   try { soundContext ||= new (window.AudioContext || window.webkitAudioContext)(); await soundContext.resume(); const gain = soundContext.createGain(); gain.gain.value=.013; gain.connect(soundContext.destination); for (const frequency of [130.81,196,261.63]) { const oscillator=soundContext.createOscillator(); oscillator.frequency.value=frequency; oscillator.connect(gain); oscillator.start(); soundNodes.push(oscillator); } world?.setSound(true); } catch { $('sound').checked=false; status('此瀏覽器未能啟用音效，仍可繼續探索。'); }
 };
-$('compare').onclick = () => { gameState.before=!gameState.before; $('compare').textContent=gameState.before?'查看選擇後':'查看選擇前'; $('game-visual').classList.toggle('changed',!gameState.before); $('game-result').textContent=gameState.before?`選擇前：${scene(gameState.articleId).lifeEvent}`:gameState.result; world?.applyInteraction?.(gameState.articleId,{...gameState,before:gameState.before}); };
-$('replay').onclick=()=>{$('game').close();openGame();}; $('game-read').onclick=()=>{$('game').close();read();};
+$('compare').onclick = () => { gameState.before=!gameState.before; $('compare').textContent=gameState.before?'查看選擇後':'查看選擇前'; $('game-visual').classList.toggle('changed',!gameState.before); const visibleResult=gameState.before?`選擇前：${scene(gameState.articleId).lifeEvent}`:gameState.result; $('game-result').textContent=visibleResult; $('game-impact').textContent=visibleResult.split(/[。！？]/).filter(Boolean).slice(0,2).join('。')+'。'; world?.applyInteraction?.(gameState.articleId,{...gameState,before:gameState.before}); };
+$('replay').onclick=()=>{$('game').close();openGame();}; $('game-read').onclick=()=>read({keepGame:true});
+$('game-next').onclick=()=>{const edge=recommend(gameState?.articleId||current)[0];if(!edge)return;$('game').close();visit(edge.targetArticleId,edge);};
+$('hide-explore-tip').onclick=()=>{ $('explore-tip').hidden=true; try{localStorage.setItem('dentsu-decision-2026-explore-tip','dismissed');}catch{} };
 $('game').addEventListener('close',()=>{if(!$('game').open){world?.setEncounter?.(null);world?.setSpeech?.('');}});
 addEventListener('keydown',event=>{if(event.key==='Escape'&&$('game').open)$('game').close();});
 $('export-progress').onclick=()=>{flushNote();const url=URL.createObjectURL(new Blob([JSON.stringify(progress.state,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='decision-wisdom-reading-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
@@ -305,7 +349,7 @@ async function boot() {
       if(expired){created.dispose();throw Error('3D 載入逾時');}return created;
     }),new Promise((_,reject)=>{worldTimeout=setTimeout(()=>{expired=true;reject(Error('3D 載入逾時'));},15000);})]).then(value=>({value}),error=>({error}));
     await intro();
-    try { const loaded=await worldReady;clearTimeout(worldTimeout);if(loaded.error)throw loaded.error;if(contextFailed){loaded.value.dispose();throw Error('3D 連線中斷');}world=loaded.value; syncWorldState();status('拖曳探索・滾輪縮放・點選人物或道具。'); }
+    try { const loaded=await worldReady;clearTimeout(worldTimeout);if(loaded.error)throw loaded.error;if(contextFailed){loaded.value.dispose();throw Error('3D 連線中斷');}world=loaded.value; syncWorldState();status('群島已展開，從一座文章島開始探索。'); try{if(!localStorage.getItem('dentsu-decision-2026-explore-tip'))$('explore-tip').hidden=false;}catch{$('explore-tip').hidden=false;} }
     catch(error){document.body.classList.add('fallback');$('catalog').hidden=false;status(`${error.message}。已切換可閱讀全部文章的 2D 模式。`);}
     window.immersive={get data(){return DATA;},get world(){return world;},get progress(){return progress.state;},visit,openGame};
   } catch(error) { document.body.classList.add('fallback');status(error.message);$('dialogue').replaceChildren();const a=text('a','開啟完整原文目錄',$('dialogue'));a.href='../read/2026/index.html'; }

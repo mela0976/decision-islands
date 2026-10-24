@@ -25,7 +25,7 @@ try {
   await page.locator('#overview').click();assert.equal(await page.locator('#mode').innerText(),'自由閱讀');await page.locator('#map-toggle').click();await page.locator('#mode').click();assert.equal(await page.locator('#mode').innerText(),'故事探索');
   await page.evaluate(()=>window.immersive.visit('2026-14',null,false));await page.locator('#interact').click();
   assert.equal(await page.locator('#game-controls select').count(),5);await page.getByRole('button',{name:'把資訊放上證據桌'}).click();
-  await page.locator('#game-after:not([hidden])').waitFor();await page.locator('#compare').click();assert.match(await page.locator('#game-result').innerText(),/選擇前/);await page.keyboard.press('Escape');
+  await page.locator('#game-after:not([hidden])').waitFor();await page.locator('#compare').click();assert.match(await page.locator('#game-impact').innerText(),/選擇前/);await page.keyboard.press('Escape');
   const games=[
    ['2026-03','保留待查，補足依據'],['2026-07','依照我的條件比較'],['2026-10','停下來排出「先問人，再問 AI」'],['2026-11','把這段回憶留在廣場'],['2026-12','查看條件與推論邊界'],['2026-14','把資訊放上證據桌'],['2026-17','修復這一段旅程'],['2026-20','把資訊放上證據桌'],['2026-22','啟動協作'],
   ];
@@ -34,7 +34,7 @@ try {
    if(id==='2026-11')await page.getByRole('button',{name:'翻看舊票根',exact:true}).click();
    await page.getByRole('button',{name:action,exact:true}).click();
    if(id==='2026-10'){await page.getByRole('button',{name:'轉身後回想',exact:true}).click();await page.getByRole('button',{name:'先問人，再問 AI',exact:true}).click();}
-   await page.locator('#game-after:not([hidden])').waitFor();assert.ok((await page.locator('#game-result').innerText()).length>20);await page.locator('#game-evidence summary').click();assert.ok((await page.locator('#game-evidence').innerText()).includes('觀點來源'));
+   await page.locator('#game-after:not([hidden])').waitFor();assert.ok((await page.locator('#game-result').textContent()).length>20);await page.locator('#game-full-result > summary').click();await page.locator('#game-evidence summary').click();assert.ok((await page.locator('#game-evidence').innerText()).includes('觀點來源'));
    const after=await page.evaluate(()=>window.immersive.world.getState().interaction);assert.ok(after.outcomeObjectCount>0,`${id} choice creates visible scene objects`);await page.locator('#replay').click();assert.equal(await page.evaluate(()=>window.immersive.world.getState().interaction.baselineRestored),true,`${id} replay restores original scene`);await page.keyboard.press('Escape');
   }
   assert.equal(await page.evaluate(()=>new Set(window.immersive.progress.stamps).size),10,'all ten insight footprints are collectible');
