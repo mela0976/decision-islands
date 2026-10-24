@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v7';
+const CACHE_VERSION = 'v8';
 const MAX_CACHE_ENTRIES = 80;
 const scopePath = new URL(self.registration.scope).pathname;
 const scopeKey = encodeURIComponent(scopePath);

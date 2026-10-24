@@ -124,3 +124,13 @@ throughput checkpoint。先驗三個代表動作，再回歸既有 68 選項，�
 本切片依 Model the Domain 將道具 owner 與事件階段集中管理。how 與 architect 的架構梳理在本葉節點內完成，遵守當次禁止再委派，不執行 arena。已讀 technical-writing、unslop 與 no-comments，新增程式沒有敘述階段的註解。當次安裝範圍找不到可選 deslop 技能，未宣稱完成該外掛審查。原刊來源與虛構改編標示保留。
 
 全島戲劇自然度、全身碰撞、M05 水下藝術、實體裝置與其他 GPU 的畫面表現仍待逐幕審查。本切片不等於 22 島完整藝術校稿。
+
+## 2026-10-24 三層 LOD 與延後建立切片 A
+
+22 島的島基與核心輪廓先建立。距目前或航行目的地 36 單位內的非當前島，使用核心形狀與四個簡化建物元件。只有當前與航行目標建立完整 authored scene，已建完整場景保留供返島使用。推薦與 hover 使用低階 landmark，不會順帶建滿三個推薦目標。島名 Canvas 貼圖於首次可見時建立，字型載入、完整文章、人物與原有裝置座標保留。
+
+`node tests/immersive-world-quality-lod.mjs` 在 source Vite、1280×800、Chromium SwiftShader 通過。初始實讀為 1 full、1 simplified、20 silhouette，只有 1 島完成完整建立。推薦與 preview 不增加完整建立數，開始航行即準備第 2 島。取消、略過、重訪的完成結果、重玩 baseline、全部 22 島進入與二次 dispose 均通過。最終 dispose 後持有的 geometry、material、texture 均為 0。證據保存在 `test-results/immersive-world-quality/lod.json`。這份 fixture 不作效能測量或 built 驗收。
+
+兩層 worker 更新為 `2026-10-24.12` 與 `v8`。`node --test tests/immersive-cache.test.mjs` 的 9 項通過。built、root cache 邊界、斷網與相同條件三次手機效能比較由主協調者在凍結 A commit 隔離建置後驗收。
+
+本切片依 Model the Domain，以 island 的 prepared baseline 和互斥 LOD 群組集中生命週期。Sequence work into verifiable units 使 A 凍結後才開始場景改動 B。Test Behavior, Not Implementation 使 fixture 透過公開 world API 驗證可見層級、返回結果與釋放。葉節點內完成 how 與 architect 梳理，不再委派或執行 arena。當次查無可選 deslop 外掛，沒有宣稱完成其審查。
