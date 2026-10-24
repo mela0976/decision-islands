@@ -1,4 +1,5 @@
 import './reading-journey.css';
+import { createMissionStage } from './mission-stage';
 import type { JourneyAudience, JourneyAudienceId, JourneyConnectionKind, JourneyPersona, JourneyQuestion, JourneyStep, ReadingJourneys } from './journey-types';
 import type { Article } from './types';
 
@@ -24,6 +25,7 @@ export interface ReadingJourneyUI {
   setData(data: ReadingJourneys, articles: readonly Article[]): void;
   setCompleted(ids: readonly string[]): void;
   setActive(active: boolean): void;
+  setMotion(enabled: boolean): void;
   showPicker(): void;
   getNextArticle(id: string): string | null;
   getContext(id: string): ReadingJourneyContext | null;
@@ -109,6 +111,9 @@ export function createReadingJourneyUI(
   root.className = 'reading-journey-ui';
   root.hidden = true;
   host.append(root);
+  const stageHost = document.createElement('div');
+  stageHost.className = 'journey-stage-host';
+  const stage = createMissionStage(stageHost, language);
 
   const picker = document.createElement('dialog');
   picker.id = 'journey-picker';
@@ -156,6 +161,7 @@ export function createReadingJourneyUI(
   function setPickerOpen(open: boolean, restoreFocus: boolean): void {
     pickerOpen = open;
     if (open) {
+      stage.setActive(false);
       if (!picker.open) picker.showModal();
       return;
     }
@@ -360,33 +366,46 @@ export function createReadingJourneyUI(
     }).join('');
     const answeredCount = question.steps.filter(value => value.mission && answers.get(value.mission.id)?.kind === 'answered').length;
     const feedback = choice ? `<section class="journey-mission-feedback" data-choice-id="${html(choice.id)}" aria-labelledby="journey-feedback-title" tabindex="-1" role="region"><p class="journey-mission-eyebrow">${html(zh ? '本站情境推演' : 'Site-created scenario')}</p><h3 id="journey-feedback-title">${html(zh ? '你選擇的行動' : 'Your chosen action')}</h3><strong>${html(localized(choice.label))}</strong><p><b>${html(zh ? '可能帶來的影響' : 'Possible effect')}</b>${html(localized(choice.outcome))}</p><p><b>${html(zh ? '需要承擔的代價' : 'Cost to accept')}</b>${html(localized(choice.tradeoff))}</p><div class="journey-mission-takeaway"><b>${html(zh ? '帶到下一輪的提醒' : 'Carry into your next decision')}</b><p>${html(localized(mission.takeaway))}</p></div><p class="journey-mission-attribution">${html(zh ? '本站策展連結' : 'Editorial connection')} · ${html(localized(step.reason))}</p></section>` : '';
-    root.innerHTML = `<aside class="journey-rail journey-mission" data-mission-id="${html(mission.id)}" aria-labelledby="journey-rail-title"><header class="journey-rail-header"><div class="journey-mission-role"><span class="journey-role-icon" aria-hidden="true">${html(persona.icon)}</span><div><p class="journey-rail-kicker">${html(zh ? '角色任務桌' : 'Your mission desk')}</p><p class="journey-rail-persona">${html(localized(persona.title))}</p></div></div><div class="journey-rail-actions"><button class="journey-rail-action" type="button" data-action="change-question" data-change-role="true">${html(words('switchQuestion'))}</button><button class="journey-rail-close" type="button" data-action="free-explore" data-free-explore="true" aria-label="${html(words('closeRail'))}">×</button></div></header>
+    const play = mission.visual ? `<div class="journey-mission-play"><section class="journey-mission-visual" aria-label="${html(zh ? '可變化的情境場景' : 'Interactive scenario scene')}"><div data-mission-stage-mount></div></section><section class="journey-mission-controls" aria-label="${html(zh ? '這輪的行動選擇' : 'Actions for this round')}"><h3 class="journey-mission-goal">${html(localized(mission.goal))}</h3><div class="journey-mission-choices" role="group" aria-label="${html(zh ? '選擇你的行動' : 'Choose your action')}">${mission.choices.map((option, index) => `<button type="button" class="journey-mission-choice${option.id === choice?.id ? ' is-selected' : ''}" data-action="mission-choice" data-mission-choice="${html(option.id)}" aria-pressed="${option.id === choice?.id}"><span aria-hidden="true">${String.fromCharCode(65 + index)}</span><strong>${html(localized(option.label))}</strong></button>`).join('')}</div></section></div><details class="journey-mission-story"><summary>${html(zh ? '任務情境與前輪方案' : 'Scenario and earlier decisions')}</summary><p class="journey-mission-scene">${html(localized(mission.scene))}</p>${previous ? `<div class="journey-mission-condition"><b>${html(zh ? '你目前方案的條件' : 'Conditions from your plan so far')}</b><ul>${previous}</ul></div>` : ''}</details>` : `<div class="journey-mission-brief"><p class="journey-mission-eyebrow">${html(zh ? `第 ${selection.stepIndex + 1} 輪 · 本站虛構情境` : `Round ${selection.stepIndex + 1} · Fictional scenario`)}</p>${previous ? `<div class="journey-mission-condition"><b>${html(zh ? '你目前方案的條件' : 'Conditions from your plan so far')}</b><ul>${previous}</ul></div>` : ''}<h3 class="journey-mission-goal">${html(localized(mission.goal))}</h3><p class="journey-mission-scene">${html(localized(mission.scene))}</p></div>
+      <div class="journey-mission-choices" role="group" aria-label="${html(zh ? '選擇你的行動' : 'Choose your action')}">${mission.choices.map((option, index) => `<button type="button" class="journey-mission-choice${option.id === choice?.id ? ' is-selected' : ''}" data-action="mission-choice" data-mission-choice="${html(option.id)}" aria-pressed="${option.id === choice?.id}"><span aria-hidden="true">${String.fromCharCode(65 + index)}</span><strong>${html(localized(option.label))}</strong></button>`).join('')}</div>`;
+    root.innerHTML = `<aside class="journey-rail journey-mission${mission.visual ? ' has-stage' : ''}" data-mission-id="${html(mission.id)}" aria-labelledby="journey-rail-title"><header class="journey-rail-header"><div class="journey-mission-role"><span class="journey-role-icon" aria-hidden="true">${html(persona.icon)}</span><div><p class="journey-rail-kicker">${html(zh ? '角色任務桌' : 'Your mission desk')}</p><p class="journey-rail-persona">${html(localized(persona.title))}</p></div></div><div class="journey-rail-actions"><button class="journey-rail-action" type="button" data-action="change-question" data-change-role="true">${html(words('switchQuestion'))}</button><button class="journey-rail-close" type="button" data-action="free-explore" data-free-explore="true" aria-label="${html(words('closeRail'))}">×</button></div></header>
       <div class="journey-rail-content"><h2 id="journey-rail-title" tabindex="-1">${html(localized(question.title))}</h2><nav class="journey-step-markers" aria-label="${html(zh ? '三輪決策，可自由跳轉' : 'Decision rounds, jump freely')}">${markers}</nav>
-      <section class="journey-current-step" data-step-current="${selection.stepIndex}"><div class="journey-mission-brief"><p class="journey-mission-eyebrow">${html(zh ? `第 ${selection.stepIndex + 1} 輪 · 本站虛構情境` : `Round ${selection.stepIndex + 1} · Fictional scenario`)}</p>${previous ? `<div class="journey-mission-condition"><b>${html(zh ? '你目前方案的條件' : 'Conditions from your plan so far')}</b><ul>${previous}</ul></div>` : ''}<h3 class="journey-mission-goal">${html(localized(mission.goal))}</h3><p class="journey-mission-scene">${html(localized(mission.scene))}</p></div>
-      <div class="journey-mission-choices" role="group" aria-label="${html(zh ? '選擇你的行動' : 'Choose your action')}">${mission.choices.map((option, index) => `<button type="button" class="journey-mission-choice${option.id === choice?.id ? ' is-selected' : ''}" data-action="mission-choice" data-mission-choice="${html(option.id)}" aria-pressed="${option.id === choice?.id}"><span aria-hidden="true">${String.fromCharCode(65 + index)}</span><strong>${html(localized(option.label))}</strong></button>`).join('')}</div>
+      <section class="journey-current-step" data-step-current="${selection.stepIndex}">${play}
       <p class="journey-mission-live" role="status" aria-live="polite">${html(choice ? (zh ? '已記錄這輪選擇，以下是影響與代價。' : 'Choice recorded. Effects and costs follow.') : answer?.kind === 'skipped' ? (zh ? '這輪已略過，仍可重新選擇。' : 'Round skipped. You can still choose an action.') : '')}</p>${feedback}
       ${choice ? `<div class="journey-mission-tools"><button class="journey-secondary-button" type="button" data-action="mission-compare" data-mission-compare aria-expanded="${compareMissionId === mission.id}">${html(zh ? '比較其他做法' : 'Compare alternatives')}</button><button class="journey-rail-action" type="button" data-action="mission-retry" data-mission-retry>${html(zh ? '重做這一輪' : 'Retry this round')}</button></div>` : ''}
       ${choice && compareMissionId === mission.id ? `<section class="journey-mission-comparison" aria-label="${html(zh ? '其他做法的取捨' : 'Alternative trade-offs')}">${mission.choices.filter(option => option.id !== choice.id).map(option => `<article><h3>${html(localized(option.label))}</h3><p>${html(localized(option.outcome))}</p><p><b>${html(zh ? '代價' : 'Cost')} · </b>${html(localized(option.tradeoff))}</p><button type="button" class="journey-secondary-button" data-action="mission-choice" data-mission-choice="${html(option.id)}" data-mission-adopt>${html(zh ? '改選這個做法' : 'Choose this instead')}</button></article>`).join('')}</section>` : ''}
       ${article ? `<details class="journey-mission-source"><summary>${html(zh ? '選讀原文，看看這輪的策展來源' : 'Optional source reading')}</summary><p class="journey-mission-eyebrow">${html(zh ? '本站策展連結' : 'Editorial connection')}</p><p>${html(localized(step.reason))}</p><h3>${html(article.title)}</h3>${choice ? `<div class="journey-insight"><span>${html(words('articleLabel'))}</span><p>${html(article.summary)}</p></div>` : ''}<button class="journey-secondary-button" type="button" data-action="read-current" data-read-article="${html(article.id)}">${html(words('readArticle'))} ↗</button></details>` : ''}
       <details class="journey-mission-help"><summary>${html(zh ? '玩法與保存方式' : 'How it works and saving')}</summary><p class="journey-mission-session">${html(zh ? '選擇只留在這次開啟的頁面；重新載入會清除。情境與選項為本站設計；沒有標準答案，文章可隨時選讀。' : 'Choices remain only in this open page and clear on reload. Scenarios and choices are designed by this site. There is no correct answer. Source reading is optional.')}</p></details>${selection.stepIndex === question.steps.length - 1 ? `<section class="journey-mission-plan" aria-labelledby="journey-plan-title"><p class="journey-mission-eyebrow">${html(zh ? '你的三輪決策' : 'Your decisions')}</p><h3 id="journey-plan-title">${html(zh ? '我的處理方案' : 'My action plan')}</h3><p>${html(zh ? `已選擇 ${answeredCount} / ${question.steps.length} 輪；${answeredCount === question.steps.length ? '可回頭比較或重做。' : '未選擇的部分仍待決定。'}` : `${answeredCount} of ${question.steps.length} rounds answered. Unanswered slots remain open.`)}</p><ol>${plan}</ol><button type="button" class="journey-secondary-button" data-action="mission-restart" data-mission-restart>${html(zh ? '重新走這個任務' : 'Replay this mission')}</button></section>` : ''}</section></div>
       <footer class="journey-rail-footer">${selection.stepIndex + 1 < question.steps.length ? `<button type="button" class="journey-primary-button" data-action="advance" ${choice ? '' : 'disabled'}>${html(zh ? '帶著方案進下一輪' : 'Take the plan to the next round')} →</button><button type="button" class="journey-next-button" data-action="mission-skip">${html(zh ? '略過這輪，稍後再決定' : 'Skip this round for now')}</button>` : `<button type="button" class="journey-primary-button" data-action="mission-plan">${html(zh ? '查看我的處理方案' : 'View my action plan')}</button><button type="button" class="journey-next-button" data-action="change-question">${html(zh ? '試另一個任務' : 'Try another mission')}</button>`}</footer></aside>`;
+    if (mission.visual) {
+      root.querySelector('[data-mission-stage-mount]')?.append(stageHost);
+      stage.setActive(active && !pickerOpen);
+      stage.update({ key: `${data?.bookId}/${data?.year}/${mission.id}`, definition: mission.visual,
+        choiceId: choice?.id ?? null,
+        previewChoiceId: compareMissionId === mission.id ? mission.choices.find(option => option.id !== choice?.id)?.id ?? null : null });
+    } else stage.setActive(false);
+
   }
 
   function renderRail(): void {
+    stageHost.remove();
     if (!active || view.kind !== 'rail') {
+      stage.setActive(false);
       root.innerHTML = '';
       return;
     }
-    if (pickerOpen) return;
+    if (pickerOpen) { stage.setActive(false); return; }
     const selection = view.selection;
     const persona = personaFor(selection.personaId);
     const question = questionFor(selection.personaId, selection.questionId);
     const step = question?.steps[selection.stepIndex];
     if (!persona || !question || !step) {
+      stage.setActive(false);
       root.innerHTML = '';
       return;
     }
     if (step.mission) { renderMission(persona, question, step, selection); return; }
+    stage.setActive(false);
     const article = articlesById.get(step.articleId);
     const hasNext = selection.stepIndex + 1 < question.steps.length;
     const markers = question.steps.map((journeyStep, index) => {
@@ -460,11 +479,11 @@ export function createReadingJourneyUI(
         answers.set(mission.id, { kind: 'answered', choiceId: choiceId! });
         compareMissionId = null;
         renderRail();
-        root.querySelector<HTMLElement>('.journey-mission-feedback')?.focus();
+        root.querySelector<HTMLElement>('.journey-mission-feedback')?.focus({ preventScroll: true });
       } else if (action === 'mission-compare') {
         compareMissionId = compareMissionId === mission.id ? null : mission.id;
         renderRail();
-        root.querySelector<HTMLElement>('[data-mission-compare]')?.focus();
+        root.querySelector<HTMLElement>('[data-mission-compare]')?.focus({ preventScroll: true });
       } else if (action === 'mission-retry') {
         answers.delete(mission.id);
         compareMissionId = null;
@@ -689,6 +708,7 @@ export function createReadingJourneyUI(
       root.hidden = !active;
       renderRail();
     },
+    setMotion(enabled) { stage.setMotion(enabled); },
     showPicker() {
       openPicker('audiences');
     },
@@ -699,6 +719,8 @@ export function createReadingJourneyUI(
     syncArticle,
     advance,
     dispose() {
+      stage.dispose();
+      stageHost.remove();
       if (picker.open) picker.close();
       pickerOpen = false;
       root.removeEventListener('click', handleClick);

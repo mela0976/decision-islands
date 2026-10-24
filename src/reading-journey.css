@@ -1149,3 +1149,33 @@
     transition-duration: .01ms !important;
   }
 }
+
+.journey-mission.has-stage {
+  bottom: 24px;
+  max-height: calc(100svh - 170px);
+  width: min(1120px, calc(100vw - 56px));
+}
+.journey-mission-play { align-items: start; display: grid; gap: 24px; grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr); }
+.journey-mission-visual, .journey-mission-controls, .journey-stage-host { min-width: 0; }
+.journey-mission-controls .journey-mission-choices { margin-top: 16px; }
+.journey-mission-controls .journey-mission-goal { line-height: 1.6; }
+.journey-mission-story { border-bottom: 1px solid var(--journey-border); font-size: 13px; margin: 12px 0; }
+.journey-mission-story > summary { align-content: center; cursor: pointer; min-height: 44px; color: var(--journey-secondary-ink); }
+.journey-mission-story > p { line-height: 1.8; }
+.journey-mission.has-stage .journey-step-markers { margin: 10px 0 14px; }
+.journey-mission.has-stage .journey-rail-content > h2 { font-size: 22px; }
+@media (max-width: 760px) {
+  .journey-mission.has-stage { bottom: 12px; max-height: calc(100svh - 130px); width: calc(100vw - 24px); }
+  .journey-mission.has-stage .journey-rail-header { padding: 8px 12px; }
+  .journey-mission.has-stage .journey-rail-content { padding: 8px 12px 16px; }
+  .journey-mission-play { display: flex; flex-direction: column; gap: 10px; }
+  .journey-mission-visual, .journey-mission-controls { width: 100%; }
+  .journey-mission.has-stage .journey-step-markers { margin: 0 0 8px; gap: 8px; }
+  .journey-mission.has-stage .journey-step-marker { min-height: 44px; }
+  .journey-mission.has-stage .journey-rail-footer { grid-template-columns: 1fr 1fr; padding: 8px 12px; }
+  .journey-mission.has-stage .journey-rail-footer > button { font-size: 11px !important; padding: 7px 9px; }
+  .journey-mission-controls .journey-mission-choices { gap: 8px; margin-top: 10px; }
+  .journey-mission-controls .journey-mission-choice { align-items: center; min-height: 52px; padding: 9px 12px; }
+  .journey-mission-controls .journey-mission-choice strong { font-size: 13px; line-height: 1.5; }
+  .journey-mission-controls h3.journey-mission-goal { font-size: 16px; line-height: 1.5; margin-bottom: 0; }
+}

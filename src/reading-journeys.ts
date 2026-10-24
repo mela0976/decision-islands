@@ -1,6 +1,8 @@
 import type { Edition } from './types';
 import type { I18nText, JourneyAudienceId, JourneyConnectionKind, JourneyDefinition, JourneyPersonaDefinition, JourneyQuestionDefinition, JourneyStepDefinition, ReadingJourneys } from './journey-types';
 import { MISSION_ROUNDS } from './journey-mission-content';
+import { MISSION_VISUALS } from './mission-visual-content';
+import { validateMissionVisual } from './mission-visual-validation';
 
 const t = (zh: string, en: string): I18nText => ({ zh, en });
 const step = (articleOrder: number, prompt: I18nText, reason: I18nText, kind?: JourneyConnectionKind, explanation?: I18nText): JourneyStepDefinition => ({
@@ -125,7 +127,12 @@ export const JOURNEY_2026: JourneyDefinition = {
     questions: role.questions.map(concern => {
       const rounds = MISSION_ROUNDS[concern.id];
       if (!rounds || rounds.length !== concern.steps.length) throw new Error('curated mission rounds must match the reading route');
-      return { ...concern, steps: concern.steps.map((entry, index) => ({ ...entry, mission: rounds[index] })) };
+      return { ...concern, steps: concern.steps.map((entry, index) => {
+        const mission = rounds[index];
+        const visual = MISSION_VISUALS[mission.id];
+        if (!visual) throw new Error('curated mission needs a visual scene');
+        return { ...entry, mission: { ...mission, visual } };
+      }) };
     }),
   })),
 };
@@ -191,6 +198,7 @@ export function buildReadingJourneys(edition: Edition, config?: JourneyDefinitio
             checkId(choice.id, choiceIds);
             checkText(choice.label); checkText(choice.outcome); checkText(choice.tradeoff);
           }
+          if (mission.visual) validateMissionVisual(mission.visual, mission.choices.map(choice => choice.id));
         }
         if ((entry.articleId === undefined) === (entry.articleOrder === undefined)) throw new Error('provide exactly one article reference');
         if (entry.articleOrder !== undefined && !Number.isInteger(entry.articleOrder)) throw new Error('invalid journey article order');

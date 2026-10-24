@@ -114,3 +114,12 @@ test('titles and entity labels have both language versions', () => {
     }
   }
 });
+
+test('calibration has a manager and limited shopping authority has a visible stop control', () => {
+  const calibration = MISSION_VISUALS['reliable-delivery-1'];
+  for (const frame of framesFor(calibration)) assert.ok(frame.entities.some(entity => entity.id === 'manager' && entity.kind === 'adult'));
+  assert.ok(calibration.choices.b.flows.some(link => link.from === 'manager' && link.to === 'screen' && link.kind === 'review'));
+  const shopping = MISSION_VISUALS['shopping-help-2'];
+  for (const frame of framesFor(shopping)) assert.ok(frame.entities.some(entity => entity.id === 'stop-control' && entity.kind === 'stop'));
+  assert.ok(shopping.choices.b.flows.some(link => link.from === 'stop-control' && link.to === 'robot' && link.kind === 'pause'));
+});

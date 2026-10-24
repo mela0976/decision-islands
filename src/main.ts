@@ -193,6 +193,7 @@ function openArticle(id: string, updateHash = true) {
   $('#return-journey')?.addEventListener('click', closeReader);
   document.querySelectorAll<HTMLElement>('[data-related]').forEach(b=>b.onclick=()=>{activePath=null;openArticle(b.dataset.related!);});
   if (!reader.open) { lastFocus = document.activeElement as HTMLElement; reader.showModal(); }
+  journeyUI?.setMotion(false);
   reader.scrollTop = 0; $('#reader-title').setAttribute('tabindex','-1'); $('#reader-title').focus({preventScroll:true});
   $('#reading-progress-fill').style.width='0%';
   if (updateHash) history.pushState({article:a.id},'',`#read/${a.id}`);
@@ -200,6 +201,7 @@ function openArticle(id: string, updateHash = true) {
 
 function closeReader() {
   reader.close();
+  journeyUI?.setMotion(motion);
   if (location.hash.startsWith('#read/')) history.replaceState(null,'',location.pathname+location.search);
   const original = lastFocus?.isConnected && lastFocus.tabIndex>=0 && !reader.contains(lastFocus) ? lastFocus : state.last ? document.querySelector<HTMLElement>(`[data-article="${CSS.escape(state.last)}"]`) : null;
   if (original && !original.closest('[inert]')) original.focus();
@@ -250,6 +252,7 @@ function syncExplorer() {
   explorerState.completedArticleIds = [...state.completed];
   explorerState.bookmarkedArticleIds = [...state.bookmarks];
   motion = !explorerState.reducedMotion && !explorerState.paused;
+  journeyUI?.setMotion(motion && !reader.open);
   world?.setState(explorerState);
   world?.setMotion(motion);
   explorerUI?.render(explorerState);

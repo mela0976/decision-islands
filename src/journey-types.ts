@@ -1,4 +1,5 @@
 import type { I18nText } from './explorer-types';
+import type { MissionVisualDefinition } from './mission-stage-types';
 
 export type { I18nText } from './explorer-types';
 export type JourneyAudienceId = 'marketing' | 'everyday';
@@ -22,6 +23,7 @@ export interface JourneyMission {
   goal: I18nText;
   choices: readonly JourneyMissionChoice[];
   takeaway: I18nText;
+  visual?: MissionVisualDefinition;
 }
 export interface JourneyStep {
   articleId: string;

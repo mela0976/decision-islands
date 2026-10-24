@@ -37,7 +37,9 @@ try {
     const chrome = await page.locator('.masthead').boundingBox();
     const task = await page.locator('.journey-mission').boundingBox();
     assert.ok(task.y >= chrome.y + chrome.height, 'the task header stays below the global controls');
+    await page.locator('.journey-mission-story summary').click();
     const initialScene = await page.locator('.journey-mission-scene').innerText();
+    await page.locator('.journey-mission-story summary').click();
     assert.ok(initialScene.length > 15);
     assert.equal(await page.locator('.journey-insight:visible').count(), 0, 'scenario precedes the article summary');
     assert.equal(await page.locator('.journey-mission-choices [data-mission-choice]').count(), 2);
@@ -64,7 +66,9 @@ try {
     await page.locator('#next-article').click();
     assert.equal(await page.locator('#reader[open]').count(), 0, 'reader next returns to the next situation');
     assert.equal(await page.locator('.journey-current-step').getAttribute('data-step-current'), '1');
+    await page.locator('.journey-mission-story summary').click();
     assert.ok((await page.locator('.journey-mission-condition').innerText()).includes(chosenB));
+    await page.locator('.journey-mission-story summary').click();
     await page.locator('[data-action="mission-skip"]').click();
     await page.locator('.journey-mission-choices [data-mission-choice="a"]').click();
     await page.locator('[data-action="mission-plan"]').click();
@@ -89,7 +93,7 @@ try {
     await page.locator('[data-mission-retry]').click();
     assert.equal(await page.locator('.journey-mission-feedback').count(), 0);
     await pick(page, 'everyday', 'family');
-    assert.notEqual(await page.locator('.journey-mission-scene').innerText(), initialScene);
+    assert.notEqual(await page.locator('.journey-mission-scene').textContent(), initialScene);
     assert.equal(await page.locator('.journey-mission-feedback').count(), 0, 'another role has its own answers');
     await page.screenshot({ path: `test-results/mission-scene-${width}.png` });
     results.push(`${width}px: concrete scenario, keyboard choice, distinct feedback, nonmutating comparison/adoption, previous plan conditions, source reader next, skips, 3-round plan, replay, retry, role isolation and holiday retention`);
@@ -122,7 +126,7 @@ try {
       await pick(page, route.audience, route.role, route.question);
       for (let index = 0; index < 3; index++) {
         ids.add(await page.locator('.journey-mission').getAttribute('data-mission-id'));
-        scenes.add(await page.locator('.journey-mission-scene').innerText());
+        scenes.add(await page.locator('.journey-mission-scene').textContent());
         await page.locator('.journey-mission-choices [data-mission-choice="a"]').click();
         assert.ok((await page.locator('.journey-mission-feedback').innerText()).length > 50);
         if (index < 2) await page.locator('[data-action="advance"]').click();
@@ -138,7 +142,7 @@ try {
     await pick(ep, 'everyday', 'newcomer');
     await ep.locator('.journey-mission-choices [data-mission-choice="a"]').click();
     assert.match(await ep.locator('.journey-mission-feedback').innerText(), /Possible effect/);
-    assert.doesNotMatch(await ep.locator('.journey-mission-scene').innerText(), /[\u4e00-\u9fff]/);
+    assert.doesNotMatch(await ep.locator('.journey-mission-scene').textContent(), /[\u4e00-\u9fff]/);
     await ep.reload();
     await ep.locator('.article-row').first().waitFor({ state: 'attached' });
     await pick(ep, 'everyday', 'newcomer');
