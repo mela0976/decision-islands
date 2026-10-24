@@ -268,6 +268,122 @@ const SCENE_CATALOG = [
   },
 ];
 
+const scenarioVisualEffect = (propId, action, reactionText, actorId = null) => ({ propId, action, reactionText, ...(actorId ? { actorId } : {}) });
+const SCENARIO_VISUAL_EFFECTS = {
+  I01: {
+    speed: scenarioVisualEffect('completed-draft', 'stack', '阿綺把完成稿疊在左側，價值表仍空白。'),
+    customer: scenarioVisualEffect('user-question', 'center', '阿綺把使用者問題卡推到桌面中央。'),
+    risk: scenarioVisualEffect('source-responsibility', 'pair', '映蓁把來源卡與責任卡放在提案旁。', 'yingzhen'),
+  },
+  I02: {
+    survey: scenarioVisualEffect('research-record', 'place', '調查卡放到橋的研究端。'),
+    contact: scenarioVisualEffect('delivery-record', 'stack', '送達紀錄疊高，對岸的人仍停下。'),
+    conversation: scenarioVisualEffect('bridge-question', 'connect', '阿綺和小岳走到橋兩端，面向彼此。'),
+  },
+  P01: {
+    creator: scenarioVisualEffect('photo-source', 'flip', '映蓁翻開照片背面的來源欄。'),
+    reverse: scenarioVisualEffect('version-pair', 'compare', '兩個影像版本並列，差異留在桌面。'),
+    label: scenarioVisualEffect('generation-tag', 'reveal', '映蓁揭開生成標記，待核對卡保留。'),
+  },
+  P02: {
+    discover: scenarioVisualEffect('entry-sign', 'turn', '入口資訊牌轉向街口。'),
+    trust: scenarioVisualEffect('use-conditions', 'exchange', '芬姐把使用條件交給顧客。'),
+    culture: scenarioVisualEffect('culture-table', 'gather', '顧客走到可參與的街角桌。'),
+  },
+  P03: {
+    positioning: scenarioVisualEffect('positioning-card', 'center', '定位卡放在策略工作台中央。'),
+    value: scenarioVisualEffect('product-question-pair', 'compare', '商品價值和使用者疑問並列。'),
+    culture: scenarioVisualEffect('culture-journey-marker', 'connect', '文化情境卡接到旅程節點。'),
+  },
+  P04: {
+    'three-sources': scenarioVisualEffect('source-triad', 'line-up', '三張獨立來源卡並排。'),
+    counterparty: scenarioVisualEffect('counterview-card', 'opposite', '相反立場卡放到證據桌另一側。'),
+    hold: scenarioVisualEffect('verification-tray', 'pause', '稿件留在待查盤，發布欄杆不動。'),
+  },
+  P05: {
+    value: scenarioVisualEffect('price-use-tag', 'face', '價格和用途標籤朝向小岳。'),
+    emotion: scenarioVisualEffect('life-photo', 'photo', '小岳翻看商品旁的生活照片。'),
+    context: scenarioVisualEffect('availability-sign', 'front', '芬姐把取得時間與服務條件放到貨架前。'),
+  },
+  P06: {
+    song: scenarioVisualEffect('stage-chorus', 'sing', '小岳停步面向舞台，附近人群一起抬頭。'),
+    cheer: scenarioVisualEffect('cheer-card', 'exchange', '小岳和阿綺交換應援卡。'),
+    place: scenarioVisualEffect('shared-stands', 'gather', '人群停在看台前，不再繞場。'),
+    story: scenarioVisualEffect('story-photo', 'retell', '小岳拿著照片面向阿綺重述經驗。'),
+  },
+  P07: {
+    detail: scenarioVisualEffect('usage-steps', 'open', '手機使用步驟卡展開。'),
+    source: scenarioVisualEffect('experience-source', 'flip', '留言者經驗卡翻面，來源欄朝上。'),
+    balance: scenarioVisualEffect('pros-limits', 'pair', '優點卡與限制卡並列在桌上。'),
+  },
+  P08: {
+    glance: scenarioVisualEffect('moving-signal', 'pass', '小岳經過看板，繼續往前走。'),
+    watch: scenarioVisualEffect('watch-marker', 'linger', '小岳停在看板前觀看。'),
+    join: scenarioVisualEffect('experience-board', 'move', '小岳走到攤位，親手移動文字板。'),
+  },
+  P09: {
+    music: scenarioVisualEffect('radio-common-song', 'listen', '收音機響起，兩代居民停下來。'),
+    show: scenarioVisualEffect('theatre-screen', 'open', '劇場布幕拉開，居民面向螢幕。'),
+    sport: scenarioVisualEffect('ticket-cheer', 'exchange', '票根放上共看桌，兩人交換應援。'),
+    talk: scenarioVisualEffect('shared-photo', 'retell', '兩人面對彼此，照片移向桌面。'),
+  },
+  M01: {
+    'new-category': scenarioVisualEffect('blank-sample-slot', 'empty', '新產品卡旁留著空白樣本槽。'),
+    'known-market': scenarioVisualEffect('package-interview-pair', 'compare', '兩個包裝方案和訪談卡並列。'),
+    'social-shift': scenarioVisualEffect('stale-scenario-card', 'flip', '舊情境卡翻面，待更新標記露出。'),
+  },
+  M02: {
+    video: scenarioVisualEffect('video-viewer', 'open', '影音裝置展開，觀看刻度亮起。'),
+    search: scenarioVisualEffect('search-question', 'present', '搜尋桌出現一張問題卡。'),
+    experience: scenarioVisualEffect('experience-table', 'gather', '體驗桌移到地圖節點，人物靠近。'),
+  },
+  M03: {
+    observed: scenarioVisualEffect('observation-record', 'place', '原始觀察紀錄放到天平左側。'),
+    estimated: scenarioVisualEffect('assumption-estimate', 'connect', '估計卡連上假設卡，兩者分開可見。'),
+    unknown: scenarioVisualEffect('unknown-tray', 'empty', '未解問題留在空盤，沒有補成證據。'),
+  },
+  M04: {
+    compare: scenarioVisualEffect('comparison-limit-sign', 'open', '比較牌翻開，限制欄朝向顧客。'),
+    simplify: scenarioVisualEffect('removed-step-board', 'clear', '多餘步驟板移出行進路徑。'),
+    assist: scenarioVisualEffect('service-guide', 'assist', '芬姐到顧客旁，指向下一個服務站。'),
+  },
+  M05: {
+    fear: scenarioVisualEffect('employee-concern', 'surface', '顧慮卡從水面下翻出，芬姐停下聆聽。'),
+    guidance: scenarioVisualEffect('next-step-sheet', 'center', '空白工作表放在桌面，阿綺提出下一步。', 'achi'),
+    silo: scenarioVisualEffect('department-halves', 'split', '水面下兩部門各拿半份資訊，連線停在界線。'),
+  },
+  A01: {
+    'before-pay': scenarioVisualEffect('checkout-info-board', 'face', '顧客在結帳資訊板前核對條件。'),
+    'after-order': scenarioVisualEffect('delivery-parcel', 'deliver', '包裹和配送、退貨單移到服務窗口。'),
+    support: scenarioVisualEffect('service-ticket', 'assist', '芬姐走到顧客旁接過服務單。'),
+  },
+  A02: {
+    draft: scenarioVisualEffect('task-ledger', 'open', '草稿停在透明任務桌，來源卡可見。'),
+    recommend: scenarioVisualEffect('recommendation-pair', 'compare', '兩個建議和限制卡並列等候核對。'),
+    execute: scenarioVisualEffect('progress-log', 'reveal', '進度板翻出，缺漏版本標成待確認。'),
+  },
+  A03: {
+    facts: scenarioVisualEffect('answer-source-plate', 'place', '答案花園展開來源牌。'),
+    voice: scenarioVisualEffect('brand-story-card', 'foreground', '品牌圖形和故事牌移到答案前景。'),
+    experience: scenarioVisualEffect('claim-use-pair', 'compare', '宣稱卡與實際使用卡並列核對。'),
+  },
+  A04: {
+    brief: scenarioVisualEffect('spec-check-stack', 'compare', '素材疊在任務規格旁比較。'),
+    brand: scenarioVisualEffect('brand-rework-tray', 'move', '不合語氣的素材移到修改盤。'),
+    reviewer: scenarioVisualEffect('approval-source-card', 'place', '來源卡與核准卡放在成品前。'),
+  },
+  A05: {
+    adapt: scenarioVisualEffect('approved-sizes', 'spread', '已核准版型展成多尺寸卡。'),
+    culture: scenarioVisualEffect('market-culture-pair', 'pair', '兩地文化卡並列，阿綺停下判斷。', 'achi'),
+    final: scenarioVisualEffect('rights-approval-desk', 'handoff', '最終內容和權利卡交到核准桌。'),
+  },
+  A06: {
+    retail: scenarioVisualEffect('shopping-basket', 'deliver', '購物籃和結帳權限卡出現。'),
+    beauty: scenarioVisualEffect('beauty-consult-card', 'pair', '膚況資訊和門市諮詢卡並列。'),
+    health: scenarioVisualEffect('health-review-card', 'shield', '保健資料旁加上人工確認標記。'),
+  },
+};
+
 const SCENE_SOURCE_GROUNDING = {
   I01: { highlightIndices: [1, 2], paragraphIndices: [18, 8], rationale: '把文章對效率與價值的區別，改編成企劃人要向客戶說明的問題。' },
   I02: { highlightIndices: [0, 1], paragraphIndices: [7, 21], rationale: '把接觸頻率未必帶來理解深度，轉成兩岸之間的探索裝置。' },
@@ -524,12 +640,22 @@ export function buildData(edition) {
     const design = sceneByCanonical.get(island.id);
     const article = articleBySourceId.get(island.articleId);
     const interactionDefinition = INTERACTIONS.find(({ id }) => id === design.interactionType);
+    const visualEffects = SCENARIO_VISUAL_EFFECTS[island.id];
+    const choiceIds = design.interaction.control.options.map(({ id }) => id);
+    if (Object.keys(visualEffects || {}).length !== choiceIds.length || choiceIds.some((id) => !visualEffects[id])) {
+      throw new TypeError(`Scenario visual effects must match every ${island.id} choice.`);
+    }
     const interaction = {
       ...design.interaction,
       sourceArticleId: article.id,
       sourceEvidence: article.highlights?.[0] ?? article.summary,
       outcomes: design.interaction.outcomes.map((outcome) => ({
         ...outcome,
+        visualEffect: {
+          id: `${island.id}-${outcome.choiceId}`,
+          actorId: visualEffects[outcome.choiceId].actorId || design.protagonistId,
+          ...visualEffects[outcome.choiceId],
+        },
         sourceArticleId: article.id,
         sourceEvidence: article.highlights?.[outcome.sourceHighlightIndex] ?? article.summary,
       })),

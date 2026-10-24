@@ -5,11 +5,16 @@ import { chromium } from '@playwright/test';
 
 const workerFile = 'dist/immersive/sw.js';
 const originalWorker = await readFile(workerFile, 'utf8');
+const previousCacheVersion = originalWorker.match(/const CACHE_VERSION = '([^']+)'/)?.[1];
+assert.ok(previousCacheVersion, 'service worker declares its cache version');
+const versionParts = /^(.*\.)(\d+)$/.exec(previousCacheVersion);
+assert.ok(versionParts, 'cache version ends with an incrementable number');
+const updateCacheVersion = `${versionParts[1]}${Number(versionParts[2]) + 1}`;
 const server = await preview({ preview: { host: '127.0.0.1', port: 0 } });
 const browser = await chromium.launch({ headless: true, args: ['--enable-webgl', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
 const page = await context.newPage();
-const result = { previousCacheVersion: '2026-10-24.7', updateCacheVersion: '2026-10-24.8', noteSurvivesUpdate: false, newControllerActive: false };
+const result = { previousCacheVersion, updateCacheVersion, noteSurvivesUpdate: false, newControllerActive: false };
 
 try {
   await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/immersive/`, { waitUntil: 'domcontentloaded' });
@@ -25,9 +30,9 @@ try {
   console.log('update-test: note saved');
   const oldController = await page.evaluate(() => navigator.serviceWorker.controller.scriptURL);
 
-  const v8Worker = originalWorker.replace("2026-10-24.7", "2026-10-24.8");
-  assert.notEqual(v8Worker, originalWorker, 'test fixture must advertise a newer cache version');
-  await writeFile(workerFile, v8Worker);
+  const updatedWorker = originalWorker.replace(previousCacheVersion, updateCacheVersion);
+  assert.notEqual(updatedWorker, originalWorker, 'test fixture must advertise a newer cache version');
+  await writeFile(workerFile, updatedWorker);
   await page.evaluate(async () => {
     const registration = await navigator.serviceWorker.getRegistration('./');
     await registration.update();
@@ -44,10 +49,10 @@ try {
   await page.waitForFunction(() => navigator.serviceWorker.controller?.scriptURL !== undefined && window.immersive?.data, undefined, { timeout: 30000 });
   await page.locator('#read').click();
   await page.waitForFunction(() => document.querySelector('#reader').open && document.querySelector('#note').value === '舊版開著時撰寫的離線筆記', undefined, { timeout: 10000 });
-  await page.waitForFunction(async () => {
+  await page.waitForFunction(async version => {
     const cacheNames = await caches.keys();
-    return cacheNames.some(name => name.endsWith('2026-10-24.8'));
-  }, undefined, { timeout: 10000 });
+    return cacheNames.some(name => name.endsWith(version));
+  }, updateCacheVersion, { timeout: 10000 });
   result.newControllerActive = await page.evaluate(() => navigator.serviceWorker.controller.scriptURL !== undefined && document.querySelector('#note').value === '舊版開著時撰寫的離線筆記');
   result.noteSurvivesUpdate = await page.locator('#note').inputValue() === '舊版開著時撰寫的離線筆記';
   result.oldController = oldController;

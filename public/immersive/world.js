@@ -312,11 +312,12 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
   const crowdEyes = new THREE.InstancedMesh(geometry('ball'), material('#293934'), 200); crowdEyes.count = crowd.count * 2; cast.add(crowdEyes);
   const dummy = new THREE.Object3D();
   const crowdSeeds = Array.from({ length: 100 }, (_, i) => { crowd.setColorAt(i, new THREE.Color(['#ac6750', '#8d9b5b', '#5d8995', '#b6898b', '#686b76', '#d0a95f'][i % 6])); return { angle: random() * Math.PI * 2, radius: 4 + random() * 1.7, speed: .02 + random() * .045, scale: .18 + random() * .08, pausedTotal: 0, pauseStartedAt: null }; });
+  let scenarioCrowdPose = null;
   function updateCrowd(elapsed) {
     for (let i = 0; i < crowd.count; i++) {
-      const seed = crowdSeeds[i], effectiveElapsed = seed.pauseStartedAt === null ? Math.max(0, elapsed - seed.pausedTotal) : Math.max(0, seed.pauseStartedAt - seed.pausedTotal), angle = encounter?.npcIndex === i ? encounter.angle : seed.angle + effectiveElapsed * seed.speed;
-      dummy.position.set(Math.cos(angle) * seed.radius, 1.45, Math.sin(angle) * seed.radius); dummy.rotation.y = -angle; dummy.scale.set(seed.scale, .65 + Math.sin(effectiveElapsed + i) * .025, seed.scale); dummy.updateMatrix(); crowd.setMatrixAt(i, dummy.matrix);
-      dummy.position.y += .5; dummy.scale.setScalar(seed.scale * .85); dummy.updateMatrix(); crowdHeads.setMatrixAt(i, dummy.matrix);
+      const seed = crowdSeeds[i], effectiveElapsed = seed.pauseStartedAt === null ? Math.max(0, elapsed - seed.pausedTotal) : Math.max(0, seed.pauseStartedAt - seed.pausedTotal), joinedScene = scenarioCrowdPose?.articleId === current?.articleId && i < scenarioCrowdPose.count, angle = joinedScene ? seed.angle : encounter?.npcIndex === i ? encounter.angle : seed.angle + effectiveElapsed * seed.speed;
+      dummy.position.set(Math.cos(angle) * seed.radius, 1.45, Math.sin(angle) * seed.radius); dummy.rotation.y = joinedScene ? Math.atan2(-dummy.position.x, -2 - dummy.position.z) : -angle; dummy.scale.set(seed.scale, .65 + Math.sin(effectiveElapsed + i) * .025, seed.scale); dummy.updateMatrix(); crowd.setMatrixAt(i, dummy.matrix);
+      dummy.position.y += joinedScene ? .68 : .5; dummy.scale.setScalar(seed.scale * .85); dummy.updateMatrix(); crowdHeads.setMatrixAt(i, dummy.matrix);
       dummy.position.y += .09; dummy.position.z -= .025; dummy.scale.set(seed.scale * .87, seed.scale * .48, seed.scale * .83); dummy.updateMatrix(); crowdHair.setMatrixAt(i, dummy.matrix);
       const facing = encounter?.npcIndex === i ? Math.atan2(camera.position.x - cast.position.x - Math.cos(angle) * seed.radius, camera.position.z - cast.position.z - Math.sin(angle) * seed.radius) : 0;
       for (let side = 0; side < 2; side++) { const lateral = side ? .07 : -.07; dummy.position.set(Math.cos(angle) * seed.radius + lateral * Math.cos(facing) + seed.scale * .75 * Math.sin(facing), 1.95, Math.sin(angle) * seed.radius + seed.scale * .75 * Math.cos(facing) - lateral * Math.sin(facing)); dummy.rotation.y = facing; dummy.scale.set(.022, .025, .022); dummy.updateMatrix(); crowdEyes.setMatrixAt(i * 2 + side, dummy.matrix); }
@@ -415,7 +416,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
   }
   function placeCast() {
     cast.position.copy(current.root.position);
-    interactionPose = null; encounter = null; setSpeech('');
+    interactionPose = null; scenarioCrowdPose = null; encounter = null; setSpeech('');
     const protagonist = current.sceneData?.protagonistId;
     for (const actor of actors) {
       actor.base.set(...[[-2.8, 1.1, 2], [-.4, 1.1, 3.7], [1.7, 1.1, 1.4], [3.6, 1.1, 3.2]][actors.indexOf(actor)]);
@@ -429,7 +430,8 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
   function finish(destination) {
     current = destination; current.visited = true; journey = null; carry.visible = false; controls.enabled = true; updateLOD(); placeCast();
     const dialogue = destination.sceneData?.dialogue?.[0];
-    if (dialogue) { setEncounter(dialogue.characterId || destination.sceneData?.protagonistId); setSpeech(dialogue.text); const actor = actors.find(a => a.id === dialogue.characterId); if (actor) { actor.state = 'arrive'; actor.expression = 'thoughtful'; actor.stateUntil = time + 4; actor.arms[1].rotation.x = -.9; } }
+    const restoredEffect = destination.interaction && !destination.interaction.before && destination.interaction.effectId;
+    if (!restoredEffect && dialogue) { setEncounter(dialogue.characterId || destination.sceneData?.protagonistId); setSpeech(dialogue.text); const actor = actors.find(a => a.id === dialogue.characterId); if (actor) { actor.state = 'arrive'; actor.expression = 'thoughtful'; actor.stateUntil = time + 4; actor.arms[1].rotation.x = -.9; } }
   }
   function focus(articleId, { animate = true, relation = null } = {}) {
     const destination = islands.get(articleId) || entries.find(i => i.canonical === articleId);
@@ -530,20 +532,159 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     controls.maxDistance = Math.max(210, distance * 1.5); camera.far = Math.max(500, distance * 3); scene.fog.near = distance * 1.5; scene.fog.far = distance * 3.5; camera.updateProjectionMatrix();
     controls.target.copy(center); camera.position.copy(center).add(new THREE.Vector3(distance * .18, distance * .83, distance * .7)); controls.update(); updateLOD();
   }
+  function renderScenarioEffect(island, effect, poseActor) {
+    const g = island.outcome;
+    const paper = '#f7eedb', ink = '#485b5b', accent = island.color;
+    const mark = (object) => { object.userData.scenarioVisualEffectId = effect.id; object.userData.scenarioPropId = effect.propId; object.userData.scenarioAction = effect.action; return object; };
+    const panel = (x, y, z, width = 1.25, height = 1.45, color = paper, rotation = 0) => mark(mesh(g, 'box', color, [x, y, z], [width, height, .12], rotation));
+    const stripe = (x, y, z, width, color = ink, rotation = 0) => { const object = mark(mesh(g, 'box', color, [x, y, z], [width, .09, .06], rotation)); return object; };
+    const peg = (x, y, z, color = '#c38c52') => mark(mesh(g, 'ball', color, [x, y, z], [.22, .22, .22]));
+    const post = (x, y, z, height = 1.8, color = ink) => mark(mesh(g, 'cylinder', color, [x, y, z], [.09, height, .09]));
+    switch (effect.action) {
+      case 'stack':
+        for (let i = 0; i < 3; i++) { panel(-2.3 + i * .12, 1.65 + i * .34, 3.8 + i * .04, 1.25, 1.1, i === 2 ? accent : paper, -.16 + i * .06); stripe(-2.65 + i * .12, 1.72 + i * .34, 3.9 + i * .04, .55); }
+        break;
+      case 'center':
+      case 'present':
+      case 'place':
+      case 'face':
+        panel(0, effect.action === 'present' ? 2.65 : 2.1, 3.6, effect.action === 'present' ? 1.6 : 1.35, effect.action === 'present' ? 1.8 : 1.35, accent);
+        stripe(0, 2.15, 3.69, .72, paper); peg(.76, 2.95, 3.62);
+        if (effect.action === 'face' || effect.action === 'present') post(-.8, 1.7, 3.55, .85);
+        break;
+      case 'pair':
+      case 'compare':
+      case 'opposite':
+        panel(-1.15, 2, 3.6, 1.25, 1.45, '#d7e2d3', -.1); panel(1.15, 2, 3.6, 1.25, 1.45, effect.action === 'opposite' ? '#d9b7ab' : '#e2d0b9', .1);
+        stripe(-1.15, 2, 3.68, .72); stripe(1.15, 2, 3.68, .72, '#785d59');
+        if (effect.action === 'compare') peg(0, 2, 3.7, '#b57958');
+        if (effect.action === 'opposite') mark(mesh(g, 'box', '#a87162', [0, 1.8, 3.55], [.18, 1.35, .8]));
+        break;
+      case 'shield':
+        mark(mesh(g, 'ring', '#4f827a', [0, 2.2, 3.55], [1.05, 1.05, .16])); panel(0, 2.2, 3.6, .75, 1.05, paper); peg(0, 2.65, 3.7, '#78966e');
+        break;
+      case 'connect':
+        mark(mesh(g, 'ring', '#6d9591', [-1.4, 2, 3.6], [.62, .62, .12])); mark(mesh(g, 'ring', '#bd8c61', [1.4, 2, 3.6], [.62, .62, .12]));
+        mark(mesh(g, 'box', '#b99770', [0, 2, 3.6], [1.7, .16, .13])); panel(0, 2.75, 3.6, .85, .72, paper); break;
+      case 'flip':
+        panel(-.2, 2.1, 3.65, 1.35, 1.65, paper, -.3); panel(.55, 2.25, 3.72, .75, 1.45, accent, .38); stripe(-.2, 2.2, 3.76, .68); peg(.98, 2.9, 3.7);
+        break;
+      case 'reveal':
+        panel(0, 2.1, 3.65, 1.55, 1.65, paper, -.08); panel(.62, 2.2, 3.74, .45, 1.3, '#d2ae74', .42); peg(.95, 2.95, 3.75, '#9d7654');
+        break;
+      case 'turn':
+        post(-.72, 1.75, 3.6, 1.6); panel(.2, 2.4, 3.6, 1.35, .9, '#d7e3d5', .35); mark(mesh(g, 'cone', '#bf8f57', [1.05, 2.4, 3.63], [.3, .48, .3], Math.PI / 2));
+        break;
+      case 'exchange':
+      case 'handoff':
+        panel(-1.15, 1.9, 3.9, .8, .85, '#d6c092', -.22); panel(1.15, 1.9, 3.9, .8, .85, '#c8d5c2', .22);
+        mark(mesh(g, 'ring', '#c18659', [0, 2.05, 3.9], [.42, .42, .12])); mark(mesh(g, 'box', '#b8a27d', [0, 1.75, 3.9], [1.45, .12, .12]));
+        if (effect.action === 'handoff') panel(0, 2.8, 3.7, 1.05, .7, paper);
+        break;
+      case 'gather':
+        mark(mesh(g, 'cylinder', '#9b9a69', [0, 1.25, 3.5], [2.15, .18, 1.15]));
+        for (let i = 0; i < 5; i++) peg(-1.2 + i * .6, 1.85 + (i % 2) * .1, 3.4 + (i % 2) * .35, ['#b17f67', '#738f82', '#c7a85f'][i % 3]);
+        break;
+      case 'line-up':
+        for (let i = 0; i < 3; i++) { panel(-1.55 + i * 1.55, 2, 3.6, 1.05, 1.45, ['#d8e2d4', '#e4d0b4', '#d7c2c4'][i]); stripe(-1.55 + i * 1.55, 2, 3.68, .55); }
+        break;
+      case 'pause':
+        panel(-1.35, 1.75, 3.7, 1.35, .8, '#e4d2b5'); mark(mesh(g, 'box', '#b76f5c', [0, 1.9, 3.6], [.18, 1.35, .35])); post(1.35, 1.8, 3.6, 1.1);
+        break;
+      case 'photo':
+        panel(0, 2.1, 3.65, 1.55, 1.45, paper, -.12); mark(mesh(g, 'box', '#8da5a0', [0, 2.25, 3.73],  [.9, .72, .04])); peg(-.42, 2.49, 3.8, '#d1a86a'); stripe(0, 1.75, 3.73, .72);
+        break;
+      case 'front':
+        mark(mesh(g, 'box', '#b59676', [0, 1.45, 3.55], [3.5, .18, 1.1])); panel(0, 2.35, 3.65, 1.3, 1.25, '#e4d7bf'); post(-1.25, 1.95, 3.55, .8); stripe(0, 2.45, 3.72, .72);
+        break;
+      case 'sing':
+      case 'listen':
+        mark(mesh(g, 'box', '#5b7068', [0, 1.35, -1.25], [3.5, .35, 1.4])); mark(mesh(g, 'box', '#b58b57', [0, 2.35, -1.85], [3.2, 2.1, .18]));
+        mark(mesh(g, 'ring', '#c48c55', [0, 3.6, -.55], [1.05, .7, .12])); mark(mesh(g, 'ring', '#81988b', [0, 3.6, -.55], [1.6, 1.1, .12]));
+        if (effect.action === 'listen') mark(mesh(g, 'cylinder', '#8e7158', [-1.2, 1.9, 2.8], [.52, .55, .5]));
+        break;
+      case 'retell':
+        panel(-.75, 2.1, 3.75, 1.05, 1.05, paper, -.14); mark(mesh(g, 'box', '#8ca09b', [-.75, 2.2, 3.83], [.72, .58, .04]));
+        mark(mesh(g, 'ring', '#b38b58', [.7, 2.65, 3.7], [.62, .42, .1])); peg(1.1, 3.05, 3.7);
+        break;
+      case 'open':
+        panel(-.72, 2, 3.65, 1.2, 1.4, paper, -.35); panel(.72, 2, 3.65, 1.2, 1.4, '#e8dbc3', .35); stripe(-.72, 2, 3.74, .62); stripe(.72, 2, 3.74, .62);
+        break;
+      case 'pass':
+        post(1.35, 1.8, 3.6, 1.5); panel(1.9, 2.4, 3.6, 1.15, .8, '#d7d1bf', -.45); mark(mesh(g, 'box', '#847963', [-1.2, 1.18, 3.6], [2.7, .08, .24], .16));
+        break;
+      case 'linger':
+        mark(mesh(g, 'ring', '#c18d55', [0, 1.1, 3.6], [1.5, 1.05, .12])); post(0, 2.15, 3.6, 1.3, '#799289'); peg(0, 3.05, 3.6, '#d8b76f');
+        break;
+      case 'move':
+        post(-1.3, 1.65, 3.6, 1.4); panel(.15, 2.15, 3.6, 1.45, 1.15, accent, .35); mark(mesh(g, 'cone', '#ba8759', [1.3, 2.1, 3.6], [.3, .45, .3], Math.PI / 2));
+        break;
+      case 'empty':
+        mark(mesh(g, 'box', '#b9a585', [0, 1.35, 3.6], [2.7, .18, 1.4])); panel(-.55, 2.1, 3.6, 1.05, 1.25, '#e7ddca'); mark(mesh(g, 'ring', '#819389', [.72, 1.75, 3.6], [.5, .5, .12]));
+        break;
+      case 'clear':
+        for (let i = 0; i < 3; i++) mark(mesh(g, 'box', '#7c9b8f', [-1.9 + i * 1.9, 1.12, 3.55], [1.35, .18, .8]));
+        mark(mesh(g, 'box', '#ae796c', [3, 1.45, 3.55], [.18, 1, 1.2]));
+        break;
+      case 'assist':
+        mark(mesh(g, 'box', '#b89d7a', [0, 1.55, 3.7], [2.6, .25, 1.3])); panel(0, 2.2, 3.7, 1, .95, paper); mark(mesh(g, 'cone', '#bd9456', [1.45, 2.2, 3.7], [.32, .7, .32]));
+        break;
+      case 'surface':
+        mark(mesh(g, 'cylinder', '#78989a', [0, .95, 3.6], [2.1, .12, 1.05])); panel(-.55, 2.15, 3.65, 1.3, 1.25, '#e3c3cb', -.22); peg(.65, 2.85, 3.65, '#bd8c61');
+        break;
+      case 'split':
+        panel(-1.35, 2, 3.6, 1.25, 1.65, '#d6c8cd'); panel(1.35, 2, 3.6, 1.25, 1.65, '#c9d7cb'); mark(mesh(g, 'box', '#ac795f', [0, 2, 3.6], [.15, .12, .22]));
+        break;
+      case 'deliver':
+        mark(mesh(g, 'box', '#bd9360', [-.6, 1.85, 3.7], [1.5, 1.15, 1.25]));
+        mark(mesh(g, 'box', '#e6d6b9', [-.6, 1.9, 3.7], [.16, 1.18, 1.3])); mark(mesh(g, 'box', '#e6d6b9', [-.6, 1.9, 3.7], [1.52, 1.15, .14]));
+        panel(1.2, 2.05, 3.8, 1.05, 1.35, paper); stripe(1.2, 2.2, 3.88, .62); peg(1.2, 1.55, 3.88, '#af7667');
+        break;
+      case 'foreground':
+        panel(0, 2.35, 3.45, 2, 2, '#d6dfd1', -.1); mark(mesh(g, 'ball', '#c38872', [-.55, 2.65, 3.58], [.28, .28, .12])); stripe(.3, 2.25, 3.58, .95, '#526e63');
+        break;
+      case 'spread':
+        for (let i = 0; i < 4; i++) { panel(-2.05 + i * 1.35, 2, 3.6, 1, 1.3, ['#d8e0d3', '#e4d3bd', '#d6c5ce', '#c8d7d2'][i], (i - 1.5) * .12); stripe(-2.05 + i * 1.35, 2, 3.68, .55); }
+        break;
+      default:
+        throw new TypeError(`Unsupported scenario visual action ${effect.action}.`);
+    }
+    if (island !== current) return;
+    const actor = actors.find(({ id }) => id === effect.actorId);
+    const partnerId = island.canonical === 'A01' && effect.action === 'assist' ? 'yue' : island.sceneData?.characterIds?.find((id) => id !== effect.actorId);
+    const actorX = ['sing', 'listen', 'gather'].includes(effect.action) ? 0 : ['exchange', 'retell', 'connect', 'handoff'].includes(effect.action) ? -1.45 : 1.25;
+    const actorZ = ['sing', 'listen'].includes(effect.action) ? 4.2 : 4.4;
+    poseActor(effect.actorId, actorX, actorZ, ['pause', 'surface', 'split'].includes(effect.action) ? 'concerned' : 'thoughtful');
+    if (actor && ['exchange', 'retell', 'connect', 'handoff', 'assist', 'gather'].includes(effect.action)) {
+      actor.arms[1].rotation.x = -.9; actor.arms[0].rotation.x = -.45;
+    }
+    if (partnerId && ['exchange', 'retell', 'connect', 'handoff', 'assist'].includes(effect.action)) {
+      const partner = actors.find(({ id }) => id === partnerId);
+      const positions = { exchange: .95, retell: 1.5, connect: 1.55, handoff: 1.1, assist: -1.2 };
+      poseActor(partnerId, positions[effect.action], 4.1, 'thoughtful');
+      if (partner) partner.arms[0].rotation.x = -.85;
+    }
+    scenarioCrowdPose = ['sing', 'listen'].includes(effect.action) ? { articleId: island.articleId, count: Math.min(5, crowd.count) } : null;
+    encounter = { characterId: effect.actorId, npcIndex: null };
+    setSpeech(effect.reactionText);
+  }
   function applyInteraction(articleId, payload = {}) {
     const island = islands.get(articleId); if (!island) return false;
     const kind = payload.kind || island.sceneData?.interactionType;
     const supported = ['sourceverification', 'purchase', 'attention', 'memory', 'persona', 'judgment', 'journey', 'delegation'];
     if (!supported.includes(kind) || !payload.choices) { for (const actor of actors) actor.reaction = time + 1.8; return true; }
     const choices = Array.isArray(payload.choices) ? payload.choices.map(String) : [String(payload.choices)];
+    const scenarioChoice = typeof payload.scenarioChoice === 'string' ? payload.scenarioChoice : null;
+    const selectedOutcome = island.sceneData?.interaction?.outcomes?.find(({ choiceId }) => choiceId === scenarioChoice);
+    const visualEffect = selectedOutcome?.visualEffect || null;
     island.actorBaseline ||= capture(cast);
     restore(island.baseline); island.outcome.clear();
     if (island === current) restore(island.actorBaseline);
     const before = Boolean(payload.before);
-    const impact = { kind, choices, before, layout: 'waiting', expression: 'neutral', checkpoint: false };
+    const impact = { kind, choices, scenarioChoice, effectId: visualEffect?.id || null, propId: visualEffect?.propId || null, action: visualEffect?.action || null, actorId: visualEffect?.actorId || null, reactionText: visualEffect?.reactionText || null, before, layout: 'waiting', expression: 'neutral', checkpoint: false };
     interactionPose = island === current ? impact : interactionPose;
     island.interaction = impact;
-    if (before) { for (const actor of actors) actor.state = 'comparison-before'; return true; }
+    if (before) { scenarioCrowdPose = null; for (const actor of actors) actor.state = 'comparison-before'; return true; }
     const g = island.outcome;
     function part(type, color, position, scale, rotation = 0) { return mesh(g, type, color, position, scale, rotation); }
     function pose(actorId, x, z, expression) { const actor = actors.find(a => a.id === actorId || a.habit === actorId); if (actor && island === current) { actor.root.position.set(x, 1.1, z); actor.root.rotation.y = -.25; actor.expression = expression; actor.state = 'demonstrate'; actor.head.rotation.z = expression === 'concerned' ? -.15 : .04; actor.brows.forEach((b, i) => b.rotation.z = expression === 'concerned' ? (i ? -.35 : .35) : 0); actor.mouth.scale.set(expression === 'smile' ? .16 : .07, expression === 'concerned' ? .035 : .018, .02); } }
@@ -597,6 +738,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
       island.core.rotation.y += unsafe ? -.6 : .6; pose('pen', .6, 3.1, unsafe ? 'concerned' : 'thoughtful'); pose('bell', unsafe ? 1.8 : 3.5, 2.6, unsafe ? 'concerned' : 'smile');
       impact.layout = unsafe ? 'agent-paused-human-takeover' : confirm ? 'agent-waits-at-confirmation-gate' : 'agent-draft-on-human-desk'; impact.checkpoint = confirm; impact.expression = unsafe ? 'concerned' : 'thoughtful';
     }
+    if (visualEffect) renderScenarioEffect(island, visualEffect, pose);
     for (const actor of actors) actor.state = island === current ? 'demonstrate' : actor.state;
     return true;
   }
@@ -677,7 +819,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     getCharacterScreenState() { return actors.map(actor=>{const position=actor.root.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0,1.5,0));const screen=position.project(camera),rect=canvas.getBoundingClientRect();return {id:actor.id,name:actor.name,screen:{x:rect.left+(screen.x+1)*rect.width/2,y:rect.top+(1-screen.y)*rect.height/2,z:screen.z}};}); },
     getRenderState() { return {active,renderedFrames,disposed,setupMs,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,textureCount:renderer.info.memory.textures,programCount:renderer.info.programs?.length||0,shadowEnabled:renderer.shadowMap.enabled,shadowCasting:sunlight.castShadow,firstDrawShadowCasting,shadowRestoreMs:shadowRestoredAt===null||firstDrawAt===null?null:shadowRestoredAt-firstDrawAt}; },
     setSound(enabled) { sound = Boolean(enabled); if (sound) chime(); },
-    getState() { return { current: current.articleId, currenttarget: journey?.destination.articleId || current.articleId, currentTarget: journey?.destination.articleId || current.articleId, mode, population: crowd.count, reducedMotion, transitioning: Boolean(journey), stage: journey ? STAGES[Math.max(0, journey.phase)] : 'arrival', renderedislandcount: entries.length, renderedIslandCount: entries.length, detailedIslandCount: entries.filter(i => i.detail.visible).length, silhouetteIslandCount: entries.filter(i => i.silhouette.visible).length, characters: actors.map(a => ({ id: a.id, name: a.name, nameLabelVisible: a.nameLabel.visible, state: a.state, habit: a.habit, expression: a.expression, position: a.root.position.toArray() })), previewed, recommendations: recommendations.map(route => ({ sourceArticleId: route.sourceArticleId, targetArticleId: route.targetArticleId, relationType: route.relationType, editorialReason: route.editorialReason, transitionQuestion: route.transitionQuestion, canonical: route.canonical, previewVisible: route.object.visible, points: [0, .5, 1].map(t => route.curve.getPoint(t).toArray()) })), carry: { kind: carryKind, visible: carry.visible, morph: carryMorph, phase: journey ? STAGES[Math.max(0, journey.phase)] : 'arrival', shapes: carryKind === 'photo-evidence-bridge' ? { photoScale: photo.scale.toArray(), evidenceCards: evidenceCards.map(o => ({ position: o.position.toArray(), rotationX: o.rotation.x, visible: o.visible })) } : carryKind === 'product-service-journey' ? { productScale: product.scale.toArray(), listRotationX: list.rotation.x, serviceSteps: serviceSteps.map(o => ({ position: o.position.toArray(), scale: o.scale.x, visible: o.visible })) } : carryKind === 'model-limits-scale' ? { cardFlip: modelCard.rotation.y, frameworkScale: scaleFrame.scale.x } : {}, objectCount: carryKind ? carryForms.get(carryKind).getObjectsByProperty('isMesh', true).length : 0 }, coastLinks, exploredLightCount: entries.filter(i => i.exploredLight.visible).length, season, decoratedIslandCount: entries.filter(i => i.decorations.children.length).length, encounter: encounter ? { ...encounter } : null, speech: speech?.userData.text || '', interaction: current.interaction ? { ...current.interaction, baselineRestored: current.interaction.before && matches(current.baseline) && matches(current.actorBaseline), propPosition: current.core.position.toArray(), propRotation: current.core.rotation.toArray().slice(0, 3), outcomeObjectCount: current.outcome.children.length } : null, camera: { position: camera.position.toArray(), target: controls.target.toArray() }, visited: entries.filter(i => i.visited).map(i => i.articleId), drawCalls: renderer.info.render.calls }; },
+    getState() { return { current: current.articleId, currenttarget: journey?.destination.articleId || current.articleId, currentTarget: journey?.destination.articleId || current.articleId, mode, population: crowd.count, reducedMotion, transitioning: Boolean(journey), stage: journey ? STAGES[Math.max(0, journey.phase)] : 'arrival', renderedislandcount: entries.length, renderedIslandCount: entries.length, detailedIslandCount: entries.filter(i => i.detail.visible).length, silhouetteIslandCount: entries.filter(i => i.silhouette.visible).length, characters: actors.map(a => ({ id: a.id, name: a.name, nameLabelVisible: a.nameLabel.visible, state: a.state, habit: a.habit, expression: a.expression, position: a.root.position.toArray() })), previewed, recommendations: recommendations.map(route => ({ sourceArticleId: route.sourceArticleId, targetArticleId: route.targetArticleId, relationType: route.relationType, editorialReason: route.editorialReason, transitionQuestion: route.transitionQuestion, canonical: route.canonical, previewVisible: route.object.visible, points: [0, .5, 1].map(t => route.curve.getPoint(t).toArray()) })), carry: { kind: carryKind, visible: carry.visible, morph: carryMorph, phase: journey ? STAGES[Math.max(0, journey.phase)] : 'arrival', shapes: carryKind === 'photo-evidence-bridge' ? { photoScale: photo.scale.toArray(), evidenceCards: evidenceCards.map(o => ({ position: o.position.toArray(), rotationX: o.rotation.x, visible: o.visible })) } : carryKind === 'product-service-journey' ? { productScale: product.scale.toArray(), listRotationX: list.rotation.x, serviceSteps: serviceSteps.map(o => ({ position: o.position.toArray(), scale: o.scale.x, visible: o.visible })) } : carryKind === 'model-limits-scale' ? { cardFlip: modelCard.rotation.y, frameworkScale: scaleFrame.scale.x } : {}, objectCount: carryKind ? carryForms.get(carryKind).getObjectsByProperty('isMesh', true).length : 0 }, coastLinks, exploredLightCount: entries.filter(i => i.exploredLight.visible).length, season, decoratedIslandCount: entries.filter(i => i.decorations.children.length).length, encounter: encounter ? { ...encounter } : null, speech: speech?.userData.text || '', interaction: current.interaction ? { ...current.interaction, baselineRestored: current.interaction.before && matches(current.baseline) && matches(current.actorBaseline), propPosition: current.core.position.toArray(), propRotation: current.core.rotation.toArray().slice(0, 3), outcomeObjectCount: current.outcome.children.length, scenarioObjects: current.outcome.children.filter(object => object.userData.scenarioVisualEffectId === current.interaction.effectId).map(object => ({ effectId: object.userData.scenarioVisualEffectId, propId: object.userData.scenarioPropId, action: object.userData.scenarioAction, geometry: object.geometry?.type || null, position: object.position.toArray(), rotation: object.rotation.toArray().slice(0, 3), scale: object.scale.toArray() })) } : null, camera: { position: camera.position.toArray(), target: controls.target.toArray() }, visited: entries.filter(i => i.visited).map(i => i.articleId), drawCalls: renderer.info.render.calls }; },
     dispose() { if (disposed) return; disposed = true; cancelAnimationFrame(frame); if (shadowRestoreTimer) clearTimeout(shadowRestoreTimer); clearRecommendations(); controls.dispose(); canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointerup', onUp); canvas.removeEventListener('pointermove', onMove); canvas.removeEventListener('pointerleave', onLeave); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('resize', resize); for (const geo of geometries.values()) geo.dispose(); for (const mat of materials.values()) mat.dispose(); for (const texture of textures) texture.dispose(); for (const object of [crowd, crowdHeads, crowdHair, crowdEyes]) object.dispose(); renderer.dispose(); audio?.close(); scene.clear(); },
   };
 }

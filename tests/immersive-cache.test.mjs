@@ -6,6 +6,9 @@ const originalGlobals = new Map(['window', 'self', 'caches', 'fetch'].map(name =
   name,
   Object.getOwnPropertyDescriptor(globalThis, name),
 ]));
+const serviceWorkerSource = readFileSync(new URL('../public/immersive/sw.js', import.meta.url), 'utf8');
+const currentCacheVersion = serviceWorkerSource.match(/const CACHE_VERSION = '([^']+)'/)?.[1];
+assert.ok(currentCacheVersion, 'service worker declares its cache version');
 
 after(() => {
   for (const [name, descriptor] of originalGlobals) {
@@ -235,7 +238,7 @@ function currentCache() {
 }
 
 function currentCacheName() {
-  return [...cacheStorage.entries.keys()].find(name => name.startsWith(scopePrefix) && name.endsWith('2026-10-24.7'));
+  return [...cacheStorage.entries.keys()].find(name => name.startsWith(scopePrefix) && name.endsWith(currentCacheVersion));
 }
 
 function coreUrls() {

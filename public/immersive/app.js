@@ -96,9 +96,15 @@ function visit(id, relation = null, animate = true) {
   const s = scene(id), line = s?.dialogue?.[0];
   const name = DATA.characters.find(c => c.id === (line?.characterId || s?.protagonistId))?.name || '阿綺';
   $('dialogue').textContent = line ? `${name}：「${line.text}」` : s?.lifeEvent || '答案很多，可是我到底該相信哪一個？';
-  $('bookmark').textContent = progress.state.bookmarks.includes(id) ? '已收藏' : '收藏';
+  renderCurrentProgressControls();
   world?.focus(id, { animate: animate && !reducedMotion, relation });
   renderCatalog();
+}
+
+function renderCurrentProgressControls() {
+  if (!current || !article(current)) return;
+  $('bookmark').textContent = progress.state.bookmarks.includes(current) ? '已收藏' : '收藏';
+  $('mark-read').textContent = progress.state.read.includes(current) ? '已讀完 ✓' : '標記讀完';
 }
 
 function recommend(id) {
@@ -219,7 +225,7 @@ function openGame(object = null) {
     const sample = select('可用研究資料', [['narrow','只有單一族群訪談'],['mixed','有多種情境訪談']]);
     button('查看條件與推論邊界', () => finishGame([setting.value,sample.value], `映蓁把觀察室切到${setting.value === 'commute' ? '通勤' : '居家'}場景。${sample.value === 'narrow' ? '資料只涵蓋單一族群，她蓋上「不可外推」標記。' : '她保留不同情境的線索，仍把模型推論和真人訪談分開。'}這不是對真實族群的預測。`), root);
   } else if (kind === 'judgment') {
-    const examples = s.islandId==='I01'?[['紀錄','這份分析的產出時間有紀錄。','data'],['估算','團隊預估下次會議可以省時。','estimate'],['解釋','客戶可能因此更願意採用提案。','inference'],['空白','是否改善使用者的問題？尚未驗證。','unknown']]:s.islandId==='A04'?[['紀錄','這批生成素材的數量已記錄。','data'],['估算','下一批預估可以縮短製作時間。','estimate'],['解釋','圖片看起來可能更符合品牌語氣。','inference'],['空白','來源和最終核准人？尚未確認。','unknown']]:[['紀錄','這場虛構測試有 8 人到場。','data'],['估算','下一場可能需要 12 張椅子。','estimate'],['解釋','有人提早離開，可能因為交通。','inference'],['空白','離開的人是否滿意？尚未詢問。','unknown']];
+    const examples = s.islandId==='I01'?[['紀錄','這份分析的產出時間有紀錄。','data'],['估算','團隊預估下次會議可以省時。','estimate'],['解釋','客戶可能因此更願意採用提案。','inference'],['空白','是否改善使用者的問題？尚未驗證。','unknown']]:s.islandId==='A04'?[['紀錄','這批生成素材的數量已記錄。','data'],['估算','下一批預估可以縮短製作時間。','estimate'],['解釋','圖片看起來可能更符合品牌語氣。','inference'],['空白','來源和最終核准人？尚未確認。','unknown']]:s.islandId==='M05'?[['紀錄','工具上線後，員工仍在等下一步說明。','data'],['估算','團隊預估省下時間能轉到其他工作。','estimate'],['推論','跨部門資訊分散可能讓流程停住。','inference'],['未知','同事最擔心的改變還沒問。','unknown']]:[['紀錄','這場虛構測試有 8 人到場。','data'],['估算','下一場可能需要 12 張椅子。','estimate'],['解釋','有人提早離開，可能因為交通。','inference'],['空白','離開的人是否滿意？尚未詢問。','unknown']];
     const selects = examples.map(([label, claim]) => select(claim, [['unknown','未知'],['data','已記錄資料'],['estimate','估計'],['inference','推論']]));
     button('把資訊放上證據桌', () => { const matches = selects.filter((el,i) => el.value === examples[i][2]).length; finishGame(selects.map(el=>el.value), `映蓁把卡片分到證據桌的四格。${matches === 4 ? '這次每張卡都保留了它的證據性質。' : '有些卡還需要重新分類：記錄對應資料、預計對應估計、可能的解釋屬於推論，尚未確認的部分仍未知。'}分類練習不是能力評分。`); }, root);
   } else if (kind === 'journey') {
@@ -235,14 +241,14 @@ function openGame(object = null) {
 }
 function finishGame(choices, result) {
   const s = scene(gameState.articleId);
-  const physicalReaction=result.split('。')[0]+'。';
   const choiceId=$('scene-choice')?.value||gameState.scenarioChoice;
   const outcome=s?.interaction?.outcomes?.find(item=>item.choiceId===choiceId);
+  const visualEffect=outcome?.visualEffect||null;
+  const physicalReaction=visualEffect?.reactionText||`${result.split('。')[0]}。`;
   if(outcome)result=`${outcome.title}。${outcome.text}\n${result}`;
-  gameState.choices = choices; gameState.result = result; gameState.before = false;
-  gameState.speech = physicalReaction;
+  gameState.choices = choices; gameState.result = result; gameState.before = false; gameState.scenarioChoice=choiceId; gameState.visualEffect=visualEffect;
   $('game-result').textContent = result;
-  $('game-impact').textContent = result.split(/[。！？]/).filter(Boolean).slice(0, 2).join('。') + '。';
+  $('game-impact').textContent = physicalReaction;
   $('game-impact').hidden = false;
   $('game-full-result').hidden = false;
   $('game-full-result').open = false;
@@ -287,8 +293,8 @@ async function intro() {
 $('read').onclick = read; $('interact').onclick = () => openGame();
 $('skip-travel').onclick=()=>{world?.focus(current,{animate:false});$('travel-controls').hidden=true;};
 $('return-travel').onclick=()=>{if(travelOrigin)visit(travelOrigin,null,false);$('travel-controls').hidden=true;};
-$('bookmark').onclick = () => { progress.toggle('bookmarks', current); $('bookmark').textContent = progress.state.bookmarks.includes(current) ? '已收藏' : '收藏'; renderCatalog(); };
-$('mark-read').onclick = () => { if (!progress.state.read.includes(current)) progress.toggle('read', current); $('mark-read').textContent = '已讀完 ✓'; renderCatalog(); };
+$('bookmark').onclick = () => { progress.toggle('bookmarks', current); renderCurrentProgressControls(); renderCatalog(); };
+$('mark-read').onclick = () => { if (!progress.state.read.includes(current)) progress.toggle('read', current); renderCurrentProgressControls(); renderCatalog(); };
 $('note').addEventListener('input', () => { clearTimeout(noteTimer); $('note-status').textContent = '儲存中…'; noteTimer = setTimeout(flushNote, 200); });
 $('reader').addEventListener('close',()=>{flushNote();world?.setActive?.(true);}); addEventListener('pagehide', flushNote);
 document.querySelectorAll('[data-depth]').forEach(b => b.onclick = () => { flushNote(); depth = b.dataset.depth; renderReading(); });
@@ -306,14 +312,14 @@ $('sound').onchange = async () => {
   if (!$('sound').checked) { for (const n of soundNodes) { try { n.stop(); } catch {} } soundNodes = []; world?.setSound(false); return; }
   try { soundContext ||= new (window.AudioContext || window.webkitAudioContext)(); await soundContext.resume(); const gain = soundContext.createGain(); gain.gain.value=.013; gain.connect(soundContext.destination); for (const frequency of [130.81,196,261.63]) { const oscillator=soundContext.createOscillator(); oscillator.frequency.value=frequency; oscillator.connect(gain); oscillator.start(); soundNodes.push(oscillator); } world?.setSound(true); } catch { $('sound').checked=false; status('此瀏覽器未能啟用音效，仍可繼續探索。'); }
 };
-$('compare').onclick = () => { gameState.before=!gameState.before; $('compare').textContent=gameState.before?'查看選擇後':'查看選擇前'; $('game-visual').classList.toggle('changed',!gameState.before); const visibleResult=gameState.before?`選擇前：${scene(gameState.articleId).lifeEvent}`:gameState.result; $('game-result').textContent=visibleResult; $('game-impact').textContent=visibleResult.split(/[。！？]/).filter(Boolean).slice(0,2).join('。')+'。'; world?.applyInteraction?.(gameState.articleId,{...gameState,before:gameState.before}); };
+$('compare').onclick = () => { gameState.before=!gameState.before; $('compare').textContent=gameState.before?'查看選擇後':'查看選擇前'; $('game-visual').classList.toggle('changed',!gameState.before); const visibleResult=gameState.before?`選擇前：${scene(gameState.articleId).lifeEvent}`:gameState.result; $('game-result').textContent=visibleResult; $('game-impact').textContent=gameState.before?`選擇前：${scene(gameState.articleId).lifeEvent.split(/[。！？]/)[0]}。`:gameState.visualEffect?.reactionText||visibleResult.split(/[。！？]/).filter(Boolean).slice(0,2).join('。')+'。'; world?.applyInteraction?.(gameState.articleId,{...gameState,before:gameState.before}); if(gameState.before){world?.setEncounter?.(gameState.characterId,gameState.npcIndex);world?.setSpeech?.(gameState.speech);} };
 $('replay').onclick=()=>{$('game').close();openGame();}; $('game-read').onclick=()=>read({keepGame:true});
 $('game-next').onclick=()=>{const edge=recommend(gameState?.articleId||current)[0];if(!edge)return;$('game').close();visit(edge.targetArticleId,edge);};
 $('hide-explore-tip').onclick=()=>{ $('explore-tip').hidden=true; try{localStorage.setItem('dentsu-decision-2026-explore-tip','dismissed');}catch{} };
 $('game').addEventListener('close',()=>{if(!$('game').open){world?.setEncounter?.(null);world?.setSpeech?.('');}});
 addEventListener('keydown',event=>{if(event.key==='Escape'&&$('game').open)$('game').close();});
 $('export-progress').onclick=()=>{flushNote();const url=URL.createObjectURL(new Blob([JSON.stringify(progress.state,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='decision-wisdom-reading-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
-$('import-progress').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>2_000_000)throw Error('備份檔案過大');const saved=progress.restore(JSON.parse(await file.text()));renderCatalog();status(saved?'已合併閱讀紀錄，既有非空白筆記優先保留。':'已讀入本次畫面，但瀏覽器儲存失敗；請下載備份保存。');}catch(error){status(`無法匯入：${error.message}`);}finally{e.target.value='';}};
+$('import-progress').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>2_000_000)throw Error('備份檔案過大');const saved=progress.restore(JSON.parse(await file.text()));renderCurrentProgressControls();renderCatalog();status(saved?'已合併閱讀紀錄，既有非空白筆記優先保留。':'已讀入本次畫面，但瀏覽器儲存失敗；請下載備份保存。');}catch(error){status(`無法匯入：${error.message}`);}finally{e.target.value='';}};
 $('world').addEventListener('webglcontextlost',event=>{event.preventDefault();contextFailed=true;world?.dispose();world=null;document.body.classList.add('fallback');$('catalog').hidden=false;status('3D 連線中斷，已切換閱讀模式。閱讀紀錄與筆記仍可使用。');});
 
 async function boot() {
