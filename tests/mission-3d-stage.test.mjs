@@ -40,7 +40,7 @@ test('manual zoom changes real WebGL pixels and survives stage navigation withou
   const server = await createServer({server:{port:0,host:'127.0.0.1',hmr:false}}); await server.listen();
   const browser = await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
   try {
-    const page = await browser.newPage({viewport:{width:1000,height:600}});
+    const page = await browser.newPage({viewport:{width:1000,height:600},reducedMotion:'reduce'});
     await page.clock.install(); await page.clock.pauseAt(new Date());
     await setup(page,`http://127.0.0.1:${server.httpServer.address().port}`);
     await page.evaluate(() => {window.stage.setActive(true);window.stage.setMotion(false);window.input={...window.input,choiceId:'a',comparisonView:'after',animate:false};window.stage.update(window.input);});
@@ -51,7 +51,6 @@ test('manual zoom changes real WebGL pixels and survives stage navigation withou
     assert.ok((await snapshot(page)).camera.zoom>1,'+ zooms in from the focused canvas');
     await page.keyboard.press('-');
     assert.ok(Math.abs((await snapshot(page)).camera.zoom-1)<.000001,'- zooms out from the focused canvas');
-    await page.emulateMedia({reducedMotion:'reduce'});
     await page.evaluate(() => window.stage.setMotion(true));
     const reducedWheel = await wheel(page,-32), reducedZoom = await snapshot(page);
     assert.equal(reducedWheel.prevented,true,'reduced-motion preference does not disable manual zoom');
