@@ -2,14 +2,17 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { preview } from 'vite';
 import { chromium } from '@playwright/test';
+import { loadavg } from 'node:os';
 
-const outputDir = 'test-results/immersive-performance-series';
+const outputDir = process.env.PERF_OUTPUT || 'test-results/immersive-performance-series';
+const runCount = Number(process.env.PERF_RUNS || 3);
+assert.ok(Number.isInteger(runCount) && runCount >= 1 && runCount <= 10, 'PERF_RUNS must be an integer from 1 to 10');
 const server = await preview({ preview: { host: '127.0.0.1', port: 0, strictPort: false } });
 const origin = `http://127.0.0.1:${server.httpServer.address().port}`;
 const series = [];
 
 try {
-  for (let runNumber = 1; runNumber <= 3; runNumber++) {
+  for (let runNumber = 1; runNumber <= runCount; runNumber++) {
     const browser = await chromium.launch({
       headless: true,
       args: ['--enable-webgl', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
@@ -74,6 +77,7 @@ try {
     const startedAt = navigationStartedAt;
     const record = {
       run: runNumber,
+      hostLoadAtStart: loadavg(),
       profile: {
         viewport: '390x844',
         deviceScaleFactor: 2,
@@ -145,14 +149,20 @@ try {
           webgl: debug && gl ? {
             vendor: gl.getParameter(debug.UNMASKED_VENDOR_WEBGL),
             renderer: gl.getParameter(debug.UNMASKED_RENDERER_WEBGL),
+            parallelCompileSupported: Boolean(gl.getExtension('KHR_parallel_shader_compile')),
           } : null,
           currentArticle: state.current,
           arrivalEvent: state.arrivalEvent?.phase || null,
           population: state.population,
+          islandCount: state.renderedIslandCount,
+          publicationFontReady: document.fonts.check('600 42px "Publication Sans TW"', '阿綺小岳映蓁芬姐'),
+          loadedPublicationFaces: [...document.fonts].filter(face => /Publication Sans TW/.test(face.family) && face.status === 'loaded').length,
         };
       });
       record.firstWorldState = firstWorldState;
       assert.equal(firstWorldState.fallback, false, 'the test must reach the 3D world, not the 2D fallback');
+      assert.equal(firstWorldState.islandCount, 22, 'all article islands must remain available');
+      assert.ok(firstWorldState.publicationFontReady && firstWorldState.loadedPublicationFaces > 0, 'the drawn world must use loaded publication font faces');
       assert.ok(firstWorldState.renderedFrames > 0, 'the world renderer must draw before the scene is counted as ready');
       assert.ok(firstWorldState.canvas.width > 0 && firstWorldState.canvas.height > 0, 'the scene canvas must have a backing buffer');
 
@@ -160,7 +170,7 @@ try {
         await document.fonts.ready;
         return {
           status: document.fonts.status,
-          expectedFontLoaded: document.fonts.check('12px "Source Han Sans TW"', '群島已展開，從一座文章島開始探索。'),
+          expectedFontLoaded: document.fonts.check('12px "Publication Sans TW"', '群島已展開，從一座文章島開始探索。'),
         };
       });
 
@@ -256,9 +266,9 @@ try {
   };
   await writeFile(`${outputDir}/series.json`, JSON.stringify({ summary, runs: series }, null, 2));
   console.log(JSON.stringify(summary, null, 2));
-  assert.equal(series.length, 3, 'exactly three same-profile cold runs are required');
-  assert.ok(series.every(run => run.status === 'passed'), 'all three profile runs must complete successfully');
-  assert.ok(series.every(run => run.errors.page.length === 0 && run.errors.failedRequests.length === 0 && run.errors.http.length === 0), 'runs must be error-free');
+  assert.equal(series.length, runCount, 'all requested same-profile cold runs are required');
+  assert.ok(series.every(run => run.status === 'passed'), 'all profile runs must complete successfully');
+  assert.ok(series.every(run => run.errors.page.length === 0 && run.errors.console.length === 0 && run.errors.failedRequests.length === 0 && run.errors.http.length === 0), 'runs must be error-free');
 } finally {
   server.httpServer.closeAllConnections?.();
   await server.close();
