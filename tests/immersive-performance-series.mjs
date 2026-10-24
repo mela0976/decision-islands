@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { preview } from 'vite';
 import { chromium } from '@playwright/test';
 import { loadavg } from 'node:os';
@@ -7,6 +7,8 @@ import { loadavg } from 'node:os';
 const outputDir = process.env.PERF_OUTPUT || 'test-results/immersive-performance-series';
 const runCount = Number(process.env.PERF_RUNS || 3);
 assert.ok(Number.isInteger(runCount) && runCount >= 1 && runCount <= 10, 'PERF_RUNS must be an integer from 1 to 10');
+const fontManifest = JSON.parse(await readFile('public/fonts/manifest.json', 'utf8'));
+const publicationGlyphs = new Set([...fontManifest.files.flatMap(file => file.codepoints), ...(fontManifest.latinCodepoints || [])]);
 const server = await preview({ preview: { host: '127.0.0.1', port: 0, strictPort: false } });
 const origin = `http://127.0.0.1:${server.httpServer.address().port}`;
 const series = [];
@@ -112,6 +114,10 @@ try {
       record.worldApiReadyMs = Date.now() - startedAt;
       await page.waitForFunction(() => window.immersive.world.getRenderState().renderedFrames > 0, { polling: 'raf', timeout: 15000 });
       record.firstWorldFrameObservedMs = await page.evaluate(() => window.__immersivePerformance.firstWorldFrameObservedEpochMs - window.__immersivePerformance.navigationStartEpochMs);
+      await page.waitForFunction(() => {
+        const labels = window.immersive.world.getLabelResourceState().visibleLabels;
+        return labels?.length > 0 && labels.every(label => label.status === 'ready' && document.fonts.check(label.font, label.text));
+      }, null, { polling: 'raf', timeout: 5000 });
       await page.locator('#interact:enabled').waitFor({ state: 'visible', timeout: 5000 });
       record.firstInteractiveMs = Date.now() - startedAt;
       await page.waitForFunction(() => window.__immersivePerformance.doubleRafProxyEpochMs !== null, { polling: 'raf', timeout: 5000 });
@@ -155,7 +161,8 @@ try {
           arrivalEvent: state.arrivalEvent?.phase || null,
           population: state.population,
           islandCount: state.renderedIslandCount,
-          publicationFontReady: document.fonts.check('600 42px "Publication Sans TW"', '阿綺小岳映蓁芬姐'),
+          visibleLabels: world.getLabelResourceState().visibleLabels,
+          publicationFontReady: world.getLabelResourceState().visibleLabels.every(label => label.status === 'ready' && document.fonts.check(label.font, label.text)),
           loadedPublicationFaces: [...document.fonts].filter(face => /Publication Sans TW/.test(face.family) && face.status === 'loaded').length,
         };
       });
@@ -163,6 +170,9 @@ try {
       assert.equal(firstWorldState.fallback, false, 'the test must reach the 3D world, not the 2D fallback');
       assert.equal(firstWorldState.islandCount, 22, 'all article islands must remain available');
       assert.ok(firstWorldState.publicationFontReady && firstWorldState.loadedPublicationFaces > 0, 'the drawn world must use loaded publication font faces');
+      const missingGlyphs = [...new Set(firstWorldState.visibleLabels.flatMap(label => [...label.text]))]
+        .filter(character => /[\p{Script=Han}\p{Script=Hangul}\p{Script=Latin}\p{Number}]/u.test(character) && !publicationGlyphs.has(character.codePointAt(0)));
+      assert.deepEqual(missingGlyphs, [], 'visible label characters must exist in the publication font outlines, not a generic fallback');
       assert.ok(firstWorldState.renderedFrames > 0, 'the world renderer must draw before the scene is counted as ready');
       assert.ok(firstWorldState.canvas.width > 0 && firstWorldState.canvas.height > 0, 'the scene canvas must have a backing buffer');
 
