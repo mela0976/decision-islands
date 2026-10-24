@@ -1,14 +1,21 @@
 import { buildData } from './data.js';
 import { createProgress } from './progress.js';
+import { initOfflineCache } from './cache.js';
 
 const $ = id => document.getElementById(id);
 const text = (tag, value, parent) => { const el = document.createElement(tag); el.textContent = value; parent?.append(el); return el; };
 const button = (label, action, parent) => { const el = text('button', label, parent); el.type = 'button'; el.addEventListener('click', action); return el; };
-const status = message => { $('status').textContent = message; };
+let canPersist=()=>true;
+const status = message => { $('status').textContent = !canPersist()&&!message.includes('備份')?`${message} · 僅本次暫存，請下載備份。`:message; };
 let storage;
 try { storage = localStorage; } catch { storage = { getItem() { throw Error('unavailable'); }, setItem() { throw Error('unavailable'); } }; }
 const progress = createProgress(storage, status);
-let DATA, world, current, travelOrigin, depth = 'guide', noteTimer, gameState, soundContext, soundNodes = [];
+canPersist=()=>progress.persistent!==false;
+initOfflineCache({ onStatus: ({ state }) => {
+  if (state === 'failed') status('離線快取未能啟用；目前仍可正常閱讀。');
+  else if (state === 'unavailable') status('此環境不支援離線快取；目前仍可正常閱讀。');
+} });
+let DATA, world, current, travelOrigin, depth = 'guide', noteTimer, gameState, soundContext, soundNodes = [], contextFailed=false;
 let reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 $('motion').checked = reducedMotion;
 document.body.classList.toggle('reduce-motion', reducedMotion);
@@ -32,8 +39,12 @@ function renderCatalog() {
     b.addEventListener('mouseenter', () => world?.preview?.(a.id));
     b.addEventListener('focus', () => world?.preview?.(a.id));
     b.addEventListener('mouseleave', () => world?.preview?.(null));
+    b.addEventListener('blur', () => world?.preview?.(null));
   }
-  $('progress').textContent = `已讀 ${progress.state.read.filter(id => article(id)).length} / 22 · 洞察印記 ${progress.state.stamps.length} · 筆記 ${Object.values(progress.state.notes).filter(Boolean).length} 篇`;
+  $('progress').textContent = `${canPersist()?'':'僅本次暫存 · '}已讀 ${progress.state.read.filter(id => article(id)).length} / 22 · 洞察印記 ${progress.state.stamps.length} · 筆記 ${Object.values(progress.state.notes).filter(Boolean).length} 篇`;
+  if(!canPersist()&&$('reader').open)$('note-status').textContent='瀏覽器無法保存本次紀錄，請下載備份。';
+  let stamps=$('stamp-list');if(!stamps){stamps=document.createElement('div');stamps.id='stamp-list';stamps.setAttribute('aria-label','我的閱讀足跡');$('progress').after(stamps);}stamps.replaceChildren();
+  DATA.progressConfig.insightStamps.forEach(stamp=>{const item=text('span',stamp.label,stamps),collected=progress.state.stamps.includes(stamp.id);item.className=collected?'collected':'';item.setAttribute('aria-label',`${stamp.label}：${collected?'已留下閱讀足跡':'尚未探索'}`);});
 }
 
 function visit(id, relation = null, animate = true) {
@@ -71,9 +82,10 @@ function renderReading() {
   $('source').href = safeSource(a.sourcePdf);
   $('mark-read').textContent = progress.state.read.includes(current) ? '已讀完 ✓' : '標記讀完';
   $('note').value = progress.state.notes[current] || ''; $('note').dataset.articleId = current;
-  $('note-status').textContent = '筆記只儲存在這個瀏覽器，可下載備份。';
+  $('note-status').textContent = canPersist()?'筆記只儲存在這個瀏覽器，可下載備份。':'瀏覽器無法保存本次紀錄，編輯後請下載備份。';
   document.querySelectorAll('[data-depth]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.depth === depth)));
   const rec = $('recommendations'); rec.replaceChildren();
+  world?.setRecommendations?.(recommend(current));
   text('h2', '帶著這個問題，航向下一座島', rec);
   text('p', s?.interaction?.prompt || a.summary, rec);
   recommend(current).forEach((edge, i) => {
@@ -82,9 +94,10 @@ function renderReading() {
     b.addEventListener('mouseenter', () => world?.preview?.(edge.targetArticleId));
     b.addEventListener('focus', () => world?.preview?.(edge.targetArticleId));
     b.addEventListener('mouseleave', () => world?.preview?.(null));
+    b.addEventListener('blur', () => world?.preview?.(null));
   });
 }
-function read() { if(!article(current))return;if($('game').open)$('game').close();flushNote(); renderReading(); $('reader').showModal(); }
+function read() { if(!article(current))return;if($('game').open)$('game').close();flushNote(); renderReading(); $('reader').showModal();world?.setActive?.(false); }
 function flushNote() {
   clearTimeout(noteTimer);
   const id = $('note').dataset.articleId;
@@ -143,15 +156,15 @@ function openGame(object = null) {
     const found = new Set(); text('p', '找找劇場裡的生活線索，再選一個讓你想起自己經驗的物件。', root);
     const items = [['ticket','舊票根：曾和朋友一起看表演'],['radio','收音機：家裡熟悉的聲音'],['cup','杯上的刻痕：某次一起加班']];
     items.forEach(([id, label]) => button(`翻看${label.split('：')[0]}`, () => { found.add(id); $('game-result').textContent = label; }, root));
-    button('把這段回憶留在廣場', () => finishGame([...found], found.size ? `你找到 ${found.size} 個生活線索。小岳把物件放回共看廣場，記憶的意義來自個人與共同經驗，不能只由道具推定。` : '小岳還沒找到有感的線索。你可以繼續找，也可以直接讀原文。'), root);
+    button('把這段回憶留在廣場', () => finishGame([...found], found.size ? `小岳把你找到的${[...found].map(id=>({ticket:'舊票根',radio:'收音機',cup:'杯子'}[id])).join('、')}放到共看廣場。記憶的意義來自個人與共同經驗，不能只由道具推定。` : '小岳還沒找到有感的線索。你可以繼續找，也可以直接讀原文。'), root);
   } else if (kind === 'persona') {
     const setting = select('改變人物所處情境', [['commute','通勤中，只有三分鐘'],['home','在家，有時間比較']]);
     const sample = select('可用研究資料', [['narrow','只有單一族群訪談'],['mixed','有多種情境訪談']]);
     button('查看條件與推論邊界', () => finishGame([setting.value,sample.value], `映蓁把觀察室切到${setting.value === 'commute' ? '通勤' : '居家'}場景。${sample.value === 'narrow' ? '資料只涵蓋單一族群，她蓋上「不可外推」標記。' : '她保留不同情境的線索，仍把模型推論和真人訪談分開。'}這不是對真實族群的預測。`), root);
   } else if (kind === 'judgment') {
-    const examples = [['紀錄','這場虛構測試有 8 人到場。','data'],['估算','下一場可能需要 12 張椅子。','estimate'],['解釋','有人提早離開，可能因為交通。','inference'],['空白','離開的人是否滿意？尚未詢問。','unknown']];
+    const examples = s.islandId==='I01'?[['紀錄','這份分析的產出時間有紀錄。','data'],['估算','團隊預估下次會議可以省時。','estimate'],['解釋','客戶可能因此更願意採用提案。','inference'],['空白','是否改善使用者的問題？尚未驗證。','unknown']]:s.islandId==='A04'?[['紀錄','這批生成素材的數量已記錄。','data'],['估算','下一批預估可以縮短製作時間。','estimate'],['解釋','圖片看起來可能更符合品牌語氣。','inference'],['空白','來源和最終核准人？尚未確認。','unknown']]:[['紀錄','這場虛構測試有 8 人到場。','data'],['估算','下一場可能需要 12 張椅子。','estimate'],['解釋','有人提早離開，可能因為交通。','inference'],['空白','離開的人是否滿意？尚未詢問。','unknown']];
     const selects = examples.map(([label, claim]) => select(claim, [['unknown','未知'],['data','已記錄資料'],['estimate','估計'],['inference','推論']]));
-    button('把資訊放上證據桌', () => { const matches = selects.filter((el,i) => el.value === examples[i][2]).length; finishGame(selects.map(el=>el.value), `映蓁把卡片分到證據桌的四格。${matches === 4 ? '這次每張卡都保留了它的證據性質。' : '有些卡還需要重新分類：到場紀錄是資料、椅子數是估計、離開原因是推論、滿意程度仍未知。'}分類練習不是能力評分。`); }, root);
+    button('把資訊放上證據桌', () => { const matches = selects.filter((el,i) => el.value === examples[i][2]).length; finishGame(selects.map(el=>el.value), `映蓁把卡片分到證據桌的四格。${matches === 4 ? '這次每張卡都保留了它的證據性質。' : '有些卡還需要重新分類：記錄對應資料、預計對應估計、可能的解釋屬於推論，尚未確認的部分仍未知。'}分類練習不是能力評分。`); }, root);
   } else if (kind === 'journey') {
     const stage = select('觀察顧客停在哪裡', [['find','找不到需要的資訊'],['compare','比較選項時怕選錯'],['confirm','下單前不知道能否退換']]);
     const support = select('提供哪一種支援？', [['ad','再推一則廣告'],['explain','說清楚條件與限制'],['human','讓現場人員協助確認']]);
@@ -165,16 +178,18 @@ function openGame(object = null) {
 }
 function finishGame(choices, result) {
   const s = scene(gameState.articleId);
+  const physicalReaction=result.split('。')[0]+'。';
   const choiceId=$('scene-choice')?.value||gameState.scenarioChoice;
   const outcome=s?.interaction?.outcomes?.find(item=>item.choiceId===choiceId);
   if(outcome)result=`${outcome.title}。${outcome.text}\n${result}`;
   gameState.choices = choices; gameState.result = result; gameState.before = false;
   $('game-result').textContent = result;
-  world?.setSpeech?.(result.split('。')[0] + '。');
+  world?.setSpeech?.(physicalReaction);
   $('game-visual').classList.add('changed'); $('game-after').hidden = false; $('compare').textContent = '查看選擇前';
-  const stampByKind={sourceverification:'truth',purchase:'preference',attention:'attention',memory:'memory',persona:'people',judgment:'judgment',journey:'experience',delegation:'agent'};
-  progress.stamp(stampByKind[gameState.kind]);
+  $('game-result').scrollIntoView({block:'nearest',behavior:reducedMotion?'instant':'smooth'});
+  progress.stamp(s.insightStampId);
   world?.applyInteraction?.(gameState.articleId, { kind: gameState.kind, choices, scenarioChoice:choiceId, result, before: false });
+  world?.setRecommendations?.(recommend(gameState.articleId));
   let source=$('game-evidence');if(!source){source=document.createElement('details');source.id='game-evidence';$('game-result').after(source);}source.replaceChildren();text('summary','這跟原文有什麼關係？',source);text('p',outcome?.sourceEvidence||s?.interaction?.sourceEvidence||article(gameState.articleId).summary,source);text('small',`觀點來源：${article(gameState.articleId).title}。人物與遊戲結果為虛構情境，並非原刊作者發言。`,source);renderCatalog();
   $('story-ending')?.remove();
   const ending=DATA.storyRoutes[0]?.ending;
@@ -184,14 +199,19 @@ function finishGame(choices, result) {
 async function intro() {
   if (progress.state.introSeen || reducedMotion) return;
   $('intro').hidden = false;
-  await new Promise(resolve => {
-    let timer, caption;
-    const finish = () => { clearTimeout(timer); clearInterval(caption); $('intro').hidden = true; $('intro-book').replaceChildren(); progress.state.introSeen = true; progress.save(); resolve(); };
-    $('skip-intro').onclick = finish;
-    const lines = ['翻開一頁，走進一個問題。','紙頁升起，問題有了形狀。','書頁化成海岸，四大群島正在展開。','答案很多，可是我到底該相信哪一個？'];
-    let i = 0; caption = setInterval(() => { $('intro-caption').textContent = lines[Math.min(++i,3)]; }, 2000);
-    timer = setTimeout(finish, 8200);
+  $('intro-book').hidden=true;
+  let sequence,finished=false,resolveSkip;
+  const skipped=new Promise(resolve=>{resolveSkip=resolve;});
+  $('skip-intro').onclick=()=>{finished=true;sequence?.skip();resolveSkip();};
+  const animation=import('./intro.js').then(async module=>{
+    if(finished)return;
+    sequence=await module.createBookIntro({host:$('intro'),reducedMotion,onCaption:caption=>{$('intro-caption').textContent=caption;}});
+    if(finished){sequence.dispose();return;}
+    await sequence.play();
   });
+  try{await Promise.race([animation,skipped]);}
+  catch{status('開場動畫未能載入，直接進入閱讀群島。');}
+  finally{finished=true;sequence?.dispose();$('intro').hidden=true;$('intro-book').replaceChildren();progress.state.introSeen=true;progress.save();}
 }
 
 $('read').onclick = read; $('interact').onclick = () => openGame();
@@ -200,7 +220,7 @@ $('return-travel').onclick=()=>{if(travelOrigin)visit(travelOrigin,null,false);$
 $('bookmark').onclick = () => { progress.toggle('bookmarks', current); $('bookmark').textContent = progress.state.bookmarks.includes(current) ? '已收藏' : '收藏'; renderCatalog(); };
 $('mark-read').onclick = () => { if (!progress.state.read.includes(current)) progress.toggle('read', current); $('mark-read').textContent = '已讀完 ✓'; renderCatalog(); };
 $('note').addEventListener('input', () => { clearTimeout(noteTimer); $('note-status').textContent = '儲存中…'; noteTimer = setTimeout(flushNote, 200); });
-$('reader').addEventListener('close', flushNote); addEventListener('pagehide', flushNote);
+$('reader').addEventListener('close',()=>{flushNote();world?.setActive?.(true);}); addEventListener('pagehide', flushNote);
 document.querySelectorAll('[data-depth]').forEach(b => b.onclick = () => { flushNote(); depth = b.dataset.depth; renderReading(); });
 for (const [id, offset] of [['previous',-1],['next',1]]) $(id).onclick = () => visit(DATA.articles[(DATA.articles.findIndex(a=>a.id===current)+22+offset)%22].id);
 function setMode(mode){progress.state.mode=mode==='explore'?'explore':'story';progress.save();$('mode').textContent=progress.state.mode==='story'?'故事探索':'自由閱讀';world?.setMode(progress.state.mode);}
@@ -222,6 +242,7 @@ $('game').addEventListener('close',()=>{if(!$('game').open){world?.setEncounter?
 addEventListener('keydown',event=>{if(event.key==='Escape'&&$('game').open)$('game').close();});
 $('export-progress').onclick=()=>{flushNote();const url=URL.createObjectURL(new Blob([JSON.stringify(progress.state,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='decision-wisdom-reading-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 $('import-progress').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>2_000_000)throw Error('備份檔案過大');const saved=progress.restore(JSON.parse(await file.text()));renderCatalog();status(saved?'已合併閱讀紀錄，既有非空白筆記優先保留。':'已讀入本次畫面，但瀏覽器儲存失敗；請下載備份保存。');}catch(error){status(`無法匯入：${error.message}`);}finally{e.target.value='';}};
+$('world').addEventListener('webglcontextlost',event=>{event.preventDefault();contextFailed=true;world?.dispose();world=null;document.body.classList.add('fallback');$('catalog').hidden=false;status('3D 連線中斷，已切換閱讀模式。閱讀紀錄與筆記仍可使用。');});
 
 async function boot() {
   try {
@@ -242,13 +263,16 @@ async function boot() {
         },
         onTransitionStage:(stage,detail)=>{
           $('travel-controls').hidden=stage==='arrival'||reducedMotion;
+          $('story').dataset.traveling=String(stage!=='arrival'&&!reducedMotion);
+          if(stage!=='arrival'&&detail?.question)$('dialogue').textContent=detail.question;
+          if(stage==='arrival'&&detail?.arrivalLine)$('dialogue').textContent=detail.arrivalLine;
           status(detail?.question||({settle:'故事暫停一下，帶著剛才的問題出發。',question:'下一個線索在海的另一邊。',carry:'帶上剛才的線索。',sail:'沿著知識航線前進。',arrival:'已抵達，點選人物或道具開始探索。'}[stage])||'正在航行');
         },
       });
       if(expired){created.dispose();throw Error('3D 載入逾時');}return created;
     }),new Promise((_,reject)=>{worldTimeout=setTimeout(()=>{expired=true;reject(Error('3D 載入逾時'));},15000);})]).then(value=>({value}),error=>({error}));
     await intro();
-    try { const loaded=await worldReady;clearTimeout(worldTimeout);if(loaded.error)throw loaded.error;world=loaded.value; world.setPopulation(Number($('population').value)); visit(current,null,false);world.setMode(progress.state.mode);status('拖曳探索・滾輪縮放・點選人物或道具。'); }
+    try { const loaded=await worldReady;clearTimeout(worldTimeout);if(loaded.error)throw loaded.error;if(contextFailed){loaded.value.dispose();throw Error('3D 連線中斷');}world=loaded.value; world.setPopulation(Number($('population').value)); visit(current,null,false);world.setMode(progress.state.mode);if($('reader').open)world.setActive(false);status('拖曳探索・滾輪縮放・點選人物或道具。'); }
     catch(error){document.body.classList.add('fallback');$('catalog').hidden=false;status(`${error.message}。已切換可閱讀全部文章的 2D 模式。`);}
     window.immersive={get data(){return DATA;},get world(){return world;},get progress(){return progress.state;},visit,openGame};
   } catch(error) { document.body.classList.add('fallback');status(error.message);$('dialogue').replaceChildren();const a=text('a','開啟完整原文目錄',$('dialogue'));a.href='../read/2026/index.html'; }

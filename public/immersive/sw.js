@@ -225,6 +225,25 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
+  // Static hosts often serve the scoped index for /immersive/ online, but the
+  // navigation request itself is not an asset URL in the cache manifest.
+  // Resolve that exact app root to the already cached entry document offline.
+  if (event.request?.mode === 'navigate') {
+    let navigationUrl;
+    try { navigationUrl = new URL(event.request.url); } catch { navigationUrl = null; }
+    if (navigationUrl?.origin === APP_SCOPE.origin && navigationUrl.pathname === APP_SCOPE.pathname) {
+      event.respondWith((async () => {
+        const entry = { url: new URL('index.html', APP_SCOPE), key: new URL('index.html', APP_SCOPE).href };
+        try {
+          const cache = await caches.open(CACHE_NAME);
+          const cached = await cache.match(entry.key);
+          if (cached) return cached;
+        } catch { /* Fall through to the normal network navigation. */ }
+        return fetch(event.request);
+      })());
+      return;
+    }
+  }
   const entry = cacheableRequest(event.request);
   if (!entry) return;
   event.respondWith(serveFromCache(event.request, entry));
