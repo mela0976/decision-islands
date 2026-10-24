@@ -5,6 +5,9 @@ import { chromium } from '@playwright/test';
 
 const output = 'test-results/immersive-character-contact';
 await mkdir(output, { recursive: true });
+const workerSource = await readFile('public/immersive/sw.js', 'utf8');
+const expectedCacheVersion = workerSource.match(/const CACHE_VERSION = '([^']+)'/)?.[1];
+assert.ok(expectedCacheVersion, 'immersive worker declares its cache version');
 const server = await preview({ preview: { host: '127.0.0.1', port: 0 } });
 const browser = await chromium.launch({ headless: true, args: ['--enable-webgl', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const origin = `http://127.0.0.1:${server.httpServer.address().port}`;
@@ -75,7 +78,7 @@ try {
   });
   assert.equal(snapshot.status, 200);
   assert.equal(snapshot.text, await readFile('dist/immersive/character-events.js', 'utf8'));
-  assert(snapshot.names.some(name => name.endsWith('2026-10-24.9')));
+  assert(snapshot.names.some(name => name.endsWith(expectedCacheVersion)));
   await page.waitForFunction(() => navigator.serviceWorker.controller);
   await context.setOffline(true);
   await page.reload({ waitUntil: 'domcontentloaded' });

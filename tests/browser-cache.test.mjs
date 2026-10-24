@@ -339,7 +339,7 @@ test('root redirect navigation ignores campaign queries in its cache key while p
 test('root worker serves the immersive app root and public CDN modules from the scoped offline snapshot', async () => {
   cacheBuckets.clear();
   const appCache = await cacheStorage.open('decision-immersive:%2Fproject%2Fimmersive%2F:2026-10-24.3');
-  for (const path of ['./index.html', './app.js', './data.js', './world.js', './character-events.js', './intro.js', './progress.js', './cache.js', './style.css', './contrast.css', '../data/2026.json', '../fonts/publication.css']) {
+  for (const path of ['./index.html', './app.js', './data.js', './world.js', './editorial-textures.js', './character-events.js', './intro.js', './progress.js', './cache.js', './style.css', './contrast.css', '../data/2026.json', '../fonts/publication.css']) {
     const url = new URL(path, 'https://app.example/project/immersive/').href;
     await appCache.put(request(url), response(200, path.includes('index') ? 'immersive shell' : 'public core'));
   }
@@ -374,14 +374,30 @@ test('root worker will not mix assets from an incomplete immersive snapshot', as
 test('root worker rejects a formerly complete snapshot missing the contact module', async () => {
   cacheBuckets.clear();
   const old = await cacheStorage.open('decision-immersive:%2Fproject%2Fimmersive%2F:old');
-  for (const path of ['./index.html', './app.js', './data.js', './world.js', './intro.js', './progress.js', './cache.js', './style.css', './contrast.css', '../data/2026.json', '../fonts/publication.css']) {
+  for (const path of ['./index.html', './app.js', './data.js', './world.js', './editorial-textures.js', './intro.js', './progress.js', './cache.js', './style.css', './contrast.css', '../data/2026.json', '../fonts/publication.css']) {
     await old.put(request(new URL(path, 'https://app.example/project/immersive/').href), response(200, 'old core'));
   }
   globalThis.fetch = async () => { throw new Error('offline missing contact module'); };
   await assert.rejects(dispatchFetch('https://app.example/project/immersive/', { mode: 'navigate', destination: 'document' }), /offline missing contact module/);
   await old.put(request('https://app.example/project/immersive/character-events.js'), response(200, 'contact module'));
-  const module = await dispatchFetch('https://app.example/project/immersive/character-events.js');
-  assert.equal(module.result.body, 'contact module');
+  const contactModule = await dispatchFetch('https://app.example/project/immersive/character-events.js');
+  assert.equal(contactModule.result.body, 'contact module');
+  const shell = await dispatchFetch('https://app.example/project/immersive/', { mode: 'navigate', destination: 'document' });
+  assert.equal(shell.result.body, 'old core');
+  globalThis.fetch = async request => response(200, `network ${request?.url || ''}`);
+});
+
+test('root worker rejects a formerly complete snapshot missing the editorial texture module', async () => {
+  cacheBuckets.clear();
+  const old = await cacheStorage.open('decision-immersive:%2Fproject%2Fimmersive%2F:old');
+  for (const path of ['./index.html', './app.js', './data.js', './world.js', './character-events.js', './intro.js', './progress.js', './cache.js', './style.css', './contrast.css', '../data/2026.json', '../fonts/publication.css']) {
+    await old.put(request(new URL(path, 'https://app.example/project/immersive/').href), response(200, 'old core'));
+  }
+  globalThis.fetch = async () => { throw new Error('offline missing editorial texture module'); };
+  await assert.rejects(dispatchFetch('https://app.example/project/immersive/', { mode: 'navigate', destination: 'document' }), /offline missing editorial texture module/);
+  await old.put(request('https://app.example/project/immersive/editorial-textures.js'), response(200, 'editorial texture module'));
+  const module = await dispatchFetch('https://app.example/project/immersive/editorial-textures.js');
+  assert.equal(module.result.body, 'editorial texture module');
   const shell = await dispatchFetch('https://app.example/project/immersive/', { mode: 'navigate', destination: 'document' });
   assert.equal(shell.result.body, 'old core');
   globalThis.fetch = async request => response(200, `network ${request?.url || ''}`);

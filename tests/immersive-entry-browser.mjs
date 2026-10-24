@@ -4,6 +4,20 @@ import { preview } from 'vite';
 import { chromium } from '@playwright/test';
 const server = await preview({ preview: { host: '127.0.0.1', port: 0, strictPort: false } });
 const browser = await chromium.launch({ headless: true, args: ['--enable-webgl', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+async function closeServerWithTimeout(timeoutMs = 5000) {
+  server.httpServer.closeAllConnections?.();
+  let timer;
+  try {
+    await Promise.race([
+      server.close(),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`Vite preview did not close within ${timeoutMs}ms.`)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 try {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
   const browserErrors = [];
@@ -40,12 +54,12 @@ try {
     return (await cache.keys()).map(request => request.url).sort();
   });
   const cachedUrls = new Set(immersiveCacheInventory);
-  const requiredLocal = [`${origin}/immersive/index.html`, `${origin}/immersive/app.js`, `${origin}/immersive/data.js`, `${origin}/immersive/world.js`, `${origin}/immersive/intro.js`, `${origin}/immersive/progress.js`, `${origin}/immersive/cache.js`, `${origin}/immersive/style.css`, `${origin}/immersive/contrast.css`, `${origin}/data/2026.json`, `${origin}/fonts/publication.css`, `${origin}/assets/cover-2026.webp`, ...Array.from({ length: 11 }, (_, index) => `${origin}/fonts/publication-${index === 0 ? 'latin-2a33d5d6a5' : index === 1 ? 'tc-supplement-0537efd18e' : `tw-variable-${index - 2}-${['a744bc8b6c','6cb5b4634b','773e05b1bc','81c18e680d','57e2764204','5d4b6c9d18','4358d63bf0','0b34eb3fe3','7a1dc60589'][index - 2]}`}.woff2`)];
+  const requiredLocal = [`${origin}/immersive/index.html`, `${origin}/immersive/app.js`, `${origin}/immersive/data.js`, `${origin}/immersive/world.js`, `${origin}/immersive/editorial-textures.js`, `${origin}/immersive/character-events.js`, `${origin}/immersive/intro.js`, `${origin}/immersive/progress.js`, `${origin}/immersive/cache.js`, `${origin}/immersive/style.css`, `${origin}/immersive/contrast.css`, `${origin}/data/2026.json`, `${origin}/fonts/publication.css`, `${origin}/assets/cover-2026.webp`, ...Array.from({ length: 11 }, (_, index) => `${origin}/fonts/publication-${index === 0 ? 'latin-2a33d5d6a5' : index === 1 ? 'tc-supplement-0537efd18e' : `tw-variable-${index - 2}-${['a744bc8b6c','6cb5b4634b','773e05b1bc','81c18e680d','57e2764204','5d4b6c9d18','4358d63bf0','0b34eb3fe3','7a1dc60589'][index - 2]}`}.woff2`)];
   const requiredCdn = ['https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js', 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js'];
-  const missingOptional = requiredLocal.slice(11).concat(requiredCdn).filter(url => !cachedUrls.has(url));
-  assert.ok(requiredLocal.slice(0, 11).every(url => cachedUrls.has(url)), 'all app core files are cached');
+  const missingOptional = requiredLocal.slice(13).concat(requiredCdn).filter(url => !cachedUrls.has(url));
+  assert.ok(requiredLocal.slice(0, 13).every(url => cachedUrls.has(url)), 'all app core files are cached');
   assert.deepEqual(missingOptional, [], 'all optional cover/font/CDN resources are present');
-  assert.equal(immersiveCacheInventory.length, 25);
+  assert.equal(immersiveCacheInventory.length, new Set([...requiredLocal, ...requiredCdn]).size);
   await page.context().setOffline(true);
   await page.goto(`${origin}/?campaign=offline#article`, { waitUntil: 'domcontentloaded', timeout: 15000 });
   await page.waitForFunction(() => location.pathname.endsWith('/immersive/'), { timeout: 10000 });
@@ -60,17 +74,40 @@ try {
   await page.locator('#read').click();
   await page.locator('[data-depth="full"]').click();
   assert.equal(await page.locator('#reading-content').innerText(), fullText, 'the root URL reaches full source text offline');
+  await page.locator('#reader form .close').click();
+  const builtP01Id = await page.evaluate(() => window.immersive.data.islands.find(candidate => candidate.id === 'P01')?.articleId);
+  assert.ok(builtP01Id, 'the built edition resolves P01 through its canonical island record');
+  await page.evaluate(id => window.immersive.visit(id, null, false), builtP01Id);
+  await page.waitForFunction(id => window.immersive.world.getState().current === id, builtP01Id);
+  await page.waitForFunction(() => window.immersive.world.getRenderState().renderedFrames >= 8);
+  const builtP01 = await page.evaluate(() => ({
+    state: window.immersive.world.getState(),
+    render: window.immersive.world.getRenderState(),
+  }));
+  const builtMotifs = builtP01.state.editorialMotifs.map(motif => motif.motifId);
+  for (const motif of ['flowerPaper', 'sourcePortrait', 'simulatedPortrait']) assert.ok(builtMotifs.includes(motif), `built offline P01 renders ${motif}`);
+  assert.ok(builtP01.render.editorialTextureCount >= 6, 'the built offline world loads shared editorial textures');
+  await mkdir('test-results/immersive-editorial/built', { recursive: true });
+  await page.locator('#world').screenshot({ path: 'test-results/immersive-editorial/built/390-P01-offline-built.png' });
+  const disposedBuiltWorld = await page.evaluate(() => {
+    window.immersive.world.dispose();
+    return window.immersive.world.getRenderState();
+  });
+  assert.equal(disposedBuiltWorld.editorialTextureCount, 0, 'built P01 releases shared textures on dispose');
+  assert.equal(disposedBuiltWorld.ownedTextureCount, 0);
+  assert.equal(disposedBuiltWorld.ownedMaterialCount, 0);
+  assert.equal(disposedBuiltWorld.ownedGeometryCount, 0);
   const noJs = await browser.newContext({ javaScriptEnabled: false });
   const noJsPage = await noJs.newPage();
   await noJsPage.goto(`${origin}/`);
   assert.equal(await noJsPage.locator('noscript a[href="./read/2026/index.html"]').count(), 1);
   await noJs.close();
-  const results = { entryPath: '/', finalPath: new URL(page.url()).pathname, islandCount: await page.evaluate(() => window.immersive.data.islands.length), articleCharacters: fullText.length, mobileInteractiveMs, noJsSourceFallback: true, rootOfflineReload: true, appOfflineReload: true, immersiveCacheEntries: immersiveCacheInventory.length, cachedFonts: immersiveCacheInventory.filter(url => url.endsWith('.woff2')).length, cachedThreeModules: immersiveCacheInventory.filter(url => url.startsWith('https://cdn.jsdelivr.net/npm/three@0.160.0/')).length, missingOptional };
+  const results = { entryPath: '/', finalPath: new URL(page.url()).pathname, islandCount: await page.evaluate(() => window.immersive.data.islands.length), articleCharacters: fullText.length, builtOfflineMotifs: builtMotifs, builtOfflineTextureCount: builtP01.render.editorialTextureCount, builtOfflineDispose: { editorialTextures: disposedBuiltWorld.editorialTextureCount, textures: disposedBuiltWorld.ownedTextureCount, materials: disposedBuiltWorld.ownedMaterialCount, geometries: disposedBuiltWorld.ownedGeometryCount }, mobileInteractiveMs, noJsSourceFallback: true, rootOfflineReload: true, appOfflineReload: true, immersiveCacheEntries: immersiveCacheInventory.length, cachedFonts: immersiveCacheInventory.filter(url => url.endsWith('.woff2')).length, cachedThreeModules: immersiveCacheInventory.filter(url => url.startsWith('https://cdn.jsdelivr.net/npm/three@0.160.0/')).length, missingOptional };
   results.rootOfflineReload = true;
   await mkdir('test-results/immersive-entry', { recursive: true });
   await writeFile('test-results/immersive-entry/results.json', JSON.stringify(results, null, 2));
   console.log(JSON.stringify(results, null, 2));
 } finally {
   await browser.close();
-  await new Promise(resolve => server.httpServer.close(resolve));
+  await closeServerWithTimeout();
 }

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { addContactRig, createCharacterEvents } from './character-events.js';
+import { createEditorialTextureFactory, editorialTextureKey } from './editorial-textures.js';
 
 const CHAPTERS = {
   intro: { color: '#d8cdb8', sea: '#f4eee1' },
@@ -55,6 +56,8 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
   const materials = new Map();
   const textures = new Set();
   const labels = new Set();
+  const editorialTextures = createEditorialTextureFactory(THREE, data.visualThemes, textures);
+  let disposedResources = null;
   const random = mulberry32(202601);
   function editorialRoughness() {
     const surface = document.createElement('canvas'); surface.width = 64; surface.height = 64;
@@ -72,7 +75,22 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
   const paperCoastMaterial = new THREE.MeshStandardMaterial({ color: '#e6dcc7', roughness: .96, metalness: 0, roughnessMap: paperRoughness });
   materials.set('paper-coast', paperCoastMaterial);
   function geometry(type) {
-    if (!geometries.has(type)) geometries.set(type, type === 'ball' ? new THREE.SphereGeometry(1, 12, 8) : type === 'cylinder' ? new THREE.CylinderGeometry(1, 1, 1, 12) : type === 'cone' ? new THREE.ConeGeometry(1, 1, 8) : type === 'ring' ? new THREE.TorusGeometry(1, 0.12, 6, 28) : new THREE.BoxGeometry(1, 1, 1));
+    if (!geometries.has(type)) {
+      let created;
+      if (type === 'ball') created = new THREE.SphereGeometry(1, 12, 8);
+      else if (type === 'cylinder') created = new THREE.CylinderGeometry(1, 1, 1, 12);
+      else if (type === 'cone') created = new THREE.ConeGeometry(1, 1, 8);
+      else if (type === 'ring') created = new THREE.TorusGeometry(1, 0.12, 6, 28);
+      else if (type === 'editorial-plane') created = new THREE.PlaneGeometry(1, 1);
+      else if (type === 'paper-petal') {
+        const shape = new THREE.Shape();
+        shape.moveTo(0, 0);
+        shape.bezierCurveTo(-.2, .22, -.28, .57, 0, .82);
+        shape.bezierCurveTo(.28, .57, .2, .22, 0, 0);
+        created = new THREE.ExtrudeGeometry(shape, { depth: .045, steps: 1, bevelEnabled: true, bevelSegments: 1, bevelSize: .018, bevelThickness: .012 });
+      } else created = new THREE.BoxGeometry(1, 1, 1);
+      geometries.set(type, created);
+    }
     return geometries.get(type);
   }
   function material(color) {
@@ -83,6 +101,74 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     const object = new THREE.Mesh(geometry(type), material(color));
     object.position.set(...position); object.scale.set(...scale); object.rotation.y = rotation;
     object.castShadow = true; object.receiveShadow = true; parent.add(object); return object;
+  }
+  function editorialConfig(island, motifId) {
+    return editorialTextures.configFor(island.chapter, island.canonical, motifId);
+  }
+  function editorialMaterial(config, tint = '#ffffff') {
+    const texture = editorialTextures.textureFor(config);
+    const key = `editorial:${editorialTextureKey(config)}:${tint}`;
+    if (!materials.has(key)) materials.set(key, new THREE.MeshStandardMaterial({ map: texture, color: tint, roughness: .96, metalness: 0, side: THREE.DoubleSide }));
+    return materials.get(key);
+  }
+  function addEditorialSurface(parent, island, motifId, { width = .8, height = .8, x = 0, y = 0, z = .51, rotation = 0 } = {}) {
+    const config = editorialConfig(island, motifId);
+    if (!config) return null;
+    const surface = new THREE.Mesh(geometry('editorial-plane'), editorialMaterial(config));
+    surface.scale.set(width, height, 1);
+    surface.position.set(x, y, z);
+    surface.rotation.z = rotation;
+    surface.renderOrder = 1;
+    surface.userData.editorialMotif = { articleId: island.canonical, motifId, type: config.type, finish: config.finish || 'paper', seed: config.seed, textureKey: editorialTextureKey(config) };
+    parent.add(surface);
+    island.editorialSurfaces.push(surface);
+    return surface;
+  }
+  function addEditorialCard(parent, island, motifId, position, scale, rotation = 0) {
+    const config = editorialConfig(island, motifId);
+    if (!config) return null;
+    const card = mesh(parent, 'box', config.palette?.[0] || '#f4f0e7', position, scale, rotation);
+    addEditorialSurface(card, island, motifId, { width: .82, height: .84, z: .52 });
+    card.userData.editorialMotif = { articleId: island.canonical, motifId, type: config.type, finish: config.finish || 'paper', seed: config.seed, textureKey: editorialTextureKey(config) };
+    return card;
+  }
+  function paperFlower(parent, island, x, z, petalPalette, index = 0) {
+    const config = editorialConfig(island, 'flowerPaper');
+    const flower = new THREE.Group();
+    flower.position.set(x, 2.08 + (index % 2) * .07, z);
+    flower.rotation.x = -Math.PI / 2;
+    flower.userData.editorialMotif = { articleId: island.canonical, motifId: 'flowerPaper', type: config?.type || 'paper-flower', seed: config?.seed || 0 };
+    parent.add(flower);
+    const texture = editorialTextures.textureFor(config);
+    const paper = (color) => {
+      const key = `editorial-flower:${config?.seed || 0}:${color}`;
+      if (!materials.has(key)) materials.set(key, new THREE.MeshStandardMaterial({ map: texture, color, roughness: .98, metalness: 0, side: THREE.DoubleSide }));
+      return materials.get(key);
+    };
+    const counts = [[6, 5], [8, 6], [10, 7]][index % 3];
+    const formScale = [0.92, 1, 1.08][index % 3];
+    for (let layer = 0; layer < counts.length; layer++) {
+      const count = counts[layer];
+      for (let petalIndex = 0; petalIndex < count; petalIndex++) {
+        const angle = (petalIndex / count) * Math.PI * 2 + (layer ? Math.PI / count : 0) + index * .11;
+        const petal = new THREE.Mesh(geometry('paper-petal'), paper(petalPalette[(petalIndex + layer) % petalPalette.length]));
+        const radius = layer ? .16 : .11;
+        petal.position.set(Math.cos(angle) * radius, Math.sin(angle) * radius, layer * .052);
+        petal.rotation.z = angle - Math.PI / 2;
+        petal.scale.set((layer ? .86 : 1) * formScale, (layer ? .78 : 1) * formScale, 1);
+        petal.castShadow = true;
+        petal.receiveShadow = true;
+        petal.userData.editorialMotif = { articleId: island.canonical, motifId: 'flowerPaper', layer, petal: petalIndex };
+        flower.add(petal);
+      }
+    }
+    const center = new THREE.Mesh(geometry('ball'), material('#bd9550'));
+    center.position.set(0, 0, .12);
+    center.scale.set(.19, .19, .12);
+    center.userData.editorialMotif = { articleId: island.canonical, motifId: 'flowerPaper', part: 'heart' };
+    flower.add(center);
+    island.editorialSurfaces.push(flower);
+    return flower;
   }
   function label(text, color = '#263f42', width = 144, speech = false) {
     const lines = String(text).match(/.{1,12}/gu)?.slice(0, 4) || [''];
@@ -137,14 +223,35 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
       case 'I01':
         building(g, -2, -2, 5, 3.8, 3, '#f2eadd'); table(g, 1, 1);
         core = mesh(g, 'box', '#414d51', [1, 2.7, .8], [1.5, 1.3, .15], -.2);
+        addEditorialSurface(core, island, 'proposal', { width: .82, height: .82, z: .52 });
         for (let n = 0; n < 7; n++) mesh(g, 'box', '#fffaf0', [-3 + n * .55, 1.2 + n * .18, 2.5], [.45, .12, 1.4], n * .08); break;
       case 'I02':
         building(g, -4, -1, 2.2, 2.4, 2, '#efe5d7'); building(g, 4, 1, 2.2, 3.6, 2, '#d7ddd4');
         core = mesh(g, 'ring', '#8a9f9b', [0, 3, 0], [2, 2, 2]);
         for (let n = -3; n <= 3; n++) mesh(g, 'box', '#f5edde', [n, 1.2 + .25 * Math.cos(n), 0], [.8, .2, 1.2]); break;
       case 'P01':
-        for (let n = 0; n < 7; n++) { const a = n * .9; mesh(g, 'cylinder', '#9caa78', [Math.cos(a) * 3.5, 1.5, Math.sin(a) * 3.5], [.07, 1, .07]); mesh(g, 'ball', n % 2 ? '#e7bfaa' : '#e3e2ce', [Math.cos(a) * 3.5, 2.2, Math.sin(a) * 3.5], [.75, .25, .75]); }
-        core = mesh(g, 'box', '#f5f0df', [0, 2.5, 0], [2, 2.6, .18], -.3); break;
+        {
+          const flowerConfig = editorialConfig(island, 'flowerPaper');
+          const palettes = flowerConfig?.petalPalettes || [['#f2dfc4', '#d58f87', '#d9b55f']];
+          for (let n = 0; n < 7; n++) {
+            const angle = n / 7 * Math.PI * 2;
+            const x = Math.cos(angle) * 3.5;
+            const z = Math.sin(angle) * 3.5;
+            mesh(g, 'cylinder', '#9caa78', [x, 1.65, z], [.07, 1.25, .07]);
+            paperFlower(g, island, x, z, palettes[n % palettes.length], n);
+          }
+        }
+        core = mesh(g, 'box', '#f5f0df', [0, 2.5, 0], [2.65, 2.6, .18], -.3);
+        addEditorialSurface(core, island, 'sourcePortrait', { width: .64, height: .9, x: -.34, z: .52, rotation: -.055 });
+        addEditorialSurface(core, island, 'simulatedPortrait', { width: .64, height: .9, x: .34, z: .52, rotation: .055 });
+        {
+          const sourceLabel = label('來源', '#263f42', 64);
+          sourceLabel.position.set(-3.25, 3.25, 2.55);
+          sourceLabel.userData.editorialMotif = { articleId: island.canonical, motifId: 'flower-source-tag' };
+          g.add(sourceLabel);
+          island.editorialSurfaces.push(sourceLabel);
+        }
+        break;
       case 'P02':
         for (let n = 0; n < 4; n++) building(g, -4 + n * 2.5, -2, 1.8, 2 + n % 2, 2, ['#d9ac8c', '#e7d5b7', '#bec39b', '#d3aab0'][n]);
         core = mesh(g, 'box', '#b4c45e', [1, 1.6, 2], [2, 1.2, 1]); break;
@@ -154,7 +261,14 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
       case 'P04':
         building(g, 3, -2, 3, 2.5, 2.8, '#eee7d9');
         for (let n = -4; n <= 2; n++) { mesh(g, 'box', '#bb9e7d', [n, 1.35 + .55 * Math.sin((n + 4) / 6 * Math.PI), 1], [.85, .18, 1.6]); mesh(g, 'box', '#7b8d8a', [n, 2, 1.9], [.09, 1.3, .09]); }
-        core = mesh(g, 'box', '#e2dcae', [-2, 2.7, 1], [1.2, 1.4, .12]); break;
+        core = mesh(g, 'box', '#e2dcae', [-2, 2.7, 1], [1.2, 1.4, .12]);
+        addEditorialSurface(core, island, 'originalPortrait', { width: .62, height: .9, x: -.34, z: .52, rotation: -.055 });
+        addEditorialSurface(core, island, 'simulatedPortrait', { width: .62, height: .9, x: .34, z: .52, rotation: .055 });
+        {
+          const fingerprint = addEditorialCard(g, island, 'fingerprint', [.85, 3.45, .35], [1.08, 1.38, .08], .72);
+          if (fingerprint) tag(fingerprint, island, 'source', 'source-trace-card');
+        }
+        break;
       case 'P05':
         building(g, 0, -2, 6, 3, 2.7, '#efd7bc'); mesh(g, 'box', '#b9c66d', [0, 3.5, -.3], [6.3, .35, 1.4]);
         for (let n = -2; n < 3; n++) mesh(g, 'box', n % 2 ? '#e8a99b' : '#d4c66b', [n, 1.65, 1.3], [.6, 1, .65]);
@@ -165,6 +279,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
       case 'P07':
         for (let n = 0; n < 5; n++) building(g, n % 2 ? 3 : -3, -3 + n * 1.5, 2, 2 + n % 3 * .6, 1.1, '#d7c9ae');
         core = mesh(g, 'box', '#516461', [0, 2, 0], [.8, 1.5, .18], .3);
+        addEditorialSurface(core, island, 'fingerprint', { width: .88, height: .82, z: .52 });
         for (let n = 0; n < 4; n++) mesh(g, 'ball', '#d6bd93', [Math.sin(n) * 1.8, 2.7 + n * .4, -1], [.35, .23, .18]); break;
       case 'P08':
         for (let n = -1; n <= 1; n++) { mesh(g, 'box', '#7d8780', [n * 3, 2.5, -1], [.16, 3, .16]); mesh(g, 'box', n ? '#d8c6a1' : '#d4a1a3', [n * 3, 4, -1], [2.3, 2.6, .2], n * .15); }
@@ -175,7 +290,12 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
         for (let n = 0; n < 9; n++) mesh(g, 'box', '#b8a170', [(n % 3 - 1) * 1.4, 1.3, 1 + Math.floor(n / 3)], [.85, .55, .7]);
         core = mesh(g, 'cylinder', '#d3b774', [-3, 1.8, 1], [.6, 1.5, .6]); break;
       case 'M01':
-        for (let n = 0; n < 3; n++) { table(g, -3 + n * 3, 0); mesh(g, 'box', '#b7c4bc', [-3 + n * 3, 2.7, -1], [2.4, 2, .12]); }
+        for (let n = 0; n < 3; n++) {
+          table(g, -3 + n * 3, 0);
+          const board = mesh(g, 'box', '#b7c4bc', [-3 + n * 3, 2.7, -1], [2.4, 2, .12]);
+          if (n === 0) addEditorialSurface(board, island, 'originalPortrait', { width: .82, height: .82, z: .52 });
+          if (n === 1) addEditorialSurface(board, island, 'simulatedPortrait', { width: .82, height: .82, z: .52 });
+        }
         core = mesh(g, 'ball', accent, [0, 3.2, 1], [.8, .9, .8]); break;
       case 'M02':
         for (let n = 0; n < 6; n++) { const a = n * Math.PI / 3; mesh(g, 'box', '#f5e7df', [Math.cos(a) * 3, 1.3, Math.sin(a) * 3], [1.5, .45, 1.5], a); mesh(g, 'box', accent, [Math.cos(a) * 1.4, 1.14, Math.sin(a) * 1.4], [2.5, .08, .12], -a); }
@@ -198,7 +318,17 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
         table(g); mesh(g, 'ring', accent, [0, 3.5, 0], [2.4, 1.8, 1.8]);
         core = mesh(g, 'ball', '#d3c5a5', [-2, 2.6, 0], [.65, .65, .65]); mesh(g, 'box', '#73939b', [2, 2.7, 0], [1.1, 1.3, 1.1]); break;
       case 'A03':
-        for (let n = 0; n < 8; n++) { const a = n * .785; mesh(g, 'cylinder', '#809d91', [Math.cos(a) * 3, 2, Math.sin(a) * 3], [.07, 2, .07]); mesh(g, 'ball', n % 2 ? '#d4dbb6' : accent, [Math.cos(a) * 3, 3, Math.sin(a) * 3], [.65, .45, .65]); }
+        {
+          const flowerConfig = editorialConfig(island, 'flowerPaper');
+          const palettes = flowerConfig?.petalPalettes || [['#eee0c6', '#bd8d54', '#6f9490']];
+          for (let n = 0; n < 8; n++) {
+            const angle = n * Math.PI / 4;
+            const x = Math.cos(angle) * 3;
+            const z = Math.sin(angle) * 3;
+            mesh(g, 'cylinder', '#809d91', [x, 1.85, z], [.07, 1.65, .07]);
+            paperFlower(g, island, x, z, palettes[n % palettes.length], n);
+          }
+        }
         core = mesh(g, 'ring', '#6d9198', [0, 2.6, 0], [1.4, 1.4, 1.4]); break;
       case 'A04':
         building(g, -2, -2, 4.5, 2.8, 2.8, '#d5dace'); table(g, 1, 1);
@@ -242,7 +372,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     const silhouette = new THREE.Group(); root.add(silhouette);
     const outcome = new THREE.Group(); detail.add(outcome);
     const decorations = new THREE.Group(); root.add(decorations);
-    const island = { ...entry, canonical, chapter, articleId: entry.articleId || article?.id || canonical, root, detail, silhouette, outcome, decorations, sign, sceneData, color: theme.color, reactionUntil: 0, visited: false };
+    const island = { ...entry, canonical, chapter, articleId: entry.articleId || article?.id || canonical, root, detail, silhouette, outcome, decorations, sign, sceneData, color: theme.color, editorialSurfaces: [], reactionUntil: 0, visited: false };
     tag(coast, island, 'island', 'coast'); tag(lawn, island, 'island', 'ground');
     islands.set(island.articleId, island); buildScene(island, index); detail.visible = false;
     const landmarks = detail.children.filter(o => o.isMesh).sort((a, b) => b.scale.x * b.scale.y * b.scale.z - a.scale.x * a.scale.y * a.scale.z).slice(0, 5);
@@ -833,9 +963,9 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     getCharacterContactState() { return characterEvents.state(); },
     getNPCState(index) { const seed=crowdSeeds[index]; if(!seed||index>=crowd.count)return null;const effective=seed.pauseStartedAt===null?Math.max(0,time-seed.pausedTotal):Math.max(0,seed.pauseStartedAt-seed.pausedTotal);const angle=seed.angle+effective*seed.speed;const position=new THREE.Vector3(Math.cos(angle)*seed.radius,1.45,Math.sin(angle)*seed.radius).add(cast.position);const screen=position.clone().project(camera),rect=canvas.getBoundingClientRect();return {index,angle,speed:seed.speed,walkPhase:(effective+index)%(Math.PI*2),paused:seed.pauseStartedAt!==null,position:{x:position.x,y:position.y,z:position.z},screen:{x:rect.left+(screen.x+1)*rect.width/2,y:rect.top+(1-screen.y)*rect.height/2,z:screen.z}}; },
     getCharacterScreenState() { return actors.map(actor=>{const position=actor.root.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0,1.5,0));const screen=position.project(camera),rect=canvas.getBoundingClientRect();return {id:actor.id,name:actor.name,screen:{x:rect.left+(screen.x+1)*rect.width/2,y:rect.top+(1-screen.y)*rect.height/2,z:screen.z}};}); },
-    getRenderState() { return {active,renderedFrames,disposed,setupMs,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,textureCount:renderer.info.memory.textures,programCount:renderer.info.programs?.length||0,shadowEnabled:renderer.shadowMap.enabled,shadowCasting:sunlight.castShadow,firstDrawShadowCasting,shadowRestoreMs:shadowRestoredAt===null||firstDrawAt===null?null:shadowRestoredAt-firstDrawAt}; },
+    getRenderState() { return {active,renderedFrames,disposed,setupMs,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,textureCount:renderer.info.memory.textures,ownedTextureCount:textures.size,editorialTextureCount:editorialTextures.cacheSize,ownedMaterialCount:materials.size,ownedGeometryCount:geometries.size,releasedResources:disposedResources,programCount:renderer.info.programs?.length||0,shadowEnabled:renderer.shadowMap.enabled,shadowCasting:sunlight.castShadow,firstDrawShadowCasting,shadowRestoreMs:shadowRestoredAt===null||firstDrawAt===null?null:shadowRestoredAt-firstDrawAt}; },
     setSound(enabled) { sound = Boolean(enabled); if (sound) chime(); },
-    getState() { return { characterEvent: characterEvents.state(), current: current.articleId, currenttarget: journey?.destination.articleId || current.articleId, currentTarget: journey?.destination.articleId || current.articleId, mode, population: crowd.count, reducedMotion, transitioning: Boolean(journey), stage: journey ? STAGES[Math.max(0, journey.phase)] : 'arrival', renderedislandcount: entries.length, renderedIslandCount: entries.length, detailedIslandCount: entries.filter(i => i.detail.visible).length, silhouetteIslandCount: entries.filter(i => i.silhouette.visible).length, characters: actors.map(a => ({ id: a.id, name: a.name, nameLabelVisible: a.nameLabel.visible, state: a.state, habit: a.habit, expression: a.expression, position: a.root.position.toArray() })), previewed, recommendations: recommendations.map(route => ({ sourceArticleId: route.sourceArticleId, targetArticleId: route.targetArticleId, relationType: route.relationType, editorialReason: route.editorialReason, transitionQuestion: route.transitionQuestion, canonical: route.canonical, previewVisible: route.object.visible, points: [0, .5, 1].map(t => route.curve.getPoint(t).toArray()) })), carry: { kind: carryKind, visible: carry.visible, morph: carryMorph, phase: journey ? STAGES[Math.max(0, journey.phase)] : 'arrival', shapes: carryKind === 'photo-evidence-bridge' ? { photoScale: photo.scale.toArray(), evidenceCards: evidenceCards.map(o => ({ position: o.position.toArray(), rotationX: o.rotation.x, visible: o.visible })) } : carryKind === 'product-service-journey' ? { productScale: product.scale.toArray(), listRotationX: list.rotation.x, serviceSteps: serviceSteps.map(o => ({ position: o.position.toArray(), scale: o.scale.x, visible: o.visible })) } : carryKind === 'model-limits-scale' ? { cardFlip: modelCard.rotation.y, frameworkScale: scaleFrame.scale.x } : {}, objectCount: carryKind ? carryForms.get(carryKind).getObjectsByProperty('isMesh', true).length : 0 }, coastLinks, exploredLightCount: entries.filter(i => i.exploredLight.visible).length, season, decoratedIslandCount: entries.filter(i => i.decorations.children.length).length, encounter: encounter ? { ...encounter } : null, speech: speech?.userData.text || '', interaction: current.interaction ? { ...current.interaction, baselineRestored: current.interaction.before && matches(current.baseline) && matches(current.actorBaseline), propPosition: current.core.position.toArray(), propRotation: current.core.rotation.toArray().slice(0, 3), outcomeObjectCount: current.outcome.children.length, scenarioObjects: current.outcome.children.filter(object => object.userData.scenarioVisualEffectId === current.interaction.effectId).map(object => ({ effectId: object.userData.scenarioVisualEffectId, propId: object.userData.scenarioPropId, action: object.userData.scenarioAction, geometry: object.geometry?.type || null, position: object.position.toArray(), rotation: object.rotation.toArray().slice(0, 3), scale: object.scale.toArray() })) } : null, camera: { position: camera.position.toArray(), target: controls.target.toArray() }, visited: entries.filter(i => i.visited).map(i => i.articleId), drawCalls: renderer.info.render.calls }; },
-    dispose() { if (disposed) return; disposed = true; characterEvents.cancel(); cancelAnimationFrame(frame); if (shadowRestoreTimer) clearTimeout(shadowRestoreTimer); clearRecommendations(); controls.dispose(); canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointerup', onUp); canvas.removeEventListener('pointermove', onMove); canvas.removeEventListener('pointerleave', onLeave); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('resize', resize); for (const geo of geometries.values()) geo.dispose(); for (const mat of materials.values()) mat.dispose(); for (const texture of textures) texture.dispose(); for (const object of [crowd, crowdHeads, crowdHair, crowdEyes]) object.dispose(); renderer.dispose(); audio?.close(); scene.clear(); },
+    getState() { return { characterEvent: characterEvents.state(), current: current.articleId, currenttarget: journey?.destination.articleId || current.articleId, currentTarget: journey?.destination.articleId || current.articleId, mode, population: crowd.count, reducedMotion, transitioning: Boolean(journey), stage: journey ? STAGES[Math.max(0, journey.phase)] : 'arrival', renderedislandcount: entries.length, renderedIslandCount: entries.length, detailedIslandCount: entries.filter(i => i.detail.visible).length, silhouetteIslandCount: entries.filter(i => i.silhouette.visible).length, editorialMotifs: current.editorialSurfaces.map(object => object.userData.editorialMotif).filter(Boolean), characters: actors.map(a => ({ id: a.id, name: a.name, nameLabelVisible: a.nameLabel.visible, state: a.state, habit: a.habit, expression: a.expression, position: a.root.position.toArray() })), previewed, recommendations: recommendations.map(route => ({ sourceArticleId: route.sourceArticleId, targetArticleId: route.targetArticleId, relationType: route.relationType, editorialReason: route.editorialReason, transitionQuestion: route.transitionQuestion, canonical: route.canonical, previewVisible: route.object.visible, points: [0, .5, 1].map(t => route.curve.getPoint(t).toArray()) })), carry: { kind: carryKind, visible: carry.visible, morph: carryMorph, phase: journey ? STAGES[Math.max(0, journey.phase)] : 'arrival', shapes: carryKind === 'photo-evidence-bridge' ? { photoScale: photo.scale.toArray(), evidenceCards: evidenceCards.map(o => ({ position: o.position.toArray(), rotationX: o.rotation.x, visible: o.visible })) } : carryKind === 'product-service-journey' ? { productScale: product.scale.toArray(), listRotationX: list.rotation.x, serviceSteps: serviceSteps.map(o => ({ position: o.position.toArray(), scale: o.scale.x, visible: o.visible })) } : carryKind === 'model-limits-scale' ? { cardFlip: modelCard.rotation.y, frameworkScale: scaleFrame.scale.x } : {}, objectCount: carryKind ? carryForms.get(carryKind).getObjectsByProperty('isMesh', true).length : 0 }, coastLinks, exploredLightCount: entries.filter(i => i.exploredLight.visible).length, season, decoratedIslandCount: entries.filter(i => i.decorations.children.length).length, encounter: encounter ? { ...encounter } : null, speech: speech?.userData.text || '', interaction: current.interaction ? { ...current.interaction, baselineRestored: current.interaction.before && matches(current.baseline) && matches(current.actorBaseline), propPosition: current.core.position.toArray(), propRotation: current.core.rotation.toArray().slice(0, 3), outcomeObjectCount: current.outcome.children.length, scenarioObjects: current.outcome.children.filter(object => object.userData.scenarioVisualEffectId === current.interaction.effectId).map(object => ({ effectId: object.userData.scenarioVisualEffectId, propId: object.userData.scenarioPropId, action: object.userData.scenarioAction, geometry: object.geometry?.type || null, position: object.position.toArray(), rotation: object.rotation.toArray().slice(0, 3), scale: object.scale.toArray() })) } : null, camera: { position: camera.position.toArray(), target: controls.target.toArray() }, visited: entries.filter(i => i.visited).map(i => i.articleId), drawCalls: renderer.info.render.calls }; },
+    dispose() { if (disposed) return; disposed = true; characterEvents.cancel(); cancelAnimationFrame(frame); if (shadowRestoreTimer) clearTimeout(shadowRestoreTimer); clearRecommendations(); controls.dispose(); canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointerup', onUp); canvas.removeEventListener('pointermove', onMove); canvas.removeEventListener('pointerleave', onLeave); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('resize', resize); disposedResources = { geometries: geometries.size, materials: materials.size, textures: textures.size, editorialTextures: editorialTextures.cacheSize }; for (const geo of geometries.values()) geo.dispose(); for (const mat of materials.values()) mat.dispose(); for (const texture of textures) texture.dispose(); editorialTextures.dispose(); geometries.clear(); materials.clear(); textures.clear(); labels.clear(); for (const object of [crowd, crowdHeads, crowdHair, crowdEyes]) object.dispose(); renderer.dispose(); audio?.close(); scene.clear(); },
   };
 }

@@ -21,7 +21,7 @@
 | 書塔非永久主場景 | 正式根入口轉至文章群島；閱讀文章不重播 intro；舊互動網站由 `/legacy.html` 保留；根路徑與 `/decision-islands/` 子路徑均通過 built Preview；主站 `45025f2` 於 Pages run `40080539177` 部署成功；公開 Chromium 從 `/` 保留 query/hash 導至22島，全文、任務結果、更新 worker/cache version 均讀回正常 | 實體行動裝置與不同 GPU 外觀未驗 |
 | 四章 2／9／5／6，共 22 島 | `immersive-data.test.mjs` 核對原刊 ID、章節與全文；瀏覽器逐一導航 22 島 | 全島最終美術與敘事品質審查 |
 | 不規則、可航行、保留海面 | 固定 seed 座標，島間距至少 18；四群島包圍盒分離 | 遠景觀感、章內船隻和自然海岸聚落需持續打磨 |
-| 紙本編輯與微縮世界質感 | 霧面建築、共享細顆粒紙岸粗糙度貼圖、樹木、道具、柔和海面與章節色彩；檢視手機首屏遮疊後，390px 寬度隱藏四位角色浮動姓名牌，保留角色本體、互動泡泡與 DOM 對話 | 黑白影像、指紋、花朵、半色調等原刊語彙尚未完整融入；真機材質觀感未驗 |
+| 紙本編輯與微縮世界質感 | 霧面建築、共享細顆粒紙岸粗糙度貼圖、樹木、道具、柔和海面與章節色彩；priority 3 視覺切片已為 I01/P01/P04/P07/M01/A03 加入程序影像、指紋、半色調／像素和紙雕花朵；390/1280 真 Chromium 截圖見下方 2026-10-24 紀錄 | 其餘 16 島尚未依原刊語彙逐島完成；本切片不等於完整藝術校稿，真機材質觀感未驗 |
 | 22 個獨立文章場景 | 22 個 canonical 場景建構器、各自情境事件和核心道具；`node tests/immersive-all-island-actions-browser.mjs` 真瀏覽器逐篇完成22項情境任務並保存每篇人物、道具、互動類型和結果長度 | 場景美術與角色物理互動仍需逐島審查，瀏覽器任務通過不等於完成人工藝術校稿 |
 | 四位原創人物、獨立節奏與表情 | 阿綺、小岳、映蓁、芬姐；狀態、習慣、眨眼、動作與互動反應。手機首屏不顯示互相遮住人物的姓名牌；寬畫布仍顯示姓名牌。NPC 真觸控後可對話並自然恢復移動 | P05 拿商品、P06 交應援卡、A01 接服務單已有手掌握點、雙節手臂、固定支撐面及互相目光；六組真瀏覽器接觸驗證見下方。其他逐島姿態、碰撞與敘事走位仍待審查 |
 | 至少八類實際互動 | 查證、購買條件、注意回想、找記憶線索、情境 Persona、證據分類、旅程修復、委託權限八種；22 篇真瀏覽器各完成自己的情境流程與非空回饋，涵蓋八種 interaction type | 任務視覺與選項仍需逐島人工細修；部分控制形式跨文章共用，但情境、輸入、結果和來源映射依島別資料 |
@@ -92,3 +92,12 @@
 本切片採用 Model the Domain，將 owner、支撐面與階段集中於同一事件狀態。採用 Test Behavior, Not Implementation，以 DOM 選擇、畫布截圖與世界座標檢查動作。採用 Prove It Works，區分真正 Chromium 畫面、built 離線讀回與未驗證的逐島敘事品質。how 與 architect 只在本葉節點內完成架構梳理，依當次委派限制沒有再派代理或進行 arena。已讀 no-comments、technical-writing 與 unslop。deslop 外掛在當次技能安裝中未找到，未宣稱完成該外掛審查。
 
 throughput checkpoint。先驗三個代表動作，再回歸既有 68 選項，最後核對離線模組生命週期。沒有可比對照，不宣稱時間或 token 節省比例。
+
+## 2026-10-24 原刊視覺語彙切片
+
+以島嶼 canonical ID 作為視覺設定鍵，`data.js` 對 I01、P01、P04、P07、M01、A03 提供具名 motif、固定 seed、調色盤與表面處理；瀏覽器驗收從 `data.islands` 反查 `articleId`，不在測試中手填文章 ID。`editorial-textures.js` 在本機 Canvas 生成黑白抽象人像、半色調、像素區塊、來源指紋弧紋和紙纖維，沒有依賴遠端圖檔。場景只將貼圖放在敘事看板、來源卡或既有花朵等物件，不新增全島共用展示牌。
+
+- P01 將來源半色調人像與模擬像素人像並排，花朵使用不同層數、形狀和紙色；A03 三品牌各有花瓣配色差異。P04 與 P07 把指紋弧紋作為來源線索；不把圖樣標示為身份認證。I01 與 M01 使用黑白抽象人像；M01 並排半色調和像素化處理。
+- `node tests/immersive-editorial-browser.mjs` 以 Chromium SwiftShader，在 390×844 與 1280×800 拍攝六島畫布與頁面，共 24 張 PNG。逐島核對 motif、聚焦島細節 LOD、共享貼圖快取、零 page errors、world dispose 後文字材質幾何資源全數釋放；P01/P04 手機相機位置和既存 baseline 完全相同。六島與 article ID 映射、截圖、hash 及資源數留在 `test-results/immersive-editorial/after/`。人工檢視兩種 viewport；P01/P04 同機位手機基準截圖在 `test-results/immersive-editorial/before/`。
+- `node --test tests/immersive-editorial-textures.test.mjs tests/immersive-data.test.mjs tests/immersive-cache.test.mjs tests/browser-cache.test.mjs` 定向通過 36/36；新測試覆蓋固定 seed、章節／品牌 motif 差異、CanvasTexture 共用與清快取。兩層 service worker 的 cache 分別升為 `2026-10-24.10` 和 `v5`，cache tests 驗證缺少新視覺模組的舊完整快照會被拒絕。一次 `npm run build` 通過 `tsc --noEmit` 與 Vite build，既有 `fonts/publication.css` build-time warning 保留。其後 `node tests/immersive-entry-browser.mjs` 以 built Preview 與 SwiftShader 離線載入 P01，核對花朵、來源半色調、模擬像素三種 motif，7 張共享 texture 存在並在 dispose 後全部歸零；同次真 Chromium 驗根入口導向、22 島、3,232 字全文、no-JS 原文 fallback、27/27 app/font/CDN 快照、root 和 app 離線重載。截圖 `test-results/immersive-editorial/built/390-P01-offline-built.png`，結果在 `test-results/immersive-entry/results.json`。
+- 這組程序圖案表達原刊視覺類型，並非使用者原始照片，也不宣稱還原或辨識真實人物。藝術完整度仍需逐島校稿；目前只驗六個命名島、畫布模擬尺寸與當前固定種子。實體手機、其他 GPU 及剩餘 16 島的視覺用途未驗。

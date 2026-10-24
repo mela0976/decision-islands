@@ -21,11 +21,50 @@ const CHAPTERS = [
 ];
 
 const VISUAL_THEMES = [
-  { id: 'paper-shore', chapterId: 'intro', palette: ['#e8e2d5', '#b3ad9f', '#333a3b'], material: '紙纖維、淺色石岸、柔光', motifs: ['折頁', '岸線', '鉛筆記號'], atmosphere: '問題剛浮上來，答案還沒有定形。' },
-  { id: 'warm-streets', chapterId: 'people', palette: ['#d8c982', '#9a9d61', '#6e7651'], material: '暖色街道、植物、布料與木作', motifs: ['街角', '舞台', '生活物件'], atmosphere: '人的偏好、信任和記憶在日常裡發生。' },
-  { id: 'rose-lab', chapterId: 'model', palette: ['#e0a7b7', '#c97991', '#66545b'], material: '粉色地景、透明研究台、霧面資料裝置', motifs: ['觀察窗', '證據卡', '分岔路徑'], atmosphere: '先看見假設，再檢查證據與未知。' },
-  { id: 'blue-current', chapterId: 'ai', palette: ['#75c8c7', '#458b9c', '#364b60'], material: '青藍水域、服務街區、手作工坊', motifs: ['任務流', '服務窗口', '協作工具'], atmosphere: '理解要進入服務、內容和責任分工。' },
+  { id: 'paper-shore', chapterId: 'intro', palette: ['#e8e2d5', '#b3ad9f', '#333a3b'], material: '紙纖維、淺色石岸、柔光', motifs: ['折頁', '岸線', '鉛筆記號'], atmosphere: '問題剛浮上來，答案還沒有定形。', editorialMotifs: {
+    I01: { proposal: { type: 'portrait', finish: 'photo', seed: 20261024, palette: ['#f4f0e7', '#222728', '#777a76'] } },
+  } },
+  { id: 'warm-streets', chapterId: 'people', palette: ['#d8c982', '#9a9d61', '#6e7651'], material: '暖色街道、植物、布料與木作', motifs: ['街角', '舞台', '生活物件'], atmosphere: '人的偏好、信任和記憶在日常裡發生。', editorialMotifs: {
+    P01: {
+      sourcePortrait: { type: 'portrait', finish: 'halftone', seed: 20261024, palette: ['#f4f0e7', '#222728', '#777a76'] },
+      simulatedPortrait: { type: 'portrait', finish: 'pixel', seed: 20261024, palette: ['#f4f0e7', '#222728', '#777a76'] },
+      flowerPaper: { type: 'flower-paper', seed: 9021, palette: ['#fffaf0', '#c8bda8'], petalPalettes: [['#f2dfc4', '#d58f87', '#d9b55f'], ['#e9e5d5', '#a2a875', '#d58f87'], ['#f1cfc1', '#cf8d7d', '#e0bf6d']] },
+    },
+    P04: {
+      originalPortrait: { type: 'portrait', finish: 'halftone', seed: 20261024, palette: ['#f4f0e7', '#222728', '#777a76'] },
+      simulatedPortrait: { type: 'portrait', finish: 'pixel', seed: 20261024, palette: ['#f4f0e7', '#222728', '#777a76'] },
+      fingerprint: { type: 'fingerprint', seed: 4047, palette: ['#f3eee3', '#354448', '#9a8a70'] },
+    },
+    P07: { fingerprint: { type: 'fingerprint', seed: 7041, palette: ['#f3eee3', '#354448', '#9a8a70'] } },
+  } },
+  { id: 'rose-lab', chapterId: 'model', palette: ['#e0a7b7', '#c97991', '#66545b'], material: '粉色地景、透明研究台、霧面資料裝置', motifs: ['觀察窗', '證據卡', '分岔路徑'], atmosphere: '先看見假設，再檢查證據與未知。', editorialMotifs: {
+    M01: {
+      originalPortrait: { type: 'portrait', finish: 'halftone', seed: 20261024, palette: ['#f4f0e7', '#222728', '#777a76'] },
+      simulatedPortrait: { type: 'portrait', finish: 'pixel', seed: 20261024, palette: ['#f4f0e7', '#222728', '#777a76'] },
+    },
+  } },
+  { id: 'blue-current', chapterId: 'ai', palette: ['#75c8c7', '#458b9c', '#364b60'], material: '青藍水域、服務街區、手作工坊', motifs: ['任務流', '服務窗口', '協作工具'], atmosphere: '理解要進入服務、內容和責任分工。', editorialMotifs: {
+    A03: { flowerPaper: {
+      type: 'flower-paper', seed: 9033, palette: ['#fffaf0', '#c8bda8'],
+      petalPalettes: [
+        ['#eee0c6', '#bd8d54', '#6f9490'],
+        ['#e5d6df', '#a6799f', '#d8a678'],
+        ['#dce7df', '#6f9e92', '#d5b45e'],
+      ],
+    } },
+  } },
 ];
+
+function cloneEditorialMotifs(editorialMotifs = {}) {
+  return Object.fromEntries(Object.entries(editorialMotifs).map(([sceneId, motifs]) => [
+    sceneId,
+    Object.fromEntries(Object.entries(motifs).map(([motifId, motif]) => [motifId, {
+      ...motif,
+      palette: [...motif.palette],
+      ...(motif.petalPalettes ? { petalPalettes: motif.petalPalettes.map((palette) => [...palette]) } : {}),
+    }])),
+  ]));
+}
 
 const CHARACTERS = [
   { id: 'achi', name: '阿綺', role: '品牌企劃人', nature: '反應快、行程滿，習慣先把事情整理成簡報；碰到互相矛盾的資訊時會皺眉停筆。', habit: '想事情時轉筆，說「等一下」後會先看證據。', motive: '想更快做出決定，也怕把錯誤答案帶進客戶會議。', fictional: true },
@@ -775,7 +814,7 @@ export function buildData(edition) {
         returnToChapterId: 'intro',
       },
     }],
-    visualThemes: VISUAL_THEMES.map((theme) => ({ ...theme, palette: [...theme.palette], motifs: [...theme.motifs] })),
+    visualThemes: VISUAL_THEMES.map((theme) => ({ ...theme, palette: [...theme.palette], motifs: [...theme.motifs], editorialMotifs: cloneEditorialMotifs(theme.editorialMotifs) })),
     progressConfig: {
       storageKey: 'dentsu-decision-intelligence-2026-progress',
       modes: ['story', 'explore'],
