@@ -197,3 +197,7 @@
 ## 任務場景延伸契約
 
 目前 2026 的 48 回合均有 SVG 2.5D 生活／工作舞台，獨立於世界 WebGL。新增題目時用 mission.visual 的完整 initial 與每個 choice frame 表示實體、姿態與互動路徑；不要只更換文字或顏色。answers 仍由 reading-journey-ui 擁有，renderer 只接收已採用或預覽選項。有限動畫結束必須保留結果，暫停／背景隱藏／減少動態必須收斂到正確場景。未提供 visual 的未來書籍保留原任務 fallback，不套用 2026 插畫。詳見 docs/ANIMATED-MISSIONS.md。
+
+## 3D 任務版本
+
+正常任務顯示Three.js compact cutaway場景，模型由mission-3d-assets建立，動作由mission-3d-actions明確指定actor/target/prop。mission-3d-stage轉換地面與桌面錨點，播放有限的走近、操作、結果停留；不解析敘述猜動作。mission-stage wrapper只在WebGL失敗/context loss才建立SVG。更新場景時同時驗證真正WebGL與fallback；舊SVG測試不能當成3D驗證。詳見3D-MISSIONS.md。

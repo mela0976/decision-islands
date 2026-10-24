@@ -58,3 +58,7 @@ Sol 與 Astra 各自比較擴充 Three 世界及 SVG 舞台，皆建議 SVG，�
 部署提交95aaaf15b9b31aab50f717ea7ad85bd647bc846d（程式整合df21ced）。GitHub Actions run40043366783的43項Node測試、13項Python測試、公開檢查、建置與Pages deploy全部success。正式HTML讀回index-DdCOv7Pk.js與index-ChIBTdtm.css，與本機產物一致。
 
 正式網址https://mela0976.github.io/decision-islands/執行animated-missions-browser，48回合96選項、8環境、390/360手機、實際動畫中間像素與座標、有限結束、快速改選、暫停/reduced-motion、英文與節慶全部通過，errors空。再執行TEST_WIDTH=390的journey-browser，以真實WebGL完成選擇、比較/採用、原文返回下一輪、略過、方案、重走與節慶保持。驗證記錄提交僅改文件，不改公開程式資產。
+
+## 3D 版本延伸
+
+後續依使用者要求，正常任務舞台改為真實Three.js 3D，原SVG移至mission-svg-stage作為WebGL失敗備援。上述SVG驗收為該次歷史版本證據，當前3D契約與新驗收見3D-MISSIONS.md。答案、預覽、原文與未知書邊界維持單一所有權。
