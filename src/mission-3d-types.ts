@@ -26,6 +26,7 @@ export interface Mission3DSnapshot {
   comparisonView: 'before' | 'after';
   choiceId: string | null;
   previewChoiceId: string | null;
+  comparisonCue: { active: boolean; token: number | null; entityIds: readonly string[] };
   camera: { position: number[]; left: number; right: number; top: number; bottom: number };
   effects: {kind: 'action-focus'; action: string; target: string; position: number[]}[];
   entities: {id: string; kind: string; position: number[]; rotation: number[]; visible: boolean; joints: number[]; projected: {left: number; top: number; right: number; bottom: number; width: number; height: number}}[];

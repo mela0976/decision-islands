@@ -44,6 +44,7 @@ export interface MissionStageInput {
   choiceId: string | null;
   previewChoiceId: string | null;
   comparisonView?: 'before' | 'after';
+  comparisonCue?: { token: number; entityIds: readonly string[]; durationMs: number };
   animate?: boolean;
 }
 export interface MissionStage {

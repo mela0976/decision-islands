@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createMission3DAssets } from './mission-3d-assets';
+import { resolveMissionChangeCue, resolveMissionEntityPose } from './mission-change-cues';
 import type { Mission3DAssets, Mission3DModel, Mission3DStage, Mission3DSnapshot } from './mission-3d-types';
 import type { MissionSceneEntity, MissionStageInput, MissionVisualFrame } from './mission-stage-types';
 
@@ -7,7 +8,6 @@ const ACTORS = new Set(['adult', 'child', 'elder', 'robot']);
 const DURATION = 2800;
 const smooth = (t: number) => { const v = THREE.MathUtils.clamp(t, 0, 1); return v * v * (3 - 2 * v); };
 const mix = THREE.MathUtils.lerp;
-const position = (entity: MissionSceneEntity) => new THREE.Vector3((entity.x - 50) * .12, ACTORS.has(entity.kind) ? 0 : .85, ACTORS.has(entity.kind) ? (entity.y - 75) * .1 + 1.3 : (entity.y - 60) * .07 - .4);
 type Pose = { position: THREE.Vector3; yaw: number; joints: number[]; scale: number; opacity: number };
 type Entity = { model: Mission3DModel; definition: MissionSceneEntity; start: Pose; end: Pose };
 type Signal = { root: THREE.Group; token: THREE.Mesh; from: THREE.Vector3; to: THREE.Vector3; kind: string };
@@ -22,29 +22,8 @@ function handPosition(entry: Entity): THREE.Vector3 {
   return hand ? hand.getWorldPosition(new THREE.Vector3()) : entry.model.root.position.clone().add(new THREE.Vector3(0, .8, .4));
 }
 function terminalPose(entity: MissionSceneEntity, frame: MissionVisualFrame): Pose {
-  const joints = Array<number>(18).fill(0);
-  const action = frame.actions?.find(item => item.actor === entity.id);
-  const receivedAction = frame.actions?.find(item => item.target === entity.id && item.actor !== entity.id);
-  const flow = frame.flows.find(item => item.from === entity.id || item.to === entity.id);
-  const otherId = action?.target ?? receivedAction?.actor ?? (flow && (flow.from === entity.id ? flow.to : flow.from));
-  const other = frame.entities.find(item => item.id === otherId);
-  const point = position(entity), target = other ? position(other) : null;
-  if (ACTORS.has(entity.kind)) {
-    const peers = frame.entities.filter(item => ACTORS.has(item.kind) && (item.opacity ?? 1) > .04).sort((a, b) => a.id.localeCompare(b.id));
-    const index = peers.findIndex(item => item.id === entity.id);
-    for (let prior = 0; prior < index; prior++) {
-      const neighbor = position(peers[prior]);
-      if (Math.abs(point.x - neighbor.x) < .8 && Math.abs(point.z - neighbor.z) < .75) point.z = neighbor.z + .85;
-    }
-  }
-  const yaw = ACTORS.has(entity.kind) && target ? Math.atan2(target.x - point.x, target.z - point.z) : -.25;
-  const pose = entity.pose ?? 'idle';
-  if (pose === 'present' || action?.kind === 'show' || action?.kind === 'handoff' || (flow && flow.from === entity.id)) { joints[9] = -1.05; joints[11] = -.24; joints[3] = -.07; }
-  if (pose === 'work' || action?.kind === 'operate' || action?.kind === 'review') { joints[6] = -.95; joints[9] = -.95; joints[3] = .16; joints[0] = .22; }
-  if (pose === 'listen' || (flow && flow.to === entity.id)) { joints[0] = .13; joints[2] = .08; joints[6] = -.32; }
-  if (receivedAction && ACTORS.has(entity.kind)) { joints[0] = .16; joints[6] = receivedAction.kind === 'handoff' ? -.85 : -.36; joints[9] = -.38; }
-  if (action?.kind === 'pause' || (!action && flow?.kind === 'pause')) { joints[9] = -.9; joints[11] = -.65; joints[3] = -.12; }
-  return { position: point, yaw, joints, scale: (entity.scale ?? 1) * (ACTORS.has(entity.kind) ? 1.45 : 1.35), opacity: entity.opacity ?? 1 };
+  const pose = resolveMissionEntityPose(entity, frame);
+  return {...pose, position: new THREE.Vector3(...pose.position)};
 }
 
 export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', onFallback?: (fallback: boolean) => void): Mission3DStage {
@@ -78,6 +57,41 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
   const effects: {root: THREE.Group; action: string; target: string}[] = [];
   const privateMaterials = new Map<THREE.Material, { opacity: number; transparent: boolean }>();
   const originalMaterials = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
+  const cueMaterials = new Map<THREE.MeshStandardMaterial | THREE.MeshBasicMaterial, { color: THREE.Color; emissive?: THREE.Color; intensity?: number }>();
+  let cueTimer: ReturnType<typeof setTimeout> | null = null, cueToken: number | null = null;
+  let cueEntityIds: string[] = [];
+  const clearCue = () => {
+    if (cueTimer != null) clearTimeout(cueTimer);
+    cueTimer = null;
+    for (const [material, base] of cueMaterials) {
+      material.color.copy(base.color);
+      if (material instanceof THREE.MeshStandardMaterial && base.emissive) { material.emissive.copy(base.emissive); material.emissiveIntensity = base.intensity!; }
+    }
+    cueMaterials.clear(); cueEntityIds = [];
+  };
+  const applyCue = () => {
+    const command = current?.comparisonCue;
+    if (!command) { const highlighted = cueEntityIds.length > 0; clearCue(); if (highlighted) render(); return; }
+    if (command.token === cueToken) return;
+    clearCue(); cueToken = command.token;
+    if (!current || !active || document.hidden || !host.isConnected || !renderer || failed || current.comparisonView == null || (current.previewChoiceId ?? current.choiceId) == null || !Number.isFinite(command.durationMs) || command.durationMs <= 0) return;
+    const changed = new Set(resolveMissionChangeCue(current).entityIds);
+    for (const id of new Set(command.entityIds)) {
+      const entry = entities.get(id);
+      if (!changed.has(id) || !entry?.model.root.visible || (entry.model.root.userData.opacity ?? 1) <= .005) continue;
+      cueEntityIds.push(id);
+      entry.model.root.traverse(object => {
+        if (!(object instanceof THREE.Mesh) || !object.visible) return;
+        for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
+          if (!(material instanceof THREE.MeshStandardMaterial || material instanceof THREE.MeshBasicMaterial) || cueMaterials.has(material)) continue;
+          cueMaterials.set(material, {color: material.color.clone(), ...(material instanceof THREE.MeshStandardMaterial ? {emissive: material.emissive.clone(), intensity: material.emissiveIntensity} : {})});
+          material.color.lerp(new THREE.Color(0xffd071), .42);
+          if (material instanceof THREE.MeshStandardMaterial) { material.emissive.set(0xffbc52); material.emissiveIntensity = .48; }
+        }
+      });
+    }
+    if (cueEntityIds.length) { cueTimer = setTimeout(() => { clearCue(); render(); }, command.durationMs); render(); }
+  };
   const removeEntity = (entry: Entity) => {
     scene.remove(entry.model.root);
     entry.model.root.traverse(object => {
@@ -170,7 +184,7 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
     render();
   };
   const fail = () => {
-    failed = true; cancel(); progress = 1;
+    clearCue(); failed = true; cancel(); progress = 1;
     entities.forEach(entry => apply(entry, 1)); applySignals(1);
     publishPhase(restingPhase());
     canvas.dataset.renderer = 'fallback';
@@ -361,7 +375,7 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
     canvas.setAttribute('aria-label', `${current.definition.title[language]} · ${frame.description[language]}`);
     if (animate && canAnimate()) begin(); else settle();
   };
-  const onVisibility = () => { if (document.hidden) settle(); };
+  const onVisibility = () => { if (document.hidden) { clearCue(); settle(); } };
   const onMotion = () => { if (media.matches) settle(); };
   const onContextLost = (event: Event) => { event.preventDefault(); fail(); };
   const observer = new ResizeObserver(resize); observer.observe(host);
@@ -385,19 +399,21 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
       current = input;
       canvas.dataset.comparisonView = input.comparisonView ?? 'after';
       canvas.setAttribute('aria-label', `${input.definition.title[language]} · ${nextFrame.description[language]}`);
-      if (nextSignature === signature) { if (input.animate === false && progress < 1) settle(); else publishPhase(progress === 1 ? restingPhase() : phase); return; }
+      if (nextSignature === signature) { if (input.animate === false && progress < 1) settle(); else publishPhase(progress === 1 ? restingPhase() : phase); applyCue(); return; }
+      clearCue();
       focus.set(0, .65, 0);
       aimCamera();
       camera.updateProjectionMatrix();
       const animate = input.animate !== false && input.comparisonView !== 'before' && missionKey === input.key && setting === input.definition.setting && choice !== null;
       if (missionKey !== input.key) { cameraYaw = .55; aimCamera(); }
       cancel(); signature = nextSignature; missionKey = input.key; frame = nextFrame;
-      initialize(); sync(animate);
+      initialize(); sync(animate); applyCue();
     },
-    setActive(value) { if (disposed) return; active = value; if (!value) settle(); else if (!renderer && current) { initialize(); sync(false); } },
+    setActive(value) { if (disposed) return; active = value; if (!value) { clearCue(); settle(); } else if (!renderer && current) { initialize(); sync(false); } },
     setMotion(value) { if (disposed) return; motion = value; if (!value) settle(); },
     replay() {
       if (disposed || !current || !frame || current.comparisonView === 'before' || !canAnimate()) return;
+      clearCue();
       for (const [id, entry] of entities) {
         const initial = current.definition.initial.entities.find(entity => entity.id === id);
         entry.start = initial ? terminalPose(initial, current.definition.initial) : {...entry.end, position: entry.end.position.clone(), joints: [...entry.end.joints], opacity: 0};
@@ -406,6 +422,7 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
     },
     snapshot(): Mission3DSnapshot {
       return {mode: renderer && !failed ? 'webgl' : 'fallback', animating: !!raf, progress, phase, comparisonView: current?.comparisonView ?? 'after', choiceId: current?.choiceId ?? null, previewChoiceId: current?.previewChoiceId ?? null,
+        comparisonCue: {active: cueEntityIds.length > 0, token: cueToken, entityIds: [...cueEntityIds]},
         camera: {position: camera.position.toArray(), left: camera.left, right: camera.right, top: camera.top, bottom: camera.bottom},
         effects: effects.map(effect => ({kind: 'action-focus', action: effect.action, target: effect.target, position: effect.root.position.toArray()})), entities: [...entities].map(([id, entry]) => {
         const bounds = projectedBounds(entry.model.root), size = bounds.getSize(new THREE.Vector2());
@@ -414,7 +431,7 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
     },
     dispose() {
       if (disposed) return;
-      cancel(); disposed = true; observer.disconnect();
+      clearCue(); cancel(); disposed = true; observer.disconnect();
       document.removeEventListener('visibilitychange', onVisibility); media.removeEventListener('change', onMotion);
       canvas.removeEventListener('webglcontextlost', onContextLost);
       canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointermove', onMove);
