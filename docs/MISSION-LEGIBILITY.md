@@ -47,3 +47,7 @@ Astra唯讀獨立審查camera/lifecycle/phase/cache及6張實際畫面，未發�
 ## 雲端測試排程修正
 
 第一次發布run40055438332在npm test為58/59，失敗為mission-3d-stage.test.mjs:70的page.screenshot超過30秒；144-frame可讀性掃描與其餘58項通過，部署未執行。新增掃描與既有WebGL/截圖測試共用軟體GPU，原本Node跨檔案平行執行會同時占用該資源。將npm test改為--test-concurrency=1以序列化檔案，不略過或放寬任何斷言。修正後本機完整59/59通過，接著重新驗證雲端。應將資源競爭視為已採取措施的原因推論，不把單次逾時當作已證明所有可能原因。
+
+序列化後run40055782468仍在同一result-b截圖逾時，排除跨檔案競爭為唯一原因。追加Notion即時SOP F及diagnosing-bugs，保留兩次原始紅燈記錄。排序假設為SwiftShader/合成器渲染排隊、特定終態合成卡住、暫停時鐘協調、字型等待（log已顯示fonts loaded，較弱）。
+
+獨立Sol唯讀檢查Playwright實際clock原始碼及stage.tick，確認動畫以絕對timestamp推導而非逐格物理積分。將同一失敗測試的clock.runFor四處改為fastForward，只取原定420/1200/終點及idle觀察時間，不在模擬時間中密集排入數百個GPU frame；保持全部姿態、真實像素、retarget、cache、fallback與idle斷言，也不增加30秒timeout。相關2項測試通過。這是單一變因的下一次Linux驗證，未將渲染排隊稱為已直接量測的確定根因。

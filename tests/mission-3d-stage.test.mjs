@@ -43,7 +43,7 @@ test('real WebGL mission actors articulate, interact, retarget, and stop renderi
     await mkdir('test-results/mission-3d',{recursive:true});
     await page.screenshot({path:'test-results/mission-3d/initial.png'});
     await page.evaluate(() => {window.input.previewChoiceId='a';window.stage.update(window.input);});
-    await page.clock.runFor(420);
+    await page.clock.fastForward(420);
     const moving = await snapshot(page);
     assert.equal(moving.animating,true);
     assert.ok(person(moving).position[0] > -3 && person(moving).position[0] < .6,'actor walks through real 3D positions');
@@ -52,7 +52,7 @@ test('real WebGL mission actors articulate, interact, retarget, and stop renderi
     await page.evaluate(() => {window.input.previewChoiceId=null;window.input.choiceId='a';window.stage.update(window.input);});
     const adopted = await snapshot(page);
     assert.ok(adopted.progress>=moving.progress,'accepting preview preserves ongoing physical animation');
-    await page.clock.runFor(780);
+    await page.clock.fastForward(780);
     const working = await snapshot(page);
     assert.ok(working.progress>.4 && working.progress<.85);
     assert.ok(Math.abs(person(working).joints[9])>.4,'actor reaches forward during performance');
@@ -62,13 +62,13 @@ test('real WebGL mission actors articulate, interact, retarget, and stop renderi
     await page.evaluate(() => {window.input.choiceId='b';window.stage.update(window.input);});
     const retargeted = await snapshot(page);
     assert.deepEqual(person(retargeted).position,person(working).position,'retarget starts at current visible position');
-    await page.clock.runFor(2900);
+    await page.clock.fastForward(2900);
     const stopped = await snapshot(page);
     assert.equal(stopped.progress,1);
     assert.ok(Math.abs(person(stopped).position[0] + 1.8)<.0001);
     assert.equal(stopped.flowCount,1);
     await page.screenshot({path:'test-results/mission-3d/result-b.png'});
-    await page.clock.runFor(180);
+    await page.clock.fastForward(180);
     assert.equal((await snapshot(page)).renderCount,stopped.renderCount,'settled stage has no idle render loop');
     await page.evaluate(() => window.stage.update({...window.input,definition:structuredClone(window.definition)}));
     assert.equal((await snapshot(page)).renderCount,stopped.renderCount,'equivalent physical frame does not replay or redraw');
