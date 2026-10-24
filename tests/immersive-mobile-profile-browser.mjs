@@ -5,9 +5,8 @@ import { chromium } from '@playwright/test';
 const server = await preview({ preview: { host: '127.0.0.1', port: 0, strictPort: false } });
 const browser = await chromium.launch({ headless: true, args: ['--enable-webgl', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 try {
-  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, reducedMotion: 'reduce' });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, reducedMotion: 'reduce', serviceWorkers: 'block' });
   await context.addInitScript(() => {
-    if (!sessionStorage.getItem('__profileStartedAt')) sessionStorage.setItem('__profileStartedAt', String(Date.now()));
     const timing = window.__immersiveTiming = { firstDrawAt: null, firstPresentedAt: null, drawCalls: 0, firstDrawCallMs: 0 };
     const methods = ['drawArrays', 'drawElements', 'drawArraysInstanced', 'drawElementsInstanced', 'drawRangeElements'];
     for (const constructor of [window.WebGLRenderingContext, window.WebGL2RenderingContext]) {
@@ -45,9 +44,10 @@ try {
   await page.waitForFunction(() => window.immersive?.world, { timeout: 20000 });
   const worldReadyMs = Date.now() - started;
   await page.waitForFunction(() => window.__immersiveTiming?.firstPresentedAt !== null, { timeout: 20000 });
-  const drawTiming = await page.evaluate(() => ({ ...window.__immersiveTiming, start: Number(sessionStorage.getItem('__profileStartedAt')) }));
-  const firstDrawMs = drawTiming.firstDrawAt - drawTiming.start;
-  const firstPresentedMs = drawTiming.firstPresentedAt - drawTiming.start;
+  const drawTiming = await page.evaluate(() => ({ ...window.__immersiveTiming }));
+  const firstDrawMs = drawTiming.firstDrawAt - started;
+  // Kept as a legacy output key; this is a double-RAF proxy, not compositor timing.
+  const firstPresentedMs = drawTiming.firstPresentedAt - started;
   await mkdir('test-results/immersive-mobile-profile', { recursive: true });
   await page.locator('#world').screenshot({ path: 'test-results/immersive-mobile-profile/first-draw.png', timeout: 10000 });
   const readyState = await page.evaluate(() => ({ render: window.immersive.world.getRenderState(), world: window.immersive.world.getState(), pixelRatio: window.devicePixelRatio }));
@@ -75,6 +75,7 @@ try {
   const resources = await page.evaluate(() => performance.getEntriesByType('resource').map(entry => ({ name: new URL(entry.name).pathname, startMs: Math.round(entry.startTime), durationMs: Math.round(entry.duration), transferBytes: entry.transferSize, decodedBytes: entry.decodedBodySize, initiator: entry.initiatorType })).filter(entry => /three|OrbitControls|world\.js|data\.js|2026\.json|publication|woff2/.test(entry.name)));
   const results = { profile: { viewport: '390x844', deviceScaleFactor: 2, latencyMs: 150, downloadMbps: 10, cpuThrottle: 4, reducedMotion: true, coldContext: true, browser: 'Chromium SwiftShader' }, worldReadyMs, firstDrawMs, firstPresentedMs, firstDrawCallMs: drawTiming.firstDrawCallMs, drawCallsToFirstPresented: drawTiming.drawCalls, worldSetupMs: readyState.render.setupMs, firstDrawFrames: readyState.render.renderedFrames, renderer: { drawCalls: readyState.render.drawCalls, triangles: readyState.render.triangles, textures: readyState.render.textureCount, programs: readyState.render.programCount, shadowEnabled: readyState.render.shadowEnabled, shadowCastingOnCapture: readyState.render.shadowCasting, shadowCastingAtFirstDraw: readyState.render.firstDrawShadowCasting, shadowRestoreFromFirstDrawMs: readyState.render.shadowRestoreMs, shadowRestoredWithinProfileMs: shadowsRestoredAt - (started + firstPresentedMs), drawCallsAfterShadowRestore: restoredRenderer.drawCalls, programsAfterShadowRestore: restoredRenderer.programCount }, resources, pixelRatio: readyState.pixelRatio, npc100: { count: npcState.population, selectedNpc: npcState.encounter.npcIndex, speech: npcState.speech, readyMs: npcReadyMs }, game: { resultCharacters: gameResult.length, resultMs: gameResultMs } };
   await mkdir('test-results/immersive-mobile-profile', { recursive: true });
+  results.timingNote = 'All times start before root navigation. firstDrawMs marks a WebGL draw call; firstPresentedMs is a legacy-named double-RAF proxy, not compositor presentation. Use the performance-series harness for acceptance.';
   await writeFile('test-results/immersive-mobile-profile/results.json', JSON.stringify(results, null, 2));
   console.log(JSON.stringify(results, null, 2));
   await context.close();
