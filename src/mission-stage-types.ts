@@ -20,11 +20,17 @@ export interface MissionSceneFlow {
   to: string;
   kind: 'share' | 'review' | 'handoff' | 'pause';
 }
+export interface MissionChangeHint {
+  entityIds: readonly string[];
+  before: I18nText;
+  after: I18nText;
+}
 export interface MissionVisualFrame {
   description: I18nText;
   entities: readonly MissionSceneEntity[];
   flows: readonly MissionSceneFlow[];
   actions?: readonly MissionSceneAction[];
+  changeHints?: readonly MissionChangeHint[];
 }
 export interface MissionSceneAction {
   kind: 'show' | 'review' | 'operate' | 'handoff' | 'pause';
