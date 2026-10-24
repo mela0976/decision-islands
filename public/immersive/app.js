@@ -170,6 +170,8 @@ function flushNote() {
 }
 
 function openGame(object = null) {
+  world?.cancelArrival?.(true);
+  $('arrival-controls').hidden=true;
   if(!article(current))return;
   const s = scene(current), id = current, kind = s.interactionType;
   if(world&&world.getState().current!==id)world.focus(id,{animate:false});
@@ -290,6 +292,8 @@ async function intro() {
   finally{finished=true;sequence?.dispose();$('intro').hidden=true;$('intro-book').replaceChildren();progress.state.introSeen=true;progress.save();}
 }
 
+$('skip-arrival').onclick=()=>{world?.skipArrival?.();$('arrival-controls').hidden=true;};
+$('replay-arrival').onclick=()=>{world?.playArrival?.({source:'bell'});};
 $('read').onclick = read; $('interact').onclick = () => openGame();
 $('skip-travel').onclick=()=>{world?.focus(current,{animate:false});$('travel-controls').hidden=true;};
 $('return-travel').onclick=()=>{if(travelOrigin)visit(travelOrigin,null,false);$('travel-controls').hidden=true;};
@@ -337,25 +341,33 @@ async function boot() {
       if(error)throw error;
       const m=module;
       const created=await m.createWorld({
-        canvas:$('world'),data:DATA,reducedMotion,onIslandSelect:id=>visit(id),
+        canvas:$('world'),data:DATA,reducedMotion,initialArrival:false,onIslandSelect:id=>visit(id),
         onObjectSelect:object=>{
           if(object.articleId!==current)visit(object.articleId,null,false);
           if(object.kind==='exit'){const edge=DATA.articleGraph.find(item=>item.sourceArticleId===current&&item.priority===1);if(edge)visit(edge.targetArticleId,edge);}
+          else if(object.objectId==='scene-bell')return;
           else if(object.kind==='note')read();
           else openGame(object);
+        },
+        onArrivalCaption:(caption, detail)=>{
+          if($('game').open||$('reader').open)return;
+          const name=DATA.characters.find(character=>character.id===caption.actorId)?.name||'';
+          $('dialogue').textContent=`${name}：「${caption.text}」${detail.complete&&detail.question?' '+detail.question:''}`;
+          $('arrival-controls').hidden=detail.complete;
+          $('arrival-fiction').hidden=false;
         },
         onTransitionStage:(stage,detail)=>{
           $('travel-controls').hidden=stage==='arrival'||reducedMotion;
           $('story').dataset.traveling=String(stage!=='arrival'&&!reducedMotion);
           if(stage!=='arrival'&&detail?.question)$('dialogue').textContent=detail.question;
-          if(stage==='arrival'&&detail?.arrivalLine)$('dialogue').textContent=detail.arrivalLine;
+          if(stage!=='arrival')$('arrival-controls').hidden=true;
           status(detail?.question||({settle:'故事暫停一下，帶著剛才的問題出發。',question:'下一個線索在海的另一邊。',carry:'帶上剛才的線索。',sail:'沿著知識航線前進。',arrival:'已抵達，點選人物或道具開始探索。'}[stage])||'正在航行');
         },
       });
       if(expired){created.dispose();throw Error('3D 載入逾時');}return created;
     }),new Promise((_,reject)=>{worldTimeout=setTimeout(()=>{expired=true;reject(Error('3D 載入逾時'));},15000);})]).then(value=>({value}),error=>({error}));
     await intro();
-    try { const loaded=await worldReady;clearTimeout(worldTimeout);if(loaded.error)throw loaded.error;if(contextFailed){loaded.value.dispose();throw Error('3D 連線中斷');}world=loaded.value; syncWorldState();status('群島已展開，從一座文章島開始探索。'); try{if(!localStorage.getItem('dentsu-decision-2026-explore-tip'))$('explore-tip').hidden=false;}catch{$('explore-tip').hidden=false;} }
+    try { const loaded=await worldReady;clearTimeout(worldTimeout);if(loaded.error)throw loaded.error;if(contextFailed){loaded.value.dispose();throw Error('3D 連線中斷');}world=loaded.value; syncWorldState();world.setArrivalEnabled(true);if(!$('game').open&&!$('reader').open)world.playArrival({source:'arrival'});status('群島已展開，從一座文章島開始探索。'); try{if(!localStorage.getItem('dentsu-decision-2026-explore-tip'))$('explore-tip').hidden=false;}catch{$('explore-tip').hidden=false;} }
     catch(error){document.body.classList.add('fallback');$('catalog').hidden=false;status(`${error.message}。已切換可閱讀全部文章的 2D 模式。`);}
     window.immersive={get data(){return DATA;},get world(){return world;},get progress(){return progress.state;},visit,openGame};
   } catch(error) { document.body.classList.add('fallback');status(error.message);$('dialogue').replaceChildren();const a=text('a','開啟完整原文目錄',$('dialogue'));a.href='../read/2026/index.html'; }

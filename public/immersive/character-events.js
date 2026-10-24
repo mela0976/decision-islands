@@ -24,7 +24,7 @@ export function addContactRig(actor, mesh) {
   });
 }
 
-function aimHand(actor, handIndex, worldTarget) {
+export function aimHand(actor, handIndex, worldTarget) {
   const hand = actor.hands[handIndex];
   actor.root.updateWorldMatrix(true, false);
   const target = actor.root.worldToLocal(worldTarget.clone());
@@ -168,4 +168,18 @@ export function createCharacterEvents({ actors, cast, mesh, onStart, onReaction 
     return { articleId: e.articleId, effectId: e.effectId, action: e.action, mode: e.mode, phase: e.phase, elapsed: e.elapsed, duration: DURATION, complete: e.complete, owner: e.owner, ownerCount: e.owner ? 1 : 0, supported: e.prop.userData.supported, propPosition: point(e.prop).toArray(), supportPosition: worldPoint(e.support).toArray(), grips: [point(e.grip).toArray(), point(e.receiveGrip).toArray()], participants: [e.source, e.destination].map((actor, i) => { const head = point(actor.head), other = point((actor === e.actor ? e.receiver : e.actor).head), forward = vec(0, 0, 1).applyQuaternion(actor.head.getWorldQuaternion(new THREE.Quaternion())); const palm = point(actor.hands[1].grip); return { id: actor.id, hand: palm.toArray(), head: head.toArray(), headWidth: .58 * 1.4, gripDistance: palm.distanceTo(point(i === 0 ? e.grip : e.receiveGrip)), gazeAlignment: forward.dot(other.sub(head).normalize()) }; }) };
   }
   return { start, update, cancel, state, hasEvent: () => Boolean(event), hasParticipant: id => Boolean(event?.participantIds.includes(id)) };
+}
+
+export function resetContactRig(actor) {
+  actor.hands.forEach((hand, index) => {
+    hand.palm.position.set(hand.side * .34, .43, 0);
+    hand.forearm.visible = false;
+    actor.arms[index].position.set(hand.side * .34, .75, 0);
+    actor.arms[index].scale.set(.08, .65, .08);
+    actor.arms[index].rotation.set(0, 0, 0);
+  });
+  actor.legs.forEach(leg => { leg.rotation.x = 0; });
+  actor.brows.forEach(brow => { brow.rotation.z = 0; });
+  actor.mouth.scale.set(.09, .018, .02);
+  actor.prop.visible = true;
 }

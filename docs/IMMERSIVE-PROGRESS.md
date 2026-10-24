@@ -101,3 +101,26 @@ throughput checkpoint。先驗三個代表動作，再回歸既有 68 選項，�
 - `node tests/immersive-editorial-browser.mjs` 以 Chromium SwiftShader，在 390×844 與 1280×800 拍攝六島畫布與頁面，共 24 張 PNG。逐島核對 motif、聚焦島細節 LOD、共享貼圖快取、零 page errors、world dispose 後文字材質幾何資源全數釋放；P01/P04 手機相機位置和既存 baseline 完全相同。六島與 article ID 映射、截圖、hash 及資源數留在 `test-results/immersive-editorial/after/`。人工檢視兩種 viewport；P01/P04 同機位手機基準截圖在 `test-results/immersive-editorial/before/`。
 - `node --test tests/immersive-editorial-textures.test.mjs tests/immersive-data.test.mjs tests/immersive-cache.test.mjs tests/browser-cache.test.mjs` 定向通過 36/36；新測試覆蓋固定 seed、章節／品牌 motif 差異、CanvasTexture 共用與清快取。兩層 service worker 的 cache 分別升為 `2026-10-24.10` 和 `v5`，cache tests 驗證缺少新視覺模組的舊完整快照會被拒絕。一次 `npm run build` 通過 `tsc --noEmit` 與 Vite build，既有 `fonts/publication.css` build-time warning 保留。其後 `node tests/immersive-entry-browser.mjs` 以 built Preview 與 SwiftShader 離線載入 P01，核對花朵、來源半色調、模擬像素三種 motif，7 張共享 texture 存在並在 dispose 後全部歸零；同次真 Chromium 驗根入口導向、22 島、3,232 字全文、no-JS 原文 fallback、27/27 app/font/CDN 快照、root 和 app 離線重載。截圖 `test-results/immersive-editorial/built/390-P01-offline-built.png`，結果在 `test-results/immersive-entry/results.json`。
 - 這組程序圖案表達原刊視覺類型，並非使用者原始照片，也不宣稱還原或辨識真實人物。藝術完整度仍需逐島校稿；目前只驗六個命名島、畫布模擬尺寸與當前固定種子。實體手機、其他 GPU 及剩餘 16 島的視覺用途未驗。
+
+## 2026-10-24 抵達後生活事件切片
+
+`arrivalEvent` 以島嶼 local 座標保存 cast、props、cause/action/reaction 三個 beat 與 handoff。`arrival-events.js` 獨立持有事件群組、階段、單一道具 owner 和 elapsed。它使用同一 world tick，與遊戲 outcome 分開。真正抵達會播放當島事件，小鈴和「再看島上事件」只重播事件。遊戲、人物對話、比較、重玩與離島取消事件，閱讀和背景分頁暫停 elapsed，恢復時不追補時間。略過及 reduced motion 依序套用三個 beat 的終態及相同的反應與銜接問題。已完成的遊戲結果優先保留，bell 暫播後由原 payload 重建，不寫入閱讀足跡。
+
+操作遠處物件時，角色先走近，掌心到達前，道具仍留在原支撐面。取得 owner 後，角色隨物件移動，手掌實際指向道具；引擎不把遠處物件瞬移到被限制的手掌。各島既有核心裝置保留原位，arrival 道具依自己的位置使用低調擱面，tray 腳依島面高度計算。
+
+- `node tests/immersive-arrival-fixture-browser.mjs` 使用實際 Three 物件，驗交接單一 owner、接觸距離、放下後 owner=null 與 supported=true、略過、reduced motion 和清理。另用真 P04 資料每 20ms 取樣 410 幀，驗掌心接觸前紙張位置不變、每幀紙張位移小於 0.08、角色位移小於 0.1，持物時掌心距離小於 0.01。
+- `node --test tests/immersive-cache.test.mjs tests/browser-cache.test.mjs` 27/27 通過。root worker `v6` 與 immersive worker `2026-10-24.11` 都把 `arrival-events.js` 列為完整快照必要模組，缺少此檔案的舊快照不能借用。
+- 凍結版代表驗證 `ARRIVAL_IDS=P06,M05,A01 node tests/immersive-arrival-browser.mjs` 在 1280×800 與 390×844 通過六組真 Chromium 場景。每個 beat 到 55% 時暫停並保存物件、角色姿態與 PNG，避免只在 phase 起點採到尚未動作的畫面。這是本機 SwiftShader 尺寸驗證，並非實體手機驗收。
+- `node tests/immersive-arrival-browser.mjs` 最終版通過 27 組真 Chromium 場景，含全部 22 島桌面，以及 I01、P06、M05、A01、A06 手機尺寸。每島保存 cause、action、reaction 各 beat 55% 的角色姿態、道具位置與旋轉、owner 和真掌心接觸距離，並驗略過、reduced motion、閱讀暫停、遊戲取消和離島取消。代表五島各兩種尺寸共 30 張 PNG，結果在 `test-results/immersive-arrival/results.json`。上述全量後的初次入場修正只改啟動時機，沒有更動 controller 或座標，依協調者裁決沿用這份無關初次時機的重播矩陣。
+- 初次 arrival 延至 intro 結束並完成 world 同步後啟用，world 的初始化與首次 render 仍提前進行。`node tests/immersive-arrival-startup-browser.mjs` 使用 built Preview 與 no-preference 動畫，通過真首訪 intro、舊訪客無 intro、world 延遲 4.5 秒且提早開閱讀三種邊界。首訪第一句 cause 在 10.614 秒出現，intro 已隱藏，當時 phase=cause、elapsed=0.1；舊訪客 cause 在 0.394 秒出現；提早開閱讀時 arrival=null、world active=false。結果在 `test-results/immersive-arrival-startup/results.json`。這些是該次本機測量，不表示所有 GPU 都有相同時間。
+- `node tests/immersive-scenario-choice-browser.mjs` 複驗 22 島 68 選項、八種玩法、P06/M05/A01 十個手機選項、compare/replay/返回，以及 M05 world 延遲 3.5 秒，78 張截圖且 errors=[]。`node --test tests/immersive-data.test.mjs tests/immersive-arrival-data.test.mjs tests/immersive-scenario-choice.test.mjs` 13/13 通過。
+- `npm run build` 通過 TypeScript 與 Vite，既有出版字型 CSS build warning 保留。`BUILT=1 node tests/immersive-arrival-browser.mjs` 以 built Preview 再驗 A06 自然三個 beat、閱讀暫停、略過、遊戲取消、reduced motion 與離島，1 case、0 error。`node tests/immersive-arrival-lifecycle-browser.mjs` 驗 bell 不開遊戲，完成及取消後精確恢復原 choices、scenarioChoice、before、道具 geometry/pose 與閱讀進度，返島保留完成結果，同島同步不重播。
+- `node tests/immersive-arrival-offline-browser.mjs` 在 built Preview 驗 root 和 app 兩個 worker scope。`2026-10-24.11` 完整快照含 28 檔，CacheStorage 與斷網 fetch 的 `arrival-events.js` 均等於目前 13,010 bytes 原始碼。斷網從根入口及 `/immersive/` 重進後，world 都能初始化，事件保留同一 reduced-motion 終態，errors=[]。結果分別在 `test-results/immersive-arrival-built/`、`test-results/immersive-arrival-lifecycle/`、`test-results/immersive-arrival-offline/`。
+- 協調者抽看最終 390-I01-action 與 390-A06-reaction，接受本切片的角色、物件、虛構標示、略過重播及阿綺結尾。該次抽查不等於全 22 島逐幕藝術驗收。
+- 協調者提供既有正式視覺切片 `5c474c9` 的 CI `40085452768` 成功，以及公開 live Chromium 的 22 島、3,232 字全文、I01-speed 六個道具與事件終態、I01 proposal 紋理及七張共享 texture、零錯誤讀回。該證據屬已發布的上一切片，本 arrival 切片尚未部署。
+
+曾啟動整體 `npm test`，在 CPU legacy NPC engine 區段依協調者指示中止，未列為完整通過。較早的 phase 起點採樣及遠距物件修正前畫面只作開發檢查，不能作最終動作驗收。多代理切片以共享工作樹的互斥檔案責任整合，沒有可比較的時間或 token 對照，不宣稱節省比例。
+
+本切片依 Model the Domain 將道具 owner 與事件階段集中管理。how 與 architect 的架構梳理在本葉節點內完成，遵守當次禁止再委派，不執行 arena。已讀 technical-writing、unslop 與 no-comments，新增程式沒有敘述階段的註解。當次安裝範圍找不到可選 deslop 技能，未宣稱完成該外掛審查。原刊來源與虛構改編標示保留。
+
+全島戲劇自然度、全身碰撞、M05 水下藝術、實體裝置與其他 GPU 的畫面表現仍待逐幕審查。本切片不等於 22 島完整藝術校稿。
