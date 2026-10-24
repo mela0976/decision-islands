@@ -252,7 +252,8 @@ function optionalUrls() {
   const cssUrl = new URL('../fonts/publication.css', appScope);
   const css = readFileSync(new URL('../public/fonts/publication.css', import.meta.url), 'utf8');
   const fontPaths = [...css.matchAll(/url\((['"]?)([^'")]+\.woff2)\1\)/g)].map(match => match[2]);
-  assert.equal(new Set(fontPaths).size, 11, 'the publication stylesheet has eleven font subsets');
+  assert.equal(new Set(fontPaths).size, 12, 'the publication stylesheet has twelve font subsets');
+  assert.ok(fontPaths.includes('publication-tw-ui-b805e5526e.woff2'), 'the cache includes the corrected native UI glyph subset');
   const fonts = fontPaths.map(path => new URL(path, cssUrl).href);
   return [new URL('../assets/cover-2026.webp', appScope).href, ...fonts];
 }

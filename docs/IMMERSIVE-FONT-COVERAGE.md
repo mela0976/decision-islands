@@ -33,3 +33,7 @@ node --test tests/publication-fonts.test.mjs
 `U+21BA ↺`、`U+21BB ↻`、`U+2301 ⌁`、`U+2302 ⌂`、`U+2304 ⌄`、`U+2315 ⌕`、`U+2316 ⌖`、`U+25F7 ◷`、`U+2637 ☷`、`U+263C ☼`、`U+263E ☾`、`U+2659 ♙`、`U+265F ♟`、`U+270E ✎`、`U+2726 ✦`。
 
 這份字型清單只涵蓋 manifest 記錄的原刊與 immersive 語料。它不代表完整 Unicode 字型。
+
+## 測試環境
+
+`requirements-fonts.txt` 固定已驗證的 fonttools[woff] 版本。Pages CI 同時安裝此檔及原 requirements.txt，確保實際 WOFF2 cmap 測試會執行。產生器需要三個授權來源字型；提交後的 coverage 與 hash 回歸測試只需要已提交的 WOFF2，不需要下載原始來源。

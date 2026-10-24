@@ -83,3 +83,22 @@ PERF_FIRST=after PERF_OUTPUT=test-results/immersive-startup-ba-final node tests/
 ```
 
 另一次不列入成績的 post-profile 仍見 onFirstUse 取樣約 517 ms，見 test-results/immersive-startup-diagnostic-after-overlap/summary.json。不能直接把與先前取樣的差當成 shader 加速比例。首次載入仍未達兩秒，且 API 之前的下載／初始化與之後的首用 program 都仍有等待；NPC API 狀態及一項任務不代表全站每個按鈕延遲已驗。
+
+## 可見文字等待候選的否決紀錄
+
+下一單位先修字型正確性。基準 17b1c5a 與候選 0ec4bb8 都已使用相同的 12 個字型檔，包含原先漏收的 25 個介面漢字；Canvas 也都指定 Publication Latin 與 Publication Sans TW。這避免用缺字 fallback 較快作為改善。新量測器等待實際可見 label ready，並對 manifest 的已驗 cmap 字碼核對 Han、Hangul、Latin 與數字。SHA-256 為 eb63d84db726ecdc891767a2b8554e394a58360cc2d6d8c5920cc09a25d0d012；原導航起點、渲染品質與網路／CPU 條件不變。
+
+候選把隱藏姓名字型改為延後等待，新增 per-label readiness。五組預先固定 AB 交錯結果如下。
+
+| 指標 | 正確字型基準中位／範圍 | 候選中位／範圍 |
+|---|---|---|
+| 首畫面可互動且可見字形就緒 | 2739 ms／2724–2885 | 2800 ms／2636–2809 |
+| World API 就緒 | 2282 ms／2273–2445 | 2353 ms／2194–2367 |
+| 100 人對話狀態就緒 | 11 ms／10–77 | 11 ms／8–13 |
+| 任務結果與場景物件就緒 | 578 ms／551–662 | 588 ms／563–635 |
+
+十次四類錯誤皆零，全部保留 22 島、100 人、6 個實際任務道具。三對首互動較快、兩對較慢，差異未超出波動，沒有量到加速。候選另有 inactive 最後一筆字型拒絕後，先成功文字未補繪的問題，由獨立審查以原函式重現。故不合併 0ec4bb8，也不為已否決的候選繼續加複雜度。原始資料在 test-results/visible-font-ab/，審查在 test-results/visible-font-review.md。
+
+保留的是字形供應、Canvas 中英文 family 及字形完成後重畫的正確性工作。上述 2739 ms 只屬指定基準，不直接當作後續新版本或實體手機速度；首載兩秒仍未達。另一次 22 島 warm-world 操作見 IMMERSIVE-INTERACTION-LATENCY.md，不能用 warm 操作通過替代 cold-start。
+
+重跑歷史比較時，需使用各節記錄的測試器版本；目前腳本要求 visibleLabels 與新的字碼 metadata，不能套在沒有這些觀察介面的舊版本，再聲稱重現原數字。

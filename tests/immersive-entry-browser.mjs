@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { preview } from 'vite';
 import { chromium } from '@playwright/test';
@@ -63,7 +63,16 @@ try {
     'immersive/style.css', 'immersive/contrast.css', 'data/2026.json',
     'fonts/publication.css',
   ].map(path => `${origin}/${path}`);
-  const requiredOptional = [`${origin}/assets/cover-2026.webp`, ...Array.from({ length: 11 }, (_, index) => `${origin}/fonts/publication-${index === 0 ? 'latin-2a33d5d6a5' : index === 1 ? 'tc-supplement-0537efd18e' : `tw-variable-${index - 2}-${['a744bc8b6c','6cb5b4634b','773e05b1bc','81c18e680d','57e2764204','5d4b6c9d18','4358d63bf0','0b34eb3fe3','7a1dc60589'][index - 2]}`}.woff2`)];
+  const fontCss = await readFile('public/fonts/publication.css', 'utf8');
+  const fontManifest = JSON.parse(await readFile('public/fonts/manifest.json', 'utf8'));
+  const fontFiles = [...fontCss.matchAll(/src:url\("([^"]+\.woff2)"\)/g)].map(match => match[1]);
+  assert.equal(new Set(fontFiles).size, 12, 'the publication snapshot includes the added native UI glyph shard');
+  assert.equal(fontFiles.length, 12, 'font faces reference twelve distinct WOFF2 files');
+  const latinFile = fontCss.match(/font-family:"Publication Latin";[^}]*src:url\("([^"]+)"\)/)?.[1];
+  assert.ok(latinFile, 'the Latin publication face is declared');
+  assert.deepEqual(new Set(fontFiles), new Set([...fontManifest.files.map(file => file.file), latinFile]), 'the cache inventory covers the complete declared font manifest');
+  assert.ok(fontFiles.includes('publication-tw-ui-b805e5526e.woff2'), 'the corrected native UI glyph outlines are included');
+  const requiredOptional = [`${origin}/assets/cover-2026.webp`, ...fontFiles.map(file => `${origin}/fonts/${file}`)];
   const requiredLocal = [...requiredCore, ...requiredOptional];
   const requiredCdn = ['https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js', 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js'];
   const missingOptional = requiredOptional.concat(requiredCdn).filter(url => !cachedUrls.has(url));

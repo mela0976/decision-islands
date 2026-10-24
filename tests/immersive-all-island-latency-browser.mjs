@@ -147,15 +147,8 @@ function summary() {
     violations: result.violations,
     errors: result.errors,
     failure: result.failure,
-    islands: result.islands.map(island => ({
-      articleId: island.articleId,
-      islandId: island.islandId,
-      interactionType: island.interactionType,
-      insightStampId: island.insightStampId,
-      fullTextCharacters: island.fullTextCharacters ?? null,
-      steps: island.steps.map(({ name, status, responseMs, actionLabel, isSubmission }) => ({ name, status, responseMs, actionLabel, isSubmission })),
-      sceneProps: island.sceneProof?.scenarioObjects?.map(prop => ({ propId: prop.propId, action: prop.action, geometry: prop.geometry })) || [],
-    })),
+    islandIds: result.islands.map(island => island.islandId),
+    slowestResponseMs: measuredSteps.length ? Math.max(...measuredSteps.map(step => step.responseMs)) : null,
   };
 }
 

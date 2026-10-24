@@ -1,5 +1,5 @@
 // Bump this value when any core asset changes so each release keeps one complete snapshot.
-const CACHE_VERSION = '2026-10-24.14';
+const CACHE_VERSION = '2026-10-24.15';
 const MAX_CACHE_ENTRIES = 60;
 const OPTIONAL_CACHE_TIMEOUT_MS = 5000;
 const APP_SCOPE = new URL(self.registration.scope);
@@ -34,6 +34,7 @@ const FONT_PATHS = [
   '../fonts/publication-tw-variable-6-4358d63bf0.woff2',
   '../fonts/publication-tw-variable-7-0b34eb3fe3.woff2',
   '../fonts/publication-tw-variable-8-7a1dc60589.woff2',
+  '../fonts/publication-tw-ui-b805e5526e.woff2',
 ];
 
 const OPTIONAL_LOCAL_PATHS = [

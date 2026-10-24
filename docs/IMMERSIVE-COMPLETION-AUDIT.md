@@ -295,3 +295,14 @@ throughput checkpoint: n/a, read-only investigation
 - 原生及根快取版本分別更新為 2026-10-24.14／v10；node --test tests/immersive-cache.test.mjs 9 項及 tests/browser-cache.test.mjs 18 項通過。更新不清除 localStorage 筆記。
 
 本追記撰寫時尚未推送這批整合修改。公開 Pages／CI 由後續讀回確認；兩秒目標仍未達，不將整體目標標記完成。
+
+## 後續追記：字形覆蓋與逐島回應
+
+本輪保持全部 Master 範圍，未把 warm-world 通過改作整體完成條件。
+
+- 原字型子集漏收 25 個 native 介面漢字，包括綺、椅、蓁、姐、嶼。新增 11,996-byte UI shard，保留舊 11 個 WOFF2 的檔名與 bytes；CSS range 與實際 cmap 覆蓋 927 個 native Han/Hangul，另核對 Latin 英數。Canvas family 同時使用 Publication Latin 與 Publication Sans TW。見 IMMERSIVE-FONT-COVERAGE.md；兩個 Python 字形/hash 回歸及兩個既有 Node 字型測試通過。
+- 用兩側都已修好字形的基準做五組 AB，新的 visible-font-wait 候選未有加速證據，故沒有合併。詳見 IMMERSIVE-PERFORMANCE.md；冷啟動兩秒仍未達。
+- 合併的是晚生 Canvas 文字的字型完成後重畫，不包含被否決候選的 readiness state machine。新五案例證明真正未載入的字形、inactive 一幀補繪與正確寬度、hidden 不補幀、拒絕不外拋、dispose 後不復活；舊四個 startup 案例也保留。見 test-results/immersive-label-font-redraw/results.json。下載失敗仍可能使用 fallback，不宣稱任何環境永不 fallback。
+- 最終 production build、根／app 離線重開、22 島與代表全文通過。快取 29 項包含 12 字型及兩個固定 CDN，沒有 missingOptional；自有資源歸零。原生／根 worker 版本為 2026-10-24.15／v11。
+- 新增 22 島真 DOM warm-world 延遲 fixture；最終字型整合一次走完 202 步、8 types、10 stamps、每島全文與 source paragraphs 相等、實際 props／draw。全部步驟低於 2,000 ms，最慢1530.5 ms，submit最慢302.6 ms；四類錯誤零。見 test-results/interaction-latency-final-fonts/results.json。不外推成所有實體手機／冷啟動的保證。
+- 字形測試需要 FontTools，另建 requirements-fonts.txt 並讓 CI 安裝，不修改原 requirements.txt。尚待本輪 CI 與公開站驗收後再記完成發布。

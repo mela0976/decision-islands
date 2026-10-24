@@ -36,3 +36,9 @@ Reduced motion 會略過開場和刻意設計的航行動畫。若初始抵達�
 在 `bd31886` production preview 執行一次。22 島、8 種互動、10 種印記都完成，202 個步驟均未超過 2,000 ms，且沒有瀏覽器錯誤。最慢步驟是 I01 的目錄開啟，1,493.1 ms；遊戲提交最慢為 I01，326.3 ms。完整結果位於 `test-results/immersive-interaction-latency/results.json`。
 
 執行前 `uptime` 顯示負載 2.01、1.69、2.65，共 10 個邏輯 CPU。背景有一個長時間執行的 Chromium headless process，約使用 51.5% CPU，LINE 約 13.6%。這是單次驗收紀錄，不代表穩定延遲或速度優勢。
+
+## 字型修正整合後的單次回歸
+
+整合 8559fe4、12 個 Publication 字型與新版離線清單後，再執行同一 corpus。22 島、8 類互動、10 種印記、202 步都完成，四類錯誤皆零，沒有超過 2,000 ms 的步驟。最慢是 I01 catalog-open，1530.5 ms；最慢 submit 為 I01，302.6 ms。原始結果在 test-results/interaction-latency-final-fonts/results.json。這仍是單次 warm-world 驗收，不宣稱穩定延遲或兩秒 cold-start。
+
+終端輸出只保留島 ID、數量、最慢回應和錯誤摘要；完整逐步證據仍寫入 JSON，避免反覆輸出整份紀錄。
