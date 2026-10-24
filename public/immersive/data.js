@@ -307,6 +307,364 @@ const SCENE_CATALOG = [
   },
 ];
 
+const arrivalCast = (actorId, position) => ({ actorId, position });
+const arrivalProp = (id, kind, position, scale, label) => ({ id, kind, position, scale, label });
+const arrivalBeat = (id, duration, actorId, text, actions) => ({ id, duration, caption: { actorId, text }, actions });
+
+const ARRIVAL_EVENT_CATALOG = {
+  I01: {
+    cast: [arrivalCast('achi', [-1.3, 1.1, 2.5]), arrivalCast('yingzhen', [1.0, 1.1, 2.8])],
+    props: [
+      arrivalProp('completed-proposal', 'paper', [-0.6, 1.9, 3.2], [1.2, 0.08, 0.9], '快速完成的提案'),
+      arrivalProp('value-sheet', 'paper', [1.4, 1.8, 3.5], [1.1, 0.06, 0.85], '仍空白的消費者價值表'),
+    ],
+    beats: [
+      arrivalBeat('cause', 2.5, 'achi', '提案完成了，價值欄還空著。', [{ type: 'gesture', actorId: 'achi', gesture: 'pen-stop' }]),
+      arrivalBeat('action', 3, 'achi', '先把報告挪開，空格還在。', [{ type: 'manipulate', actorId: 'achi', propId: 'completed-proposal', operation: 'place', to: [-1.6, 1.8, 3.3] }]),
+      arrivalBeat('reaction', 2.5, 'yingzhen', '這一格，還沒有人能回答。', [{ type: 'look', actorId: 'yingzhen', target: { propId: 'value-sheet' } }]),
+    ],
+    handoffPropId: 'value-sheet',
+  },
+  I02: {
+    cast: [arrivalCast('achi', [-2.6, 1.1, 2.8]), arrivalCast('yue', [3.4, 1.1, 4.4])],
+    props: [
+      arrivalProp('message-route', 'route', [-1.6, 1.45, 3.5], [2.2, 0.08, 0.16], '越過橋面的訊息路線'),
+      arrivalProp('understanding-question', 'sign', [-2.7, 2.0, 2.9], [0.8, 0.8, 0.12], '接觸很多次，真的理解了嗎？'),
+    ],
+    beats: [
+      arrivalBeat('cause', 2.5, 'achi', '送到了很多次，接住了嗎？', [{ type: 'look', actorId: 'achi', target: { actorId: 'yue' } }]),
+      arrivalBeat('action', 3, 'achi', '訊息越過橋，問題還留在這邊。', [{ type: 'transform', propId: 'message-route', to: [1.6, 1.45, 3.5], rotation: [0, 0, 0] }]),
+      arrivalBeat('reaction', 2.5, 'yue', '我看見了，還沒說懂。', [
+        { type: 'walk', actorId: 'yue', to: [3.1, 1.1, 4.4], gait: 'hesitate' },
+        { type: 'look', actorId: 'achi', target: { propId: 'understanding-question' } },
+      ]),
+    ],
+    handoffPropId: 'message-route',
+  },
+  P01: {
+    cast: [arrivalCast('yingzhen', [-1.0, 1.1, 2.5]), arrivalCast('fenjie', [1.2, 1.1, 3.1])],
+    props: [
+      arrivalProp('unmarked-photo', 'photo', [-0.2, 1.9, 3.25], [0.9, 0.06, 0.7], '沒有來源標記的影像'),
+      arrivalProp('source-tag', 'sign', [1.5, 1.8, 3.7], [0.55, 0.65, 0.1], '來源尚未找到'),
+    ],
+    beats: [
+      arrivalBeat('cause', 2.5, 'yingzhen', '這張圖很像真的，來源呢？', [{ type: 'look', actorId: 'yingzhen', target: { propId: 'unmarked-photo' } }]),
+      arrivalBeat('action', 3, 'yingzhen', '背面也沒有來處。', [{ type: 'manipulate', actorId: 'yingzhen', propId: 'unmarked-photo', operation: 'flip', to: [0.0, 1.9, 3.25] }]),
+      arrivalBeat('reaction', 2.5, 'fenjie', '先等等，別急著轉出去。', [{ type: 'gesture', actorId: 'fenjie', gesture: 'hesitate' }]),
+    ],
+    handoffPropId: 'unmarked-photo',
+  },
+  P02: {
+    cast: [arrivalCast('yue', [-2.1, 1.1, 2.6]), arrivalCast('fenjie', [0.6, 1.1, 3.4])],
+    props: [
+      arrivalProp('choice-sign', 'sign', [-0.2, 2.0, 3.65], [0.95, 0.9, 0.12], '每條路都在推薦下一步'),
+      arrivalProp('street-route', 'route', [1.5, 1.45, 4.0], [1.5, 0.08, 0.18], '需求、體驗與行動的街口'),
+    ],
+    beats: [
+      arrivalBeat('cause', 2.5, 'yue', '每個路口都在叫我選。', [{ type: 'look', actorId: 'yue', target: { propId: 'choice-sign' } }]),
+      arrivalBeat('action', 3, 'yue', '我先停一下，想走哪條？', [{ type: 'walk', actorId: 'yue', to: [-0.7, 1.1, 3.1], gait: 'hesitate' }]),
+      arrivalBeat('reaction', 2.5, 'fenjie', '先說說你現在要做什麼。', [{ type: 'gesture', actorId: 'fenjie', gesture: 'listen' }]),
+    ],
+    handoffPropId: 'street-route',
+  },
+  P03: {
+    cast: [arrivalCast('achi', [-1.5, 1.1, 2.5]), arrivalCast('yingzhen', [1.2, 1.1, 2.8])],
+    props: [
+      arrivalProp('customer-report', 'paper', [-0.35, 1.9, 3.2], [1.25, 0.07, 0.9], '年輕客群不買單的簡報'),
+      arrivalProp('unknown-causes', 'paper', [1.55, 1.8, 3.5], [0.85, 0.06, 0.65], '背面尚未連線的原因'),
+    ],
+    beats: [
+      arrivalBeat('cause', 2.5, 'achi', '「年輕人不買」真是結論嗎？', [{ type: 'look', actorId: 'achi', target: { propId: 'customer-report' } }]),
+      arrivalBeat('action', 3, 'achi', '翻過來，還有幾個空白原因。', [{ type: 'manipulate', actorId: 'achi', propId: 'customer-report', operation: 'flip', to: [-0.25, 1.9, 3.2] }]),
+      arrivalBeat('reaction', 2.5, 'yingzhen', '先把未知圈出來。', [{ type: 'gesture', actorId: 'yingzhen', gesture: 'mark' }]),
+    ],
+    handoffPropId: 'unknown-causes',
+  },
+  P04: {
+    cast: [arrivalCast('yingzhen', [-1.7, 1.1, 2.6]), arrivalCast('achi', [1.45, 1.1, 2.7])],
+    props: [
+      arrivalProp('draft-story', 'paper', [0.55, 2.05, 3.2], [1.0, 0.06, 0.75], '等待核對的稿件'),
+      arrivalProp('pending-tray', 'tray', [1.9, 1.72, 3.7], [1.05, 0.3, 0.75], '來源待查'),
+      arrivalProp('closed-bridge', 'barrier', [0.2, 1.25, 4.65], [2.0, 0.8, 0.16], '查證完成前仍關閉'),
+    ],
+    beats: [
+      arrivalBeat('cause', 2.5, 'yingzhen', '幾個說法都對不上來源。', [{ type: 'look', actorId: 'yingzhen', target: { propId: 'draft-story' } }]),
+      arrivalBeat('action', 3, 'yingzhen', '這份先放到待查區。', [{ type: 'manipulate', actorId: 'yingzhen', propId: 'draft-story', operation: 'place', to: [1.9, 1.94, 3.7] }]),
+      arrivalBeat('reaction', 2.5, 'achi', '證據還沒到，我先不發布。', [{ type: 'gesture', actorId: 'achi', gesture: 'pen-stop' }]),
+    ],
+    handoffPropId: 'draft-story',
+  },
+  P05: {
+    cast: [arrivalCast('yue', [-0.2, 1.1, 2.6]), arrivalCast('fenjie', [2.0, 1.1, 3.35])],
+    props: [
+      arrivalProp('recommended-product', 'product', [0.15, 2.15, 3.15], [0.55, 0.85, 0.45], 'Agent 推薦的高性價比商品'),
+      arrivalProp('life-photo', 'photo', [1.55, 1.85, 3.75], [0.85, 0.06, 0.7], '陪過一段生活的品牌記憶'),
+      arrivalProp('shelf-route', 'route', [-1.7, 1.4, 4.2], [1.2, 0.08, 0.16], '用途、價格和生活情境'),
+    ],
+    beats: [
+      arrivalBeat('cause', 2.5, 'yue', '推薦的很划算，但我記得別的。', [{ type: 'look', actorId: 'yue', target: { propId: 'recommended-product' } }]),
+      arrivalBeat('action', 3, 'yue', '先拿起來比一比。', [{ type: 'manipulate', actorId: 'yue', propId: 'recommended-product', operation: 'lift', to: [0.05, 2.4, 2.95] }]),
+      arrivalBeat('reaction', 2.5, 'yue', '我想起來的，是那段日子。', [
+        { type: 'look', actorId: 'yue', target: { propId: 'life-photo' } },
+        { type: 'gesture', actorId: 'fenjie', gesture: 'listen' },
+      ]),
+    ],
+    handoffPropId: 'recommended-product',
+  },
+  P06: {
+    cast: [arrivalCast('yue', [-2.45, 1.1, 2.5]), arrivalCast('achi', [1.25, 1.1, 3.2])],
+    props: [
+      arrivalProp('stage-lamp', 'lamp', [-0.35, 2.35, 3.45], [0.4, 1.15, 0.4], '亮起的共同舞台'),
+      arrivalProp('event-sign', 'sign', [1.8, 2.0, 4.25], [0.75, 0.75, 0.12], '球賽與演唱會入口'),
+    ],
+    beats: [
+      arrivalBeat('cause', 2.5, 'yue', '我只是從這裡路過。', [{ type: 'walk', actorId: 'yue', to: [-1.25, 1.1, 2.6], gait: 'pass' }]),
+      arrivalBeat('action', 3, 'yue', '咦，這首我會。', [{ type: 'walk', actorId: 'yue', to: [0.0, 1.1, 3.0], gait: 'hesitate' }]),
+      arrivalBeat('reaction', 2.5, 'yue', '一起唱完這句吧。', [
+        { type: 'gesture', actorId: 'yue', gesture: 'sing' },
+        { type: 'gesture', actorId: 'achi', gesture: 'sing' },
+        { type: 'crowd', mode: 'sing', targetPropId: 'stage-lamp', count: 4 },
+      ]),
+    ],
+    handoffPropId: 'stage-lamp',
+  },
+  P07: {
+    cast: [arrivalCast('yue', [-1.45, 1.1, 2.6]), arrivalCast('achi', [1.25, 1.1, 2.9])],
+    props: [
+      arrivalProp('template-phone', 'phone', [-0.8, 2.1, 3.25], [0.4, 0.75, 0.12], '制式產品介紹'),
+      arrivalProp('use-photo', 'photo', [1.45, 1.85, 3.8], [0.85, 0.06, 0.7], '朋友分享的實際使用經驗'),
+    ],
+    beats: [
+      arrivalBeat('cause', 2.5, 'yue', '每個介紹看起來都一樣。', [{ type: 'look', actorId: 'yue', target: { propId: 'template-phone' } }]),
+      arrivalBeat('action', 3, 'yue', '這張照片比較像真的用過。', [
+        { type: 'walk', actorId: 'yue', to: [0.45, 1.1, 3.3], gait: 'walk' },
+        { type: 'look', actorId: 'yue', target: { propId: 'use-photo' } },
+      ]),
+      arrivalBeat('reaction', 2.5, 'achi', '先看看他遇到什麼情境。', [{ type: 'look', actorId: 'achi', target: { propId: 'use-photo' } }]),
+    ],
+    handoffPropId: 'use-photo',
+  },
+  P08: {
+    cast: [arrivalCast('yue', [-2.6, 1.1, 2.6]), arrivalCast('achi', [1.9, 1.1, 2.7])],
+    props: [
+      arrivalProp('media-sign-one', 'sign', [-1.7, 1.9, 3.5], [0.65, 0.7, 0.1], '輪播看板一'),
+      arrivalProp('media-sign-two', 'sign', [-0.45, 1.9, 3.5], [0.65, 0.7, 0.1], '輪播看板二'),
+      arrivalProp('media-sign-three', 'sign', [0.8, 1.9, 3.5], [0.65, 0.7, 0.1], '輪播看板三'),
+      arrivalProp('empty-stop-zone', 'route', [2.45, 1.4, 3.55], [1.0, 0.08, 0.75], '空著的停留區'),
+      arrivalProp('attention-report', 'paper', [1.8, 1.85, 4.35], [0.9, 0.06, 0.7], '曝光達標，停留仍少'),
+    ],
+    beats: [
+      arrivalBeat('cause', 2.5, 'yue', '看板都看過了，我先走。', [{ type: 'walk', actorId: 'yue', to: [2.4, 1.1, 3.55], gait: 'pass' }]),
+      arrivalBeat('action', 3, 'achi', '停留的位置還是空的。', [{ type: 'look', actorId: 'achi', target: { propId: 'empty-stop-zone' } }]),
+      arrivalBeat('reaction', 2.5, 'achi', '報表也沒有記憶的答案。', [{ type: 'look', actorId: 'achi', target: { propId: 'attention-report' } }]),
+    ],
+    handoffPropId: 'attention-report',
+  },
+  P09: {
+    cast: [arrivalCast('yue', [1.15, 1.1, 2.7]), arrivalCast('achi', [-1.35, 1.1, 2.9])],
+    props: [
+      arrivalProp('old-radio', 'radio', [-0.15, 1.95, 3.35], [0.75, 0.55, 0.4], '播著舊歌的收音機'),
+      arrivalProp('shared-memory-sign', 'sign', [1.65, 1.9, 3.8], [0.75, 0.75, 0.1], '共看廣場'),
+    ],
+    beats: [
+      arrivalBeat('cause', 2.5, 'yue', '這首歌，家裡也放過。', [{ type: 'look', actorId: 'yue', target: { propId: 'old-radio' } }]),
+      arrivalBeat('action', 3, 'yue', '旁邊的人也跟著停下來。', [{ type: 'crowd', mode: 'gather', targetPropId: 'old-radio', count: 4 }]),
+      arrivalBeat('reaction', 2.5, 'achi', '原來好幾個人都記得。', [
+        { type: 'crowd', mode: 'listen', targetPropId: 'old-radio', count: 4 },
+        { type: 'gesture', actorId: 'achi', gesture: 'remember' },
+      ]),
+    ],
+    handoffPropId: 'old-radio',
+  },
+  M01: {
+    cast: [arrivalCast('yingzhen', [-0.65, 1.1, 2.55]), arrivalCast('achi', [1.6, 1.1, 2.8])],
+    props: [
+      arrivalProp('simulation-card', 'paper', [-0.55, 1.95, 3.15], [0.9, 0.06, 0.65], '剛完成的模擬結果'),
+      arrivalProp('first-pass-tray', 'tray', [-1.65, 1.75, 3.55], [0.85, 0.28, 0.65], '暫存，先不當成答案'),
+      arrivalProp('sample-scenario', 'photo', [1.1, 1.9, 3.65], [0.8, 0.06, 0.65], '樣本與情境的限制'),
+    ],
+    beats: [
+      arrivalBeat('cause', 2.5, 'yingzhen', '先把模擬卡收起來。', [{ type: 'manipulate', actorId: 'yingzhen', propId: 'simulation-card', operation: 'place', to: [-1.65, 1.94, 3.55] }]),
+      arrivalBeat('action', 3, 'yingzhen', '樣本和情境，都要放在旁邊。', [{ type: 'manipulate', actorId: 'yingzhen', propId: 'sample-scenario', operation: 'flip', to: [1.15, 1.9, 3.65] }]),
+      arrivalBeat('reaction', 2.5, 'achi', '背面才看得到限制。', [{ type: 'look', actorId: 'achi', target: { propId: 'sample-scenario' } }]),
+    ],
+    handoffPropId: 'sample-scenario',
+  },
+  M02: {
+    cast: [arrivalCast('achi', [-2.15, 1.1, 2.55]), arrivalCast('yingzhen', [1.75, 1.1, 2.8])],
+    props: [
+      arrivalProp('channel-route', 'route', [-0.2, 1.42, 3.45], [3.1, 0.08, 0.16], '沿節點展開的多渠道地圖'),
+      arrivalProp('no-observation-log', 'sign', [1.7, 2.0, 3.85], [0.65, 0.8, 0.1], '這一站還沒有觀察紀錄'),
+      arrivalProp('observation-note', 'paper', [-1.95, 1.85, 4.15], [0.75, 0.06, 0.6], '先定義要觀察什麼'),
+    ],
+    beats: [
+      arrivalBeat('cause', 2.5, 'achi', '點很多，哪一站有人停？', [{ type: 'walk', actorId: 'achi', to: [0.5, 1.1, 3.4], gait: 'walk' }]),
+      arrivalBeat('action', 3, 'achi', '這一站，還沒有觀察紀錄。', [{ type: 'gesture', actorId: 'achi', gesture: 'point' }]),
+      arrivalBeat('reaction', 2.5, 'yingzhen', '先定義要看什麼。', [{ type: 'gesture', actorId: 'yingzhen', gesture: 'mark' }]),
+    ],
+    handoffPropId: 'channel-route',
+  },
+  M03: {
+    cast: [arrivalCast('yingzhen', [-1.0, 1.1, 2.6]), arrivalCast('achi', [1.2, 1.1, 2.8])],
+    props: [
+      arrivalProp('precise-forecast', 'paper', [-0.6, 1.9, 3.2], [0.95, 0.06, 0.7], '精確到小數點的預測卡'),
+      arrivalProp('unknown-tray', 'tray', [1.5, 1.72, 3.6], [0.85, 0.28, 0.65], '未知，先留空'),
+    ],
+    beats: [
+      arrivalBeat('cause', 2.5, 'yingzhen', '這個數字很精確。', [{ type: 'look', actorId: 'yingzhen', target: { propId: 'precise-forecast' } }]),
+      arrivalBeat('action', 3, 'yingzhen', '翻面還有幾個假設。', [{ type: 'manipulate', actorId: 'yingzhen', propId: 'precise-forecast', operation: 'flip', to: [-0.5, 1.9, 3.2] }]),
+      arrivalBeat('reaction', 2.5, 'achi', '未知的部分，先留在空盤。', [
+        { type: 'look', actorId: 'yingzhen', target: { propId: 'unknown-tray' } },
+        { type: 'gesture', actorId: 'achi', gesture: 'hesitate' },
+      ]),
+    ],
+    handoffPropId: 'unknown-tray',
+  },
+  M04: {
+    cast: [arrivalCast('yue', [-1.95, 1.1, 2.6]), arrivalCast('fenjie', [1.1, 1.1, 2.9])],
+    props: [
+      arrivalProp('service-route', 'route', [-0.45, 1.45, 3.55], [2.6, 0.08, 0.16], '顧客反覆停住的服務路徑'),
+      arrivalProp('hidden-limit', 'sign', [1.0, 1.95, 3.75], [0.65, 0.75, 0.1], '翻開才看見的使用限制'),
+      arrivalProp('service-barrier', 'barrier', [2.5, 1.3, 4.0], [0.18, 0.95, 0.65], '尚未說清楚的下一步'),
+    ],
+    beats: [
+      arrivalBeat('cause', 2.5, 'yue', '這條路，我走到一半又停了。', [{ type: 'walk', actorId: 'yue', to: [-0.55, 1.1, 3.2], gait: 'hesitate' }]),
+      arrivalBeat('action', 3, 'fenjie', '我把藏著的限制翻出來。', [{ type: 'manipulate', actorId: 'fenjie', propId: 'hidden-limit', operation: 'flip', to: [1.05, 1.95, 3.75] }]),
+      arrivalBeat('reaction', 2.5, 'fenjie', '先說說你卡在哪一步？', [{ type: 'gesture', actorId: 'fenjie', gesture: 'listen' }]),
+    ],
+    handoffPropId: 'service-route',
+  },
+  M05: {
+    cast: [arrivalCast('achi', [-0.55, 1.1, 2.7]), arrivalCast('fenjie', [1.45, 1.1, 2.8])],
+    props: [
+      arrivalProp('already-on-lamp', 'lamp', [0.1, 2.1, 3.4], [0.42, 1.1, 0.42], '已亮起的上線指示燈'),
+      arrivalProp('quiet-curtain', 'curtain', [0.85, 1.95, 3.65], [0.12, 1.55, 1.05], '隔開水面上下的布簾'),
+      arrivalProp('blank-next-step', 'sign', [1.7, 1.85, 4.2], [0.7, 0.75, 0.1], '下一步仍空白'),
+    ],
+    beats: [
+      arrivalBeat('cause', 2.5, 'achi', '系統上線了，然後呢？', [{ type: 'gesture', actorId: 'achi', gesture: 'hesitate' }]),
+      arrivalBeat('action', 3, 'fenjie', '我先走近一點聽。', [{ type: 'walk', actorId: 'fenjie', to: [0.55, 1.1, 3.1], gait: 'walk' }]),
+      arrivalBeat('reaction', 2.5, 'fenjie', '省下的時間，大家還在等方向。', [
+        { type: 'gesture', actorId: 'fenjie', gesture: 'listen' },
+        { type: 'look', actorId: 'achi', target: { propId: 'blank-next-step' } },
+      ]),
+    ],
+    handoffPropId: 'blank-next-step',
+  },
+  A01: {
+    cast: [arrivalCast('yue', [-0.85, 1.1, 2.55]), arrivalCast('fenjie', [0.5, 1.1, 2.75])],
+    props: [
+      arrivalProp('returned-parcel', 'parcel', [-1.15, 2.15, 3.0], [0.8, 0.7, 0.65], '顧客帶回來的包裹'),
+      arrivalProp('delivery-slip', 'paper', [-0.7, 1.95, 3.25], [0.65, 0.06, 0.45], '配送單'),
+      arrivalProp('delivery-guide', 'sign', [1.4, 1.9, 3.7], [0.75, 0.8, 0.1], '配送與後續說明'),
+    ],
+    beats: [
+      arrivalBeat('cause', 2.5, 'yue', '包裹到了，說明卻沒跟上。', [{ type: 'walk', actorId: 'yue', to: [-0.5, 1.1, 2.7], gait: 'walk' }]),
+      arrivalBeat('action', 3, 'yue', '這張配送單先交給你。', [{ type: 'exchange', actorId: 'yue', receiverId: 'fenjie', propId: 'delivery-slip', to: [-0.05, 2.35, 2.9] }]),
+      arrivalBeat('reaction', 2.5, 'fenjie', '我們一起看配送說明。', [{ type: 'gesture', actorId: 'fenjie', gesture: 'point' }]),
+    ],
+    handoffPropId: 'delivery-slip',
+  },
+  A02: {
+    cast: [arrivalCast('achi', [-1.25, 1.1, 2.6]), arrivalCast('yingzhen', [1.45, 1.1, 2.9])],
+    props: [
+      arrivalProp('completion-lamp', 'lamp', [-0.8, 2.15, 3.2], [0.4, 1.0, 0.4], '已亮起的完成燈'),
+      arrivalProp('task-board', 'sign', [0.8, 1.9, 3.55], [1.0, 0.95, 0.1], '待補帳戶與版本欄'),
+    ],
+    beats: [
+      arrivalBeat('cause', 2.5, 'achi', '完成燈亮了，資料齊了嗎？', [{ type: 'look', actorId: 'achi', target: { propId: 'completion-lamp' } }]),
+      arrivalBeat('action', 3, 'achi', '翻開任務板，兩欄還空著。', [{ type: 'manipulate', actorId: 'achi', propId: 'task-board', operation: 'flip', to: [0.85, 1.9, 3.55] }]),
+      arrivalBeat('reaction', 2.5, 'yingzhen', '這些沒補上，我先不接用。', [{ type: 'gesture', actorId: 'yingzhen', gesture: 'mark' }]),
+    ],
+    handoffPropId: 'task-board',
+  },
+  A03: {
+    cast: [arrivalCast('yue', [-2.0, 1.1, 2.65]), arrivalCast('achi', [1.35, 1.1, 2.65])],
+    props: [
+      arrivalProp('similar-brand-sign', 'sign', [0.45, 2.0, 3.65], [1.1, 0.9, 0.12], '幾個看起來相似的品牌'),
+      arrivalProp('distinctive-object', 'product', [1.7, 2.0, 3.45], [0.55, 0.7, 0.5], '能看出差異的品牌物件'),
+    ],
+    beats: [
+      arrivalBeat('cause', 2.5, 'yue', '剛才那個品牌有什麼不一樣？', [{ type: 'walk', actorId: 'yue', to: [-3.45, 1.1, 3.5], gait: 'pass' }]),
+      arrivalBeat('action', 3, 'achi', '我把差異物件放近一點。', [
+        { type: 'manipulate', actorId: 'achi', propId: 'distinctive-object', operation: 'place', to: [0.7, 2.0, 3.4] },
+        { type: 'walk', actorId: 'yue', to: [0.05, 1.1, 3.0], gait: 'walk' },
+      ]),
+      arrivalBeat('reaction', 2.5, 'yue', '我回來了，還是指不出來。', [{ type: 'gesture', actorId: 'yue', gesture: 'hesitate' }]),
+    ],
+    handoffPropId: 'similar-brand-sign',
+  },
+  A04: {
+    cast: [arrivalCast('achi', [-0.9, 1.1, 2.6]), arrivalCast('yingzhen', [1.65, 1.1, 2.95])],
+    props: [
+      arrivalProp('off-tone-asset', 'photo', [-0.45, 1.95, 3.2], [0.9, 0.06, 0.7], '不符合品牌語氣的素材'),
+      arrivalProp('revision-tray', 'tray', [1.45, 1.7, 3.7], [0.9, 0.28, 0.65], '待修改素材'),
+      arrivalProp('approval-slot', 'sign', [1.85, 1.9, 4.45], [0.75, 0.8, 0.1], '規格與核准欄仍空白'),
+    ],
+    beats: [
+      arrivalBeat('cause', 2.5, 'achi', '這張看起來完整，卻不像我們。', [{ type: 'look', actorId: 'achi', target: { propId: 'off-tone-asset' } }]),
+      arrivalBeat('action', 3, 'achi', '先把它移到修改盤。', [{ type: 'manipulate', actorId: 'achi', propId: 'off-tone-asset', operation: 'place', to: [1.45, 1.89, 3.7] }]),
+      arrivalBeat('reaction', 2.5, 'yingzhen', '規格和核准人還沒填。', [{ type: 'gesture', actorId: 'yingzhen', gesture: 'point' }]),
+    ],
+    handoffPropId: 'approval-slot',
+  },
+  A05: {
+    cast: [arrivalCast('achi', [-1.15, 1.1, 2.55]), arrivalCast('yingzhen', [1.35, 1.1, 2.95])],
+    props: [
+      arrivalProp('local-market-asset', 'photo', [-0.25, 1.95, 3.15], [0.85, 0.06, 0.65], '帶有在地符號的素材'),
+      arrivalProp('standard-market-asset', 'photo', [1.15, 1.95, 3.65], [0.85, 0.06, 0.65], '沿用標準版型的素材'),
+      arrivalProp('human-review-tray', 'tray', [2.25, 1.7, 4.0], [0.85, 0.28, 0.65], '保留給人判斷'),
+    ],
+    beats: [
+      arrivalBeat('cause', 2.5, 'achi', '這兩張放進不同市場會一樣嗎？', [{ type: 'look', actorId: 'achi', target: { propId: 'local-market-asset' } }]),
+      arrivalBeat('action', 3, 'achi', '先對照在地符號和版型。', [{ type: 'manipulate', actorId: 'achi', propId: 'local-market-asset', operation: 'flip', to: [-0.2, 1.95, 3.15] }]),
+      arrivalBeat('reaction', 2.5, 'yingzhen', '這一份先留給懂當地的人看。', [{ type: 'manipulate', actorId: 'yingzhen', propId: 'local-market-asset', operation: 'place', to: [2.25, 1.92, 4.0] }]),
+    ],
+    handoffPropId: 'local-market-asset',
+  },
+  A06: {
+    cast: [arrivalCast('yue', [-0.75, 1.1, 2.6]), arrivalCast('fenjie', [0.55, 1.1, 2.8]), arrivalCast('achi', [-2.1, 1.1, 2.9])],
+    props: [
+      arrivalProp('shopping-tray', 'tray', [-0.85, 1.55, 3.35], [0.85, 0.3, 0.7], '尚未結帳的購物籃'),
+      arrivalProp('permission-barrier', 'barrier', [0.65, 1.25, 4.35], [1.35, 0.85, 0.16], '付款與健康決定的接手線'),
+      arrivalProp('opening-value-sheet', 'paper', [-2.45, 1.85, 3.55], [1.0, 0.06, 0.75], 'I01 的問題、依據與取捨表'),
+      arrivalProp('achi-pencil', 'product', [-1.9, 2.3, 3.25], [0.35, 0.1, 0.12], '阿綺帶回來的筆'),
+    ],
+    beats: [
+      arrivalBeat('cause', 2.5, 'yue', '到了付款或健康這一步，誰負責？', [{ type: 'walk', actorId: 'yue', to: [0.0, 1.1, 3.3], gait: 'hesitate' }]),
+      arrivalBeat('action', 3, 'fenjie', '我先接手聽你在意什麼。', [{ type: 'gesture', actorId: 'fenjie', gesture: 'listen' }]),
+      arrivalBeat('reaction', 2.5, 'achi', '先問清問題、依據和取捨。', [
+        { type: 'manipulate', actorId: 'achi', propId: 'achi-pencil', operation: 'place', to: [-2.15, 1.98, 3.55] },
+        { type: 'look', actorId: 'yue', target: { propId: 'permission-barrier' } },
+      ]),
+    ],
+    handoffPropId: 'opening-value-sheet',
+  },
+};
+
+function buildArrivalEvent(canonicalId, design) {
+  const authored = ARRIVAL_EVENT_CATALOG[canonicalId];
+  if (!authored) throw new TypeError(`No arrival event is defined for ${canonicalId}.`);
+  return {
+    id: `${canonicalId}-arrival`,
+    fictional: true,
+    cause: design.lifeEvent,
+    cast: authored.cast.map(({ actorId, position }) => ({ actorId, position: [...position] })),
+    props: authored.props.map((prop) => ({ ...prop, position: [...prop.position], scale: [...prop.scale] })),
+    beats: authored.beats.map((beat) => ({
+      ...beat,
+      caption: { ...beat.caption },
+      actions: beat.actions.map((action) => ({
+        ...action,
+        ...(action.to ? { to: [...action.to] } : {}),
+        ...(action.rotation ? { rotation: [...action.rotation] } : {}),
+        ...(action.target ? { target: { ...action.target } } : {}),
+      })),
+    })),
+    handoff: { propId: authored.handoffPropId, question: design.handoff.question },
+  };
+}
+
 const scenarioVisualEffect = (propId, action, reactionText, actorId = null) => ({ propId, action, reactionText, ...(actorId ? { actorId } : {}) });
 const SCENARIO_VISUAL_EFFECTS = {
   I01: {
@@ -679,6 +1037,7 @@ export function buildData(edition) {
     const design = sceneByCanonical.get(island.id);
     const article = articleBySourceId.get(island.articleId);
     const interactionDefinition = INTERACTIONS.find(({ id }) => id === design.interactionType);
+    const arrivalEvent = buildArrivalEvent(island.id, design);
     const visualEffects = SCENARIO_VISUAL_EFFECTS[island.id];
     const choiceIds = design.interaction.control.options.map(({ id }) => id);
     if (Object.keys(visualEffects || {}).length !== choiceIds.length || choiceIds.some((id) => !visualEffects[id])) {
@@ -709,9 +1068,10 @@ export function buildData(edition) {
       setting: design.setting,
       lifeEvent: design.lifeEvent,
       protagonistId: design.protagonistId,
-      characterIds: [...new Set([design.protagonistId, ...design.dialogue.map(({ characterId }) => characterId)])],
+      characterIds: [...new Set([design.protagonistId, ...design.dialogue.map(({ characterId }) => characterId), ...arrivalEvent.cast.map(({ actorId }) => actorId)])],
       coreDevice: design.coreDevice,
       dialogue: design.dialogue.map((line) => ({ ...line, fictional: true })),
+      arrivalEvent,
       interaction,
       sourceGrounding: buildSourceGrounding(article, island.id),
       transition: { ...design.handoff },
