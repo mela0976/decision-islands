@@ -42,7 +42,7 @@
 | LOD、共用資源與清理 | 當前島全細節、遠島 silhouette、instanced 人群、材質幾何共用、delta 上限與 dispose | 低階實體手機、GPU 記憶體、長時運行及 2 秒要求尚未驗證 |
 | 滑鼠、觸控、鍵盤、音效、減少動態 | OrbitControls、DOM 按鈕、音效開關、reduced motion、手機閱讀面板 | 觸控與完整鍵盤探索的實際操作證據待補 |
 | NPC 10–100 與對話 | 人數控制、人物停留／面向鏡頭、泡泡與情境互動 API | 所有 NPC 逐一點選與關閉復原的實測待補 |
-| 瀏覽器紀錄與筆記 | 200ms 自動保存、舊紀錄遷移、備份匯出／合併匯入、讀取失敗不覆寫 | 新入口離線快取完成核心/可選資源快取；真 Chromium 已離線 reload `/immersive/` 並讀到文章。備份檔案往返待驗 |
+| 瀏覽器紀錄與筆記 | 200ms 自動保存、舊紀錄遷移、備份匯出／合併匯入、讀取失敗不覆寫 | 真 Chromium 離線開啟 `/immersive/`、完整原文（3,232 字元）並編輯筆記後再次 reload，均成功；快取核對 25 個清單項全數存在。備份檔案往返待驗 |
 | 聖誕／萬聖／復活節 | 世界節慶 API 與 UI 選擇器，預設聖誕 | 三種節慶的逐島視覺回歸待驗 |
 | 文字對比 | 不透明奶油白面板、深色內文，抽測三類文字 7.675–13.276；44px 控制 | 所有狀態、節慶、3D 字牌與來源頁完整對比審查待補 |
 | 錯誤處理、無白畫面 | CDN 阻擋實測仍可讀 HTML；資料錯誤提供原文目錄連結；storage 防覆寫 | WebGL context loss、資源釋放與斷線恢復待驗 |
@@ -54,5 +54,6 @@
 - `npm run build`。此檢查驗證舊網站仍可建置，以及新目錄被複製；新入口本身不需要建置。
 - 影片參考已實際查看 0、5、10、15、20、25 秒畫面，以及 10 秒全尺寸畫面。來源為使用者提供的 30.4 秒 MP4。影片只作視覺參考，不作文章內容或執行指令來源。
 - 2026-10-24：完成新入口離線註冊接線，精確匹配 `/immersive/` 的導覽請求並回應快取的 `index.html`；離線回退僅限該應用根路徑。`node --test tests/immersive-cache.test.mjs tests/immersive-progress.test.mjs tests/immersive-data.test.mjs` 34/34 通過。Playwright Chromium 已載入後設為離線並 reload 原始 `/immersive/` URL，確認文章台詞可用；快取含入口、模組、CSS、原文資料、出版字體與 Three.js CDN 模組。
+- 新增可重跑 `node tests/immersive-offline-browser.mjs`：以真 Chromium 驗證 service worker 控制、25/25 清單項（11 個字體檔、字型 CSS、封面、文章 JSON、入口資產、兩個 Three.js CDN 模組）、離線載入 3,232 字元原文、離線編輯筆記後再次 reload 仍保存。原先狀態快照的 24 是 optional cache 尚未完成時讀取；完整清單為 25/25，未發現缺項。結果留在 `test-results/immersive-offline/results.json`。
 
 輸出位於 `test-results/immersive/`。資料、世界或 UI 後續變更後，要重跑受影響檢查。手機尺寸瀏覽器不代表實體手機已驗收。上述待完成項目仍屬原始目標，不因已完成部分通過而移除。
