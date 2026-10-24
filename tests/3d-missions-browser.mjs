@@ -36,7 +36,7 @@ async function pixels(page) {
     await canvas.scrollIntoViewIfNeeded();
     bounds = await canvas.boundingBox();
   }
-  return hash(await page.screenshot({style:'.mission-stage-replay { visibility: hidden !important; }',clip:{x:Math.ceil(bounds.x)+2,y:Math.ceil(bounds.y)+2,width:Math.floor(bounds.width)-4,height:Math.floor(bounds.height)-4}}));
+  return hash(await page.screenshot({clip:{x:Math.ceil(bounds.x)+2,y:Math.ceil(bounds.y)+56,width:Math.floor(bounds.width)-4,height:Math.floor(bounds.height)-58}}));
 }
 try {
   if (!process.env.TEST_MOTION_ONLY) {
@@ -104,10 +104,17 @@ try {
     await page.waitForFunction(() => !matchMedia('(prefers-reduced-motion: reduce)').matches && document.querySelector('#motion').getAttribute('aria-pressed') === 'true');
     await page.locator('.journey-mission-choices [data-mission-choice="a"]').evaluate(button => button.click());
     assert.equal(await page.locator('.mission-stage-canvas').getAttribute('data-animating'), 'true');
+    assert.equal(await page.locator('.mission-stage--3d').getAttribute('data-phase'), 'approach');
     await page.clock.fastForward(550);
     const mid = await pixels(page);
-    await page.clock.fastForward(2400);
+    await page.clock.fastForward(650);
+    assert.equal(await page.locator('.mission-stage--3d').getAttribute('data-phase'), 'interact');
+    const interacting = await pixels(page);
+    assert.notEqual(mid,interacting,'approach and operation have distinct rendered states');
+    await page.screenshot({path:'test-results/3d-action-closeup.png'});
+    await page.clock.fastForward(1750);
     const after = await pixels(page);
+    assert.equal(await page.locator('.mission-stage--3d').getAttribute('data-phase'), 'result');
     assert.notEqual(before, mid); assert.notEqual(mid, after, 'animation has visible intermediate rendered frames');
     await page.locator('.mission-stage-replay').evaluate(button => button.click()); await page.clock.fastForward(450);
     assert.notEqual(await pixels(page), after, 'replay visibly restarts the action');
