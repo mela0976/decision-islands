@@ -6,8 +6,17 @@ import type { MissionSceneEntity, MissionStageInput, MissionVisualFrame } from '
 
 const ACTORS = new Set(['adult', 'child', 'elder', 'robot']);
 const DURATION = 2800;
+const MIN_USER_ZOOM = .65;
+const MAX_USER_ZOOM = 2.4;
+const ZOOM_STEP = 1.2;
+const WHEEL_DELTA_LIMIT = 240;
 const smooth = (t: number) => { const v = THREE.MathUtils.clamp(t, 0, 1); return v * v * (3 - 2 * v); };
 const mix = THREE.MathUtils.lerp;
+export function getMission3DControlsHelp(language: 'zh' | 'en'): string {
+  return language === 'zh'
+    ? '拖曳旋轉場景；滾輪或 +／− 縮放；雙擊重設視角，按 0 重設縮放。'
+    : 'Drag to rotate. Use the mouse wheel or +/− to zoom. Double-click to reset the view, or press 0 to reset zoom.';
+}
 type Pose = { position: THREE.Vector3; yaw: number; joints: number[]; scale: number; opacity: number };
 type Entity = { model: Mission3DModel; definition: MissionSceneEntity; start: Pose; end: Pose };
 type Signal = { root: THREE.Group; token: THREE.Mesh; from: THREE.Vector3; to: THREE.Vector3; kind: string };
@@ -27,11 +36,15 @@ function terminalPose(entity: MissionSceneEntity, frame: MissionVisualFrame): Po
 }
 
 export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', onFallback?: (fallback: boolean) => void): Mission3DStage {
+  const controlsHelp = getMission3DControlsHelp(language);
   const canvas = document.createElement('canvas');
   canvas.className = 'mission-stage-canvas';
   canvas.dataset.renderer = 'fallback';
   canvas.dataset.phase = 'ready';
   canvas.setAttribute('role', 'img');
+  canvas.tabIndex = 0;
+  canvas.setAttribute('title', controlsHelp);
+  canvas.setAttribute('aria-label', controlsHelp);
   canvas.style.width = '100%';
   canvas.style.height = '100%';
   canvas.style.display = 'block';
@@ -41,6 +54,7 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
   const camera = new THREE.OrthographicCamera(-8.5, 8.5, 4.25, -4.25, .1, 70);
   const focus = new THREE.Vector3(0, .65, 0);
   let cameraYaw = .55;
+  let userZoom = 1;
   const aimCamera = () => { camera.position.set(Math.sin(cameraYaw) * 12, 9, Math.cos(cameraYaw) * 12); camera.lookAt(focus); };
   aimCamera();
   let renderer: THREE.WebGLRenderer | null = null;
@@ -161,16 +175,20 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
         }
       }
     } else for (const entry of entities.values()) if (entry.model.root.visible && (entry.model.root.userData.opacity ?? 1) > .04) box.union(projectedBounds(entry.model.root));
-    if (box.isEmpty()) return;
-    const center = box.getCenter(new THREE.Vector2()), size = box.getSize(new THREE.Vector2());
-    const aspect = viewportWidth / viewportHeight;
-    const topMargin = Math.min(.36, 54 / viewportHeight), bottomMargin = .06;
-    const selected = current?.previewChoiceId != null || current?.choiceId != null;
-    const framing = compared ? 1 : selected ? mix(1.12, 1, smooth(progress / .34)) : 1.12;
-    const halfHeight = Math.max(size.y / (2 * (1 - topMargin - bottomMargin)), size.x / (2 * aspect * .88), 1.6) * framing;
-    center.y += halfHeight * (topMargin - bottomMargin);
-    camera.left = center.x - halfHeight * aspect; camera.right = center.x + halfHeight * aspect;
-    camera.top = center.y + halfHeight; camera.bottom = center.y - halfHeight;
+    if (!box.isEmpty()) {
+      const center = box.getCenter(new THREE.Vector2()), size = box.getSize(new THREE.Vector2());
+      const aspect = viewportWidth / viewportHeight;
+      const topMargin = Math.min(.36, 54 / viewportHeight), bottomMargin = .06;
+      const selected = current?.previewChoiceId != null || current?.choiceId != null;
+      const framing = compared ? 1 : selected ? mix(1.12, 1, smooth(progress / .34)) : 1.12;
+      const halfHeight = Math.max(size.y / (2 * (1 - topMargin - bottomMargin)), size.x / (2 * aspect * .88), 1.6) * framing;
+      center.y += halfHeight * (topMargin - bottomMargin);
+      camera.left = center.x - halfHeight * aspect; camera.right = center.x + halfHeight * aspect;
+      camera.top = center.y + halfHeight; camera.bottom = center.y - halfHeight;
+      camera.updateProjectionMatrix();
+    }
+    camera.zoom = userZoom;
+    canvas.dataset.zoom = String(userZoom);
     camera.updateProjectionMatrix();
   };
   const render = () => { if (renderer && !failed && !disposed) { fitCamera(); renderer.render(scene, camera); renderCount++; } };
@@ -274,6 +292,24 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
   };
   const settle = () => { cancel(); progress = 1; entities.forEach(entry => apply(entry, 1)); applySignals(1); publishPhase(restingPhase()); render(); };
   const canAnimate = () => active && motion && !media.matches && !document.hidden && host.isConnected && !!renderer && !failed;
+  const canHandleZoomInput = () => {
+    if (disposed || !active || document.hidden || !host.isConnected || !canvas.isConnected || !renderer || failed || canvas.getClientRects().length === 0) return false;
+    for (let element: HTMLElement | null = canvas; element; element = element.parentElement) {
+      const style = window.getComputedStyle(element);
+      if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
+    }
+    const bounds = canvas.getBoundingClientRect();
+    return bounds.width > 0 && bounds.height > 0;
+  };
+  const setUserZoom = (value: number) => {
+    if (!Number.isFinite(value)) return false;
+    const next = THREE.MathUtils.clamp(value, MIN_USER_ZOOM, MAX_USER_ZOOM);
+    if (next === userZoom) return false;
+    userZoom = next;
+    render();
+    return true;
+  };
+  const zoomBy = (factor: number) => Number.isFinite(factor) && factor > 0 && setUserZoom(userZoom * factor);
   const tick = (now: number) => {
     raf = 0;
     if (!canAnimate()) { settle(); return; }
@@ -372,16 +408,41 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
     }
     buildSignals();
     canvas.dataset.setting = current.definition.setting;
-    canvas.setAttribute('aria-label', `${current.definition.title[language]} · ${frame.description[language]}`);
+    canvas.setAttribute('aria-label', `${current.definition.title[language]} · ${frame.description[language]} · ${controlsHelp}`);
     if (animate && canAnimate()) begin(); else settle();
   };
   const onVisibility = () => { if (document.hidden) { clearCue(); settle(); } };
   const onMotion = () => { if (media.matches) settle(); };
   const onContextLost = (event: Event) => { event.preventDefault(); fail(); };
+  const onWheel = (event: WheelEvent) => {
+    if (event.ctrlKey || event.metaKey || !canHandleZoomInput() || !Number.isFinite(event.deltaY) || event.deltaY === 0) return;
+    const unit = event.deltaMode === WheelEvent.DOM_DELTA_PIXEL ? 1
+      : event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16
+        : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? Math.max(1, window.innerHeight) : Number.NaN;
+    const rawDelta = event.deltaY * unit;
+    if (!Number.isFinite(rawDelta)) return;
+    const delta = THREE.MathUtils.clamp(rawDelta, -WHEEL_DELTA_LIMIT, WHEEL_DELTA_LIMIT);
+    if (zoomBy(Math.exp(-delta * .001))) event.preventDefault();
+  };
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.ctrlKey || event.metaKey || !canHandleZoomInput()) return;
+    const factor = event.key === '+' || event.key === '=' || event.code === 'NumpadAdd' ? ZOOM_STEP
+      : event.key === '-' || event.key === '_' || event.code === 'NumpadSubtract' ? 1 / ZOOM_STEP : null;
+    if (factor !== null) { if (zoomBy(factor)) event.preventDefault(); return; }
+    if ((event.key === '0' || event.code === 'Numpad0') && setUserZoom(1)) event.preventDefault();
+  };
+  const onDoubleClick = (event: MouseEvent) => {
+    if (!canHandleZoomInput() || (userZoom === 1 && cameraYaw === .55)) return;
+    userZoom = 1; cameraYaw = .55;
+    aimCamera(); render(); event.preventDefault();
+  };
   const observer = new ResizeObserver(resize); observer.observe(host);
   document.addEventListener('visibilitychange', onVisibility);
   media.addEventListener('change', onMotion);
   canvas.addEventListener('webglcontextlost', onContextLost);
+  canvas.addEventListener('wheel', onWheel, {passive: false});
+  canvas.addEventListener('keydown', onKeyDown);
+  canvas.addEventListener('dblclick', onDoubleClick);
   let pointer: {id: number; x: number; yaw: number} | null = null;
   const onDown = (event: PointerEvent) => { pointer = {id: event.pointerId, x: event.clientX, yaw: cameraYaw}; canvas.setPointerCapture?.(event.pointerId); };
   const onMove = (event: PointerEvent) => { if (!pointer || event.pointerId !== pointer.id) return; cameraYaw = THREE.MathUtils.clamp(pointer.yaw + (event.clientX - pointer.x) * .003, .16, .86); aimCamera(); render(); };
@@ -398,14 +459,14 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
       const nextSignature = JSON.stringify([input.key, input.definition.setting, physicalEntities, physicalFlows, nextFrame.actions ?? [], input.comparisonView ?? null, input.comparisonView != null ? choice : null]);
       current = input;
       canvas.dataset.comparisonView = input.comparisonView ?? 'after';
-      canvas.setAttribute('aria-label', `${input.definition.title[language]} · ${nextFrame.description[language]}`);
+      canvas.setAttribute('aria-label', `${input.definition.title[language]} · ${nextFrame.description[language]} · ${controlsHelp}`);
       if (nextSignature === signature) { if (input.animate === false && progress < 1) settle(); else publishPhase(progress === 1 ? restingPhase() : phase); applyCue(); return; }
       clearCue();
       focus.set(0, .65, 0);
       aimCamera();
       camera.updateProjectionMatrix();
       const animate = input.animate !== false && input.comparisonView !== 'before' && missionKey === input.key && setting === input.definition.setting && choice !== null;
-      if (missionKey !== input.key) { cameraYaw = .55; aimCamera(); }
+      if (missionKey !== input.key) { cameraYaw = .55; userZoom = 1; aimCamera(); }
       cancel(); signature = nextSignature; missionKey = input.key; frame = nextFrame;
       initialize(); sync(animate); applyCue();
     },
@@ -423,7 +484,7 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
     snapshot(): Mission3DSnapshot {
       return {mode: renderer && !failed ? 'webgl' : 'fallback', animating: !!raf, progress, phase, comparisonView: current?.comparisonView ?? 'after', choiceId: current?.choiceId ?? null, previewChoiceId: current?.previewChoiceId ?? null,
         comparisonCue: {active: cueEntityIds.length > 0, token: cueToken, entityIds: [...cueEntityIds]},
-        camera: {position: camera.position.toArray(), left: camera.left, right: camera.right, top: camera.top, bottom: camera.bottom},
+        camera: {position: camera.position.toArray(), zoom: camera.zoom, left: camera.left, right: camera.right, top: camera.top, bottom: camera.bottom},
         effects: effects.map(effect => ({kind: 'action-focus', action: effect.action, target: effect.target, position: effect.root.position.toArray()})), entities: [...entities].map(([id, entry]) => {
         const bounds = projectedBounds(entry.model.root), size = bounds.getSize(new THREE.Vector2());
         return {id, kind: entry.definition.kind, position: entry.model.root.position.toArray(), rotation: entry.model.root.rotation.toArray().slice(0, 3) as number[], visible: entry.model.root.visible, joints: readPose(entry).joints, projected: {left: (bounds.min.x + 1) / 2 * viewportWidth, right: (bounds.max.x + 1) / 2 * viewportWidth, top: (1 - bounds.max.y) / 2 * viewportHeight, bottom: (1 - bounds.min.y) / 2 * viewportHeight, width: size.x / 2 * viewportWidth, height: size.y / 2 * viewportHeight}};
@@ -434,6 +495,9 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
       clearCue(); cancel(); disposed = true; observer.disconnect();
       document.removeEventListener('visibilitychange', onVisibility); media.removeEventListener('change', onMotion);
       canvas.removeEventListener('webglcontextlost', onContextLost);
+      canvas.removeEventListener('wheel', onWheel);
+      canvas.removeEventListener('keydown', onKeyDown);
+      canvas.removeEventListener('dblclick', onDoubleClick);
       canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointermove', onMove);
       canvas.removeEventListener('pointerup', onUp); canvas.removeEventListener('pointercancel', onUp);
       disposeSignals(); entities.forEach(removeEntity); assets?.dispose(); privateMaterials.forEach((_base, material) => material.dispose()); privateMaterials.clear(); originalMaterials.clear();

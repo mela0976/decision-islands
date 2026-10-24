@@ -4,24 +4,185 @@ import { mkdir } from 'node:fs/promises';
 import { chromium } from '@playwright/test';
 import { createServer } from 'vite';
 
-const setup = async (page, origin) => {
+const setup = async (page, origin, language = 'zh') => {
   await page.route(`${origin}/__mission_3d_fixture`, route => route.fulfill({contentType:'text/html',body:'<!doctype html><html><body style="margin:0;background:#edf0e3"><main id="fixture" style="width:900px;height:450px"></main></body></html>'}));
   await page.goto(`${origin}/__mission_3d_fixture`);
-  await page.evaluate(async () => {
+  await page.evaluate(async language => {
     const { createMission3DStage } = await import('/src/mission-3d-stage.ts');
     const text = value => ({zh:value,en:value});
     const frame = (x, pose = 'idle', kind = 'share') => ({description:text(`Action ${x}`),entities:[{id:'person',kind:'adult',x,y:75,pose},{id:'assistant',kind:'robot',x:70,y:75,pose:'listen'},{id:'phone',kind:'phone',x:50,y:60},{id:'stop',kind:'stop',x:58,y:60,opacity:kind==='pause'?1:.15}],flows:x===25?[]:[{id:'transfer',from:'person',to:'assistant',kind}],actions:[{actor:'person',target:kind==='pause'?'stop':'assistant',prop:'phone',kind:kind==='pause'?'pause':'show'}]});
     window.definition = {setting:'home',title:text('A physical scene'),initial:frame(25),choices:{a:frame(55,'present'),b:frame(35,'work','pause')}};
     window.input = {key:'family',definition:window.definition,choiceId:null,previewChoiceId:null};
     window.fallbacks = [];
-    window.stage = createMission3DStage(document.querySelector('#fixture'),'zh', value => window.fallbacks.push(value));
+    window.stage = createMission3DStage(document.querySelector('#fixture'),language, value => window.fallbacks.push(value));
     window.stage.setActive(false);
     window.stage.update(window.input);
-  });
+  }, language);
 };
 const snapshot = page => page.evaluate(() => window.stage.snapshot());
 const person = state => state.entities.find(entity => entity.id === 'person');
 const canvasPixels = async page => page.screenshot({clip: await page.locator('canvas').boundingBox()});
+const wheel = (page, deltaY, options = {}) => page.evaluate(({deltaY, options}) => {
+  const {target: targetName = 'canvas', ...init} = options;
+  const target = targetName === 'body' ? document.body : targetName === 'saved' ? window.savedCanvas : document.querySelector('canvas');
+  const event = new WheelEvent('wheel', {deltaY: Number.isFinite(deltaY) ? deltaY : 0, bubbles: true, cancelable: true, ...init});
+  if (!Number.isFinite(deltaY)) Object.defineProperty(event, 'deltaY', {value: deltaY});
+  target.dispatchEvent(event);
+  return {prevented: event.defaultPrevented, zoom: window.stage.snapshot().camera.zoom, renderCount: window.stage.snapshot().renderCount};
+}, {deltaY, options});
+const keydown = (page, key, options = {}) => page.evaluate(({key, options}) => {
+  const event = new KeyboardEvent('keydown', {key, bubbles: true, cancelable: true, ...options});
+  document.querySelector('canvas').dispatchEvent(event);
+  return {prevented: event.defaultPrevented, zoom: window.stage.snapshot().camera.zoom};
+}, {key, options});
+
+test('manual zoom changes real WebGL pixels and survives stage navigation without starting an idle loop', async () => {
+  const server = await createServer({server:{port:0,host:'127.0.0.1',hmr:false}}); await server.listen();
+  const browser = await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
+  try {
+    const page = await browser.newPage({viewport:{width:1000,height:600}});
+    await page.clock.install(); await page.clock.pauseAt(new Date());
+    await setup(page,`http://127.0.0.1:${server.httpServer.address().port}`);
+    await page.evaluate(() => {window.stage.setActive(true);window.stage.setMotion(false);window.input={...window.input,choiceId:'a',comparisonView:'after',animate:false};window.stage.update(window.input);});
+    const canvas = page.locator('canvas');
+    assert.equal(await canvas.getAttribute('tabindex'),'0','the canvas can receive keyboard zoom controls');
+    await canvas.focus();
+    await page.keyboard.press('Shift+=');
+    assert.ok((await snapshot(page)).camera.zoom>1,'+ zooms in from the focused canvas');
+    await page.keyboard.press('-');
+    assert.ok(Math.abs((await snapshot(page)).camera.zoom-1)<.000001,'- zooms out from the focused canvas');
+    await page.emulateMedia({reducedMotion:'reduce'});
+    await page.evaluate(() => window.stage.setMotion(true));
+    const reducedWheel = await wheel(page,-32), reducedZoom = await snapshot(page);
+    assert.equal(reducedWheel.prevented,true,'reduced-motion preference does not disable manual zoom');
+    assert.ok(reducedZoom.camera.zoom>1);
+    assert.equal(reducedZoom.animating,false);
+    await page.clock.fastForward(250);
+    assert.equal((await snapshot(page)).renderCount,reducedZoom.renderCount,'reduced-motion zoom leaves no idle RAF');
+    await keydown(page,'0');
+    await page.emulateMedia({reducedMotion:'no-preference'});
+    await page.evaluate(() => window.stage.setMotion(false));
+    const afterBase = await snapshot(page), initialPixels = await canvasPixels(page);
+    assert.equal(afterBase.mode,'webgl');
+    assert.equal(afterBase.camera.zoom,1,'new stages start at the original camera scale');
+    assert.match(await page.locator('canvas').getAttribute('title'),/拖曳.*滾輪.*雙擊.*0/);
+    assert.match(await page.locator('canvas').getAttribute('aria-label'),/拖曳.*滾輪.*雙擊.*0/);
+
+    const firstWheel = await wheel(page,-32);
+    const zoomedAfter = await snapshot(page);
+    assert.equal(firstWheel.prevented,true,'an active canvas consumes a vertical wheel that changes zoom');
+    assert.ok(zoomedAfter.camera.zoom>1);
+    assert.ok(person(zoomedAfter).projected.width>person(afterBase).projected.width,'the projected actor grows at the new camera scale');
+    assert.notDeepEqual(await canvasPixels(page),initialPixels,'zoom changes rendered WebGL pixels');
+    assert.equal(zoomedAfter.animating,false,'manual zoom works while motion is paused');
+    await page.clock.fastForward(250);
+    assert.equal((await snapshot(page)).renderCount,zoomedAfter.renderCount,'manual zoom schedules one draw without an idle RAF');
+
+    assert.equal((await keydown(page,'0')).prevented,true);
+    const resetToDefault = await snapshot(page);
+    assert.equal(resetToDefault.camera.zoom,1,'0 resets only the camera scale');
+    assert.ok(person(resetToDefault).projected.width<person(zoomedAfter).projected.width,'reset zoom shrinks the projected actor back to its baseline');
+    assert.deepEqual(await canvasPixels(page),initialPixels,'reset restores the original rendered pixels');
+    await page.evaluate(() => {window.input.comparisonView='before';window.stage.update(window.input);});
+    const beforeBase = await snapshot(page);
+    await wheel(page,-32);
+    const zoomedBefore = await snapshot(page);
+    assert.ok(zoomedBefore.camera.zoom>1,'before comparison keeps user zoom');
+    await page.evaluate(() => {window.input.comparisonView='after';window.stage.update(window.input);});
+    const zoomedAfterAgain = await snapshot(page);
+    const beforeFactor = person(zoomedBefore).projected.width/person(beforeBase).projected.width;
+    const afterFactor = person(zoomedAfterAgain).projected.width/person(afterBase).projected.width;
+    assert.ok(Math.abs(beforeFactor-afterFactor)<.01,'before and after views apply the same zoom factor');
+    assert.equal(zoomedAfterAgain.camera.zoom,zoomedBefore.camera.zoom);
+    assert.equal(zoomedAfterAgain.choiceId,'a','comparison does not change the selected answer');
+
+    await page.evaluate(() => {const host=document.querySelector('#fixture');host.style.width='640px';host.style.height='320px';window.input={...window.input,previewChoiceId:'b'};window.stage.update(window.input);window.dispatchEvent(new Event('resize'));});
+    const retargeted = await snapshot(page);
+    assert.equal(retargeted.camera.zoom,zoomedAfterAgain.camera.zoom,'resize and choice retarget preserve zoom');
+    assert.equal(retargeted.choiceId,'a'); assert.equal(retargeted.previewChoiceId,'b','zoom does not change answer or preview data');
+    await page.evaluate(() => {window.stage.setMotion(true);window.stage.replay();});
+    assert.equal((await snapshot(page)).animating,true,'replay remains available after manual zoom');
+    await page.clock.fastForward(3000);
+    assert.equal((await snapshot(page)).camera.zoom,zoomedAfterAgain.camera.zoom,'replay preserves zoom through the animation');
+
+    const canvasBox = await page.locator('canvas').boundingBox();
+    await page.mouse.move(canvasBox.x+180,canvasBox.y+150);
+    await page.mouse.down(); await page.mouse.move(canvasBox.x+300,canvasBox.y+150,{steps:3}); await page.mouse.up();
+    const dragged = await snapshot(page), draggedCamera = dragged.camera.position;
+    assert.notDeepEqual(draggedCamera,afterBase.camera.position,'drag continues to rotate the camera while zoomed');
+    assert.equal(dragged.camera.zoom,zoomedAfterAgain.camera.zoom,'drag preserves the current zoom');
+    await wheel(page,-32);
+    await page.mouse.dblclick(canvasBox.x+300,canvasBox.y+150);
+    const reset = await snapshot(page);
+    assert.equal(reset.camera.zoom,1,'double-click resets zoom');
+    assert.deepEqual(reset.camera.position,afterBase.camera.position,'double-click also resets yaw');
+
+    await wheel(page,-32);
+    await page.evaluate(() => {window.input={...window.input,key:'another-mission',animate:false};window.stage.update(window.input);});
+    assert.equal((await snapshot(page)).camera.zoom,1,'a new mission key resets user zoom');
+    await page.evaluate(() => window.stage.dispose());
+  } finally {await browser.close();await server.close();}
+});
+
+test('wheel normalization, bounds, browser shortcuts, and inactive canvases preserve page scrolling', async () => {
+  const server = await createServer({server:{port:0,host:'127.0.0.1',hmr:false}}); await server.listen();
+  const browser = await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
+  try {
+    const page = await browser.newPage({viewport:{width:1000,height:600}});
+    await page.clock.install(); await page.clock.pauseAt(new Date());
+    await setup(page,`http://127.0.0.1:${server.httpServer.address().port}`,'en');
+    await page.evaluate(() => {window.stage.setActive(true);window.stage.setMotion(false);window.input={...window.input,animate:false};window.stage.update(window.input);});
+    assert.match(await page.locator('canvas').getAttribute('title'),/Drag.*wheel.*double-click.*0/i);
+    const wrapperControls = await page.evaluate(async () => {
+      const {createMissionStage} = await import('/src/mission-stage.ts');
+      const host = document.createElement('div'); host.id = 'mission-wrapper-fixture'; host.style.width = '900px'; host.style.height = '450px'; document.body.append(host);
+      window.wrapperStage = createMissionStage(host,'en'); window.wrapperStage.setActive(false); window.wrapperStage.update(window.input);
+      const canvas = host.querySelector('canvas');
+      return {title: canvas.title, label: canvas.getAttribute('aria-label')};
+    });
+    assert.match(wrapperControls.title,/Drag.*wheel.*double-click.*0/i);
+    assert.match(wrapperControls.label,/Drag.*wheel.*double-click.*0/i);
+    await page.evaluate(() => window.wrapperStage.dispose());
+
+    const bodyWheel = await wheel(page,-40,{target:'body'});
+    assert.equal(bodyWheel.prevented,false,'wheel input outside the canvas remains available to the page');
+    assert.equal(bodyWheel.zoom,1);
+    for (const [deltaY, options] of [[0,{deltaX:30}],[-80,{ctrlKey:true}],[-80,{metaKey:true}],[Number.NaN,{}]]) {
+      const ignored = await wheel(page,deltaY,options);
+      assert.equal(ignored.prevented,false,'horizontal-only, nonfinite, and browser-zoom gestures are ignored');
+      assert.equal(ignored.zoom,1);
+    }
+    const pixel = await wheel(page,-32,{deltaMode:0});
+    assert.equal(pixel.prevented,true);
+    await keydown(page,'0');
+    const line = await wheel(page,-2,{deltaMode:1});
+    assert.ok(Math.abs(line.zoom-pixel.zoom)<.000001,'two line units equal 32 pixel units');
+    await keydown(page,'0');
+    const pageUnit = await wheel(page,-32/600,{deltaMode:2});
+    assert.ok(Math.abs(pageUnit.zoom-pixel.zoom)<.000001,'page units use the browser viewport height');
+    await keydown(page,'0');
+    for (let index=0;index<8;index++) await wheel(page,-1000000);
+    assert.equal((await snapshot(page)).camera.zoom,2.4,'large wheel deltas clamp to the maximum zoom');
+    assert.equal((await wheel(page,-1000000)).prevented,false,'the page keeps scrolling when zoom is already at its maximum');
+    for (let index=0;index<8;index++) await wheel(page,1000000);
+    assert.equal((await snapshot(page)).camera.zoom,.65,'zoom clamps to the minimum');
+    assert.equal((await wheel(page,1000000)).prevented,false,'the page keeps scrolling when zoom is already at its minimum');
+    assert.equal((await keydown(page,'+', {ctrlKey:true})).prevented,false,'keyboard browser zoom shortcuts are left alone');
+
+    await page.evaluate(() => window.stage.setActive(false));
+    assert.equal((await wheel(page,-80)).prevented,false,'an inactive stage never consumes wheel input');
+    await page.evaluate(() => {window.stage.setActive(true);document.querySelector('canvas').style.visibility='hidden';});
+    assert.equal((await wheel(page,-80)).prevented,false,'a hidden canvas never consumes wheel input');
+    await page.evaluate(() => {document.querySelector('canvas').style.visibility='';Object.defineProperty(document,'hidden',{configurable:true,value:true});});
+    assert.equal((await wheel(page,-80)).prevented,false,'a hidden document never consumes wheel input');
+    await page.evaluate(() => {Object.defineProperty(document,'hidden',{configurable:true,value:false});window.savedHost=document.querySelector('#fixture');window.savedCanvas=document.querySelector('canvas');window.savedHost.remove();});
+    assert.equal((await wheel(page,-80,{target:'saved'})).prevented,false,'a detached canvas never consumes wheel input');
+    await page.evaluate(() => {document.body.append(window.savedHost);window.savedCanvas.dispatchEvent(new Event('webglcontextlost',{cancelable:true}));});
+    assert.equal((await wheel(page,-80)).prevented,false,'a lost WebGL context never consumes wheel input');
+    await page.evaluate(() => {window.savedCanvas=document.querySelector('canvas');window.stage.dispose();});
+    assert.equal((await wheel(page,-80,{target:'saved'})).prevented,false,'disposing a stage removes its wheel listener');
+  } finally {await browser.close();await server.close();}
+});
 
 test('manual comparison cues alter only changed visible models, expire exactly, and release lifecycle work', async () => {
   const server = await createServer({server:{port:0,host:'127.0.0.1',hmr:false}}); await server.listen();

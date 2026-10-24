@@ -1,5 +1,5 @@
 import './mission-stage.css';
-import { createMission3DStage } from './mission-3d-stage';
+import { createMission3DStage, getMission3DControlsHelp } from './mission-3d-stage';
 import { createSvgMissionStage, type SvgMissionStage } from './mission-svg-stage';
 import { resolveMissionChangeCue } from './mission-change-cues';
 import type { MissionStage, MissionStageInput } from './mission-stage-types';
@@ -286,8 +286,12 @@ export function createMissionStage(host: HTMLElement, language: 'zh' | 'en'): Mi
       }
       else {
         engine!.update(stageInput());
-        viewport.querySelector('canvas')?.setAttribute('aria-label', `${next.definition.title[language]}。${frame.description[language]}`);
-        viewport.querySelector('canvas')?.setAttribute('title', language === 'zh' ? '拖曳查看場景' : 'Drag to inspect the scene');
+        const canvas = viewport.querySelector('canvas');
+        const controlsHelp = getMission3DControlsHelp(language);
+        canvas?.setAttribute('aria-label', language === 'zh'
+          ? `${next.definition.title[language]}。${frame.description[language]}。${controlsHelp}`
+          : `${next.definition.title[language]}. ${frame.description[language]}. ${controlsHelp}`);
+        canvas?.setAttribute('title', controlsHelp);
         activeFigure.dataset.setting = next.definition.setting;
       }
       syncCueMetadata();
