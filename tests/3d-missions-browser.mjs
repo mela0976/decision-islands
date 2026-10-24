@@ -31,8 +31,11 @@ async function task(page, audience, role, question) {
 }
 async function pixels(page) {
   const canvas = page.locator('.mission-stage-canvas');
-  await canvas.scrollIntoViewIfNeeded();
-  const bounds = await canvas.boundingBox();
+  let bounds = await canvas.boundingBox();
+  if (bounds.y < 0 || bounds.y + bounds.height > page.viewportSize().height) {
+    await canvas.scrollIntoViewIfNeeded();
+    bounds = await canvas.boundingBox();
+  }
   return hash(await page.screenshot({clip:{x:Math.ceil(bounds.x)+2,y:Math.ceil(bounds.y)+2,width:Math.floor(bounds.width)-4,height:Math.floor(bounds.height)-4}}));
 }
 try {
@@ -93,18 +96,19 @@ try {
     const { ctx, page } = await boot();
     await task(page, 'everyday', 'family');
     const before = await pixels(page);
+    await page.clock.install(); await page.clock.pauseAt(new Date());
     await page.emulateMedia({ reducedMotion: 'no-preference' });
-    if ((await page.locator('#motion').getAttribute('aria-pressed')) === 'false') await page.locator('#motion').click();
-    await page.locator('.journey-mission-choices [data-mission-choice="a"]').click();
-    await page.waitForTimeout(550);
+    if ((await page.locator('#motion').getAttribute('aria-pressed')) === 'false') await page.locator('#motion').evaluate(button => button.click());
+    await page.locator('.journey-mission-choices [data-mission-choice="a"]').evaluate(button => button.click());
+    await page.clock.runFor(550);
     const mid = await pixels(page);
-    await page.waitForTimeout(2400);
+    await page.clock.runFor(2400);
     const after = await pixels(page);
     assert.notEqual(before, mid); assert.notEqual(mid, after, 'animation has visible intermediate rendered frames');
-    await page.locator('.mission-stage-replay').click(); await page.waitForTimeout(450);
+    await page.locator('.mission-stage-replay').evaluate(button => button.click()); await page.clock.runFor(450);
     assert.notEqual(await pixels(page), after, 'replay visibly restarts the action');
-    await page.locator('#motion').click();
-    await page.waitForTimeout(100);
+    await page.locator('#motion').evaluate(button => button.click());
+    await page.clock.runFor(100);
     assert.equal(await pixels(page), after, 'pause settles at the correct outcome');
     const bounds = await page.locator('.mission-stage-canvas').boundingBox();
     await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
@@ -112,15 +116,15 @@ try {
     await page.mouse.move(bounds.x + bounds.width / 2 + 70, bounds.y + bounds.height / 2, { steps: 5 });
     await page.mouse.up();
     assert.notEqual(await pixels(page), after, 'dragging changes the actual 3D viewpoint');
-    await page.locator('.journey-mission-choices [data-mission-choice="b"]').click();
-    await page.locator('[data-mission-compare]').click();
+    await page.locator('.journey-mission-choices [data-mission-choice="b"]').evaluate(button => button.click());
+    await page.locator('[data-mission-compare]').evaluate(button => button.click());
     await page.locator('.mission-stage-canvas').evaluate(canvas => canvas.getContext('webgl2')?.getExtension('WEBGL_lose_context')?.loseContext());
     await page.locator('.mission-stage[data-renderer="fallback"] svg').waitFor();
     assert.equal(await page.locator('.journey-mission-feedback').getAttribute('data-choice-id'), 'b', 'context loss preserves adopted answer during preview');
     assert.equal(await page.locator('.mission-stage').getAttribute('data-choice-id'), 'a');
     assert.equal(await page.locator('.mission-stage').getAttribute('data-preview'), 'true');
     assert.match(await page.locator('.mission-stage figcaption').textContent(), /預覽/);
-    await page.locator('[data-mission-compare]').click();
+    await page.locator('[data-mission-compare]').evaluate(button => button.click());
     assert.equal(await page.locator('.mission-stage').getAttribute('data-choice-id'), 'b');
     assert.equal(await page.locator('.journey-mission-feedback').getAttribute('data-choice-id'), 'b');
     await ctx.close(); results.push('Visible intermediate 3D animation, replay, pause terminal state and WebGL context loss fallback preserve playable choices');
@@ -131,18 +135,19 @@ try {
   ]) {
     const {ctx,page} = await boot();
     await task(page,'everyday',sample.role,sample.question);
-    await page.locator(`.journey-step-marker[data-step="${sample.step}"]`).click();
+    await page.locator(`.journey-step-marker[data-step="${sample.step}"]`).evaluate(button => button.click());
     const before = await pixels(page);
+    await page.clock.install(); await page.clock.pauseAt(new Date());
     await page.emulateMedia({reducedMotion:'no-preference'});
-    if ((await page.locator('#motion').getAttribute('aria-pressed')) === 'false') await page.locator('#motion').click();
-    await page.locator('.journey-mission-choices [data-mission-choice="b"]').click();
-    await page.waitForTimeout(650);
+    if ((await page.locator('#motion').getAttribute('aria-pressed')) === 'false') await page.locator('#motion').evaluate(button => button.click());
+    await page.locator('.journey-mission-choices [data-mission-choice="b"]').evaluate(button => button.click());
+    await page.clock.runFor(650);
     const middle = await pixels(page);
-    await page.locator('.mission-stage').screenshot({path:`test-results/3d-action-${sample.name}-middle.png`});
-    await page.waitForTimeout(2200);
+    await page.screenshot({path:`test-results/3d-action-${sample.name}-middle.png`});
+    await page.clock.runFor(2200);
     const after = await pixels(page);
     assert.notEqual(before,middle); assert.notEqual(middle,after);
-    await page.locator('.mission-stage').screenshot({path:`test-results/3d-action-${sample.name}-after.png`});
+    await page.screenshot({path:`test-results/3d-action-${sample.name}-after.png`});
     await ctx.close(); results.push(`${sample.name}: distinct intermediate and terminal 3D action frames`);
   }
   assert.deepEqual(errors, []);

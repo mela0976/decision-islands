@@ -277,6 +277,10 @@ export function createMission3DStage(host: HTMLElement, language: 'zh' | 'en', o
       current = input;
       canvas.setAttribute('aria-label', `${input.definition.title[language]} · ${nextFrame.description[language]}`);
       if (nextSignature === signature) return;
+      camera.zoom = choice ? 1.18 : 1;
+      focus.set(0, .65, choice ? .8 : 0);
+      aimCamera();
+      camera.updateProjectionMatrix();
       const animate = missionKey === input.key && setting === input.definition.setting && choice !== null;
       if (missionKey !== input.key) { cameraYaw = .55; aimCamera(); }
       cancel(); signature = nextSignature; missionKey = input.key; frame = nextFrame;
