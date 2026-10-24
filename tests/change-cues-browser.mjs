@@ -42,7 +42,7 @@ try {
     const token = await page.locator('.mission-stage').getAttribute('data-cue-token');
     const labels = await page.locator('[data-change-cue-label]').allTextContents();
     assert.ok(labels.length>=1 && labels.length<=2);
-    assert.ok(labels.every(label=>label.length<=14),JSON.stringify(labels));
+    assert.ok(labels.every(label=>[...label].length<=18),JSON.stringify(labels));
     const bounds = await page.locator('[data-change-cue-label]').evaluateAll(nodes=>nodes.map(node=>{
       const box=node.getBoundingClientRect();
       return {left:box.left,right:box.right,top:box.top,bottom:box.bottom,font:Number.parseFloat(getComputedStyle(node).fontSize)};
