@@ -61,6 +61,12 @@ try {
       assert.equal(await page.evaluate(()=>window.__stageNode===document.querySelector('.mission-stage')),true,'stage survives UI replacement');
       await page.locator('.journey-mission-choices [data-mission-choice="b"]').click();
       const b=await physical(page);assert.notEqual(a,b,`${id} has different A/B objects, poses or flow geometry`);
+      await page.locator('[data-mission-view="before"]').click();
+      assert.equal(await physical(page),initial,`${id} fallback restores the actual initial arrangement`);
+      assert.equal(await page.locator('.journey-mission-feedback').getAttribute('data-choice-id'),'b');
+      await page.locator('[data-mission-view="after"]').click();
+      assert.equal(await physical(page),b,`${id} fallback restores the adopted result`);
+      await page.waitForFunction(() => document.querySelector('.mission-stage').getAnimations({subtree:true}).length === 0, null, {timeout:1000});
       assert.equal(await page.locator('.mission-stage').evaluate(el=>el.getAnimations({subtree:true}).length),0);
       if(round===0) {
         await page.locator('[data-mission-compare]').click();

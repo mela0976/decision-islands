@@ -32,34 +32,42 @@ test('visible mission meshes fit mobile and desktop with readable actors and obj
       await page.waitForFunction(width => document.querySelector('canvas')?.width === Math.floor(width * Math.min(devicePixelRatio || 1, width < 600 ? 1.25 : 1.5)),width);
       const states = await page.evaluate(() => window.missions.flatMap(mission => [null,'a','b'].map(choiceId => {
         window.stage.update({key:mission.id,definition:mission.visual,choiceId,previewChoiceId:null});
-        return {mission:mission.id,choiceId,...window.stage.snapshot()};
+        document.querySelector('canvas').getContext('webgl2').finish();
+        return {sample:'original',mission:mission.id,choiceId,...window.stage.snapshot()};
       })));
       assert.equal(states.length,144);
-      for (const state of states) {
+      const comparisons = await page.evaluate(() => window.missions.flatMap(mission => ['a','b'].flatMap(choiceId => ['before','after'].map(comparisonView => {
+        window.stage.update({key:mission.id,definition:mission.visual,choiceId,previewChoiceId:null,comparisonView,animate:false});
+        document.querySelector('canvas').getContext('webgl2').finish();
+        return {sample:'comparison',mission:mission.id,choiceId,comparisonView,...window.stage.snapshot()};
+      }))));
+      assert.equal(comparisons.length,192);
+      for (const state of [...states,...comparisons]) {
         assert.equal(state.mode,'webgl');
         for (const entity of state.entities.filter(entity=>entity.visible)) {
-          const context=`${width}/${state.mission}/${state.choiceId}/${entity.id}`;
+          const context=`${width}/${state.mission}/${state.choiceId}/${state.comparisonView??'original'}/${entity.id}`;
           const bounds=entity.projected;
           assert.ok(bounds.left>=-0.1 && bounds.right<=width+.1 && bounds.top>=53.9 && bounds.bottom<=height+.1,`${context} fits viewport below controls ${JSON.stringify(bounds)}`);
           const target=entity.kind==='adult'||entity.kind==='elder'?38:entity.kind==='child'?26:entity.kind==='phone'?20:0;
           if (target) assert.ok(bounds.height>=target,`${context} height ${bounds.height.toFixed(1)} >= ${target}`);
-          measurements.push({viewportWidth:width,viewportHeight:height,mission:state.mission,choice:state.choiceId,id:entity.id,kind:entity.kind,...bounds});
+          measurements.push({viewportWidth:width,viewportHeight:height,sample:state.sample,comparisonView:state.comparisonView,mission:state.mission,choice:state.choiceId,id:entity.id,kind:entity.kind,...bounds});
         }
       }
       for (const [missionId,choiceId] of [['shared-memory-1',null],['shared-memory-1','a'],['family-trust-3','b'],['human-skill-1','a'],['creative-value-2','a']]) {
         await page.evaluate(({missionId,choiceId})=>{const mission=window.missions.find(item=>item.id===missionId);window.stage.update({key:mission.id,definition:mission.visual,choiceId,previewChoiceId:null});},{missionId,choiceId});
-        await page.locator('#fixture').screenshot({path:`test-results/readable-missions/${width}-${missionId}-${choiceId??'initial'}.png`});
+        const clip = await page.locator('#fixture').boundingBox();
+        await page.screenshot({clip,path:`test-results/readable-missions/${width}-${missionId}-${choiceId??'initial'}.png`});
       }
     }
     await page.evaluate(()=>{window.stage.setMotion(true);const mission=window.missions.find(item=>item.id==='shared-memory-1');window.input={key:mission.id,definition:mission.visual,choiceId:null,previewChoiceId:null};window.stage.update(window.input);window.stage.update({...window.input,previewChoiceId:'b'});});
     assert.equal((await page.evaluate(()=>window.stage.snapshot())).phase,'approach');
     await page.clock.fastForward(1200);
     assert.equal((await page.evaluate(()=>window.stage.snapshot())).phase,'interact');
-    await page.locator('#fixture').screenshot({path:'test-results/readable-missions/interaction.png'});
+    await page.screenshot({clip:await page.locator('#fixture').boundingBox(),path:'test-results/readable-missions/interaction.png'});
     const before=await page.evaluate(()=>window.stage.snapshot());
     await page.evaluate(()=>window.stage.update({...window.input,choiceId:'b'}));
     assert.deepEqual((await page.evaluate(()=>window.stage.snapshot())).entities,before.entities);
-    assert.deepEqual(await page.evaluate(()=>window.phases.at(-1)),{phase:'interact',choiceId:'b',preview:false});
+    assert.deepEqual(await page.evaluate(()=>window.phases.at(-1)),{phase:'interact',choiceId:'b',preview:false,comparisonView:'after'});
     await page.clock.fastForward(1700);
     const terminal=await page.evaluate(()=>window.stage.snapshot());
     assert.equal(terminal.phase,'result'); assert.equal(terminal.animating,false);

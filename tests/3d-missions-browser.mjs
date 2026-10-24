@@ -36,7 +36,7 @@ async function pixels(page) {
     await canvas.scrollIntoViewIfNeeded();
     bounds = await canvas.boundingBox();
   }
-  return hash(await page.screenshot({clip:{x:Math.ceil(bounds.x)+2,y:Math.ceil(bounds.y)+56,width:Math.floor(bounds.width)-4,height:Math.floor(bounds.height)-58}}));
+  return hash(await page.screenshot({timeout:30000,clip:{x:Math.ceil(bounds.x)+2,y:Math.ceil(bounds.y)+56,width:Math.floor(bounds.width)-4,height:Math.floor(bounds.height)-58}}));
 }
 try {
   if (!process.env.TEST_MOTION_ONLY) {
@@ -62,9 +62,20 @@ try {
       await page.evaluate(() => { window.__missionCanvas = document.querySelector('.mission-stage-canvas'); });
       await page.locator('.journey-mission-choices [data-mission-choice="a"]').click();
       const a = await pixels(page); assert.notEqual(a, initial, `${id} A has real pixel changes`);
-      if (!captured.has(route.role)) { await page.locator('.mission-stage').screenshot({ path: `test-results/3d-role-${route.role}.png` }); captured.add(route.role); }
-      await page.locator('.journey-mission-choices [data-mission-choice="b"]').click();
-      const b = await pixels(page); assert.notEqual(a, b, `${id} has distinct 3D outcomes`);
+      if (!captured.has(route.role)) { await page.screenshot({clip:await page.locator('.mission-stage').boundingBox(),timeout:30000,path:`test-results/3d-role-${route.role}.png`}); captured.add(route.role); }
+      let b;
+      for (const choice of ['a', 'b']) {
+        if (choice === 'b') await page.locator('.journey-mission-choices [data-mission-choice="b"]').click();
+        const result = choice === 'a' ? a : await pixels(page);
+        if (choice === 'b') b = result;
+        await page.locator('[data-mission-view="before"]').click();
+        assert.equal(await page.locator('.mission-stage').getAttribute('data-comparison-view'), 'before');
+        assert.equal(await page.locator('.journey-mission-feedback').getAttribute('data-choice-id'), choice);
+        assert.notEqual(await pixels(page), result, `${id} ${choice} before and after differ visually`);
+        await page.locator('[data-mission-view="after"]').click();
+        assert.equal(await pixels(page), result, `${id} ${choice} comparison restores exact result`);
+      }
+      assert.notEqual(a, b, `${id} has distinct 3D outcomes`);
       assert.equal(await page.evaluate(() => window.__missionCanvas === document.querySelector('.mission-stage-canvas')), true, 'one renderer survives rail redraw');
       if (!round) {
         await page.locator('[data-mission-compare]').click();
@@ -75,6 +86,7 @@ try {
         await page.locator('.journey-mission-choices [data-mission-choice="b"]').click();
       }
       if (round < 2) await page.locator('.journey-mission [data-action="advance"]').click();
+      if (missions.size % 12 === 0) console.log(`Compared ${missions.size}/48 mission scenes`);
     }
   }
   assert.equal(missions.size, 48); assert.equal(captured.size, 8);
@@ -87,9 +99,22 @@ try {
     assert.ok(stage.width > 290 && stage.y >= 0 && stage.y + stage.height < height);
     for (const box of await page.locator('.journey-mission-choices [data-mission-choice]').evaluateAll(nodes => nodes.map(node => ({ top: node.getBoundingClientRect().top, bottom: node.getBoundingClientRect().bottom, height: node.getBoundingClientRect().height })))) assert.ok(box.top >= 0 && box.bottom < height && box.height >= 44);
     await page.locator('.journey-mission-choices [data-mission-choice="a"]').click();
+    const after = await pixels(page);
+    for (const view of ['before', 'after']) {
+      const toggle = page.locator(`[data-mission-view="${view}"]`);
+      await toggle.click();
+      assert.equal(await toggle.getAttribute('aria-pressed'), 'true');
+      const bounds = await toggle.boundingBox();
+      assert.ok(bounds.width >= 44 && bounds.height >= 44 && bounds.x >= 0 && bounds.x + bounds.width <= width && bounds.y >= 0 && bounds.y + bounds.height <= height);
+      assert.equal(await page.locator('.journey-mission-feedback').getAttribute('data-choice-id'), 'a');
+      if (view === 'before') {
+        assert.notEqual(await pixels(page), after);
+        await page.screenshot({ path: `test-results/3d-mobile-${width}-before.png` });
+      } else assert.equal(await pixels(page), after);
+    }
+    await page.screenshot({ path: `test-results/3d-mobile-${width}.png` });
     await page.locator('#season').selectOption('easter');
     assert.equal(await page.locator('.journey-mission-feedback').getAttribute('data-choice-id'), 'a');
-    await page.screenshot({ path: `test-results/3d-mobile-${width}.png` });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await ctx.close(); results.push(`${width}x${height}: real 3D stage and both actions visible, holiday retains answer`);
   }
@@ -129,12 +154,16 @@ try {
     assert.notEqual(await pixels(page), after, 'dragging changes the actual 3D viewpoint');
     await page.locator('.journey-mission-choices [data-mission-choice="b"]').evaluate(button => button.click());
     await page.locator('[data-mission-compare]').evaluate(button => button.click());
+    await page.locator('[data-mission-view="before"]').evaluate(button => button.click());
     await page.locator('.mission-stage-canvas').evaluate(canvas => canvas.getContext('webgl2')?.getExtension('WEBGL_lose_context')?.loseContext());
     await page.locator('.mission-stage[data-renderer="fallback"] svg').waitFor();
     assert.equal(await page.locator('.journey-mission-feedback').getAttribute('data-choice-id'), 'b', 'context loss preserves adopted answer during preview');
     assert.equal(await page.locator('.mission-stage').getAttribute('data-choice-id'), 'a');
     assert.equal(await page.locator('.mission-stage').getAttribute('data-preview'), 'true');
+    assert.equal(await page.locator('.mission-stage').getAttribute('data-comparison-view'), 'before', 'context loss retains the visible comparison side');
     assert.match(await page.locator('.mission-stage figcaption').textContent(), /預覽/);
+    await page.locator('[data-mission-view="after"]').evaluate(button => button.click());
+    assert.equal(await page.locator('.mission-stage').getAttribute('data-comparison-view'), 'after');
     await page.locator('[data-mission-compare]').evaluate(button => button.click());
     assert.equal(await page.locator('.mission-stage').getAttribute('data-choice-id'), 'b');
     assert.equal(await page.locator('.journey-mission-feedback').getAttribute('data-choice-id'), 'b');
