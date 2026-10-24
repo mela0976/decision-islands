@@ -191,7 +191,8 @@ export function createSvgMissionStage(host: HTMLElement, language: 'zh'|'en'): S
       const choice = input.previewChoiceId ?? input.choiceId;
       const comparisonView = input.comparisonView ?? 'after';
       const frame = comparisonView === 'before' || !choice ? input.definition.initial : input.definition.choices[choice] ?? input.definition.initial;
-      const signature = JSON.stringify([input.key, input.definition.setting, choice, Boolean(input.previewChoiceId), comparisonView, frame]);
+      const cue = input.comparisonCue;
+      const signature = JSON.stringify([input.key, input.definition.setting, choice, Boolean(input.previewChoiceId), comparisonView, frame, cue?.token ?? null]);
       currentInput = input;
       currentFrame = frame;
       if (signature === lastSignature) {
@@ -211,6 +212,10 @@ export function createSvgMissionStage(host: HTMLElement, language: 'zh'|'en'): S
       stage.dataset.choiceId = choice ?? '';
       stage.dataset.preview = String(Boolean(input.previewChoiceId));
       stage.dataset.comparisonView = comparisonView;
+      stage.dataset.cueActive = String(Boolean(cue));
+      stage.dataset.cueToken = String(cue?.token ?? stage.dataset.cueToken ?? 0);
+      if (cue?.entityIds.length) stage.dataset.cueIds = JSON.stringify(cue.entityIds);
+      else delete stage.dataset.cueIds;
       stage.dataset.animating = String(canAnimate);
       svg.dataset.setting = input.definition.setting;
       if (!sameMission) {
@@ -245,6 +250,7 @@ export function createSvgMissionStage(host: HTMLElement, language: 'zh'|'en'): S
         node.dataset.y = String(entity.y);
         node.dataset.pose = entity.pose ?? 'idle';
         node.dataset.opacity = String(entity.opacity ?? 1);
+        node.dataset.cueHighlight = String(Boolean(cue?.entityIds.includes(entity.id)));
         node.style.transform = position(entity);
         node.style.opacity = String(entity.opacity ?? 1);
         const use = node.querySelector('use')!;

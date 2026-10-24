@@ -102,6 +102,9 @@
   stroke-linejoin: round;
   paint-order: stroke;
 }
+.mission-stage[data-cue-active='true'] [data-scene-entity][data-cue-highlight='true'] > use {
+  filter: drop-shadow(0 0 5px #f0a631);
+}
 .mission-stage-flows {
   opacity: .88;
 }
@@ -121,12 +124,65 @@
   font-weight: 600;
   padding-left: 13px;
 }
+.mission-stage figcaption[data-cue-active='true'] {
+  align-items: center;
+  box-sizing: border-box;
+  display: flex;
+  height: 44px;
+  max-height: 44px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.mission-stage-change-cue {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.mission-stage-change-cue-context,
+.mission-stage-change-cue [data-change-cue-label] {
+  box-sizing: border-box;
+  font-size: 12px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mission-stage-change-cue-context {
+  flex: 0 0 auto;
+  font-weight: 700;
+}
+.mission-stage-change-cue [data-change-cue-label] {
+  background: color-mix(in srgb, var(--holiday-secondary, #789181) 16%, var(--holiday-paper, #fff8ef));
+  border: 1px solid color-mix(in srgb, var(--holiday-secondary, #789181) 38%, transparent);
+  border-radius: 999px;
+  color: var(--holiday-ink, #304d47);
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 3px 7px;
+  text-align: center;
+}
+.mission-stage-cue-announcement {
+  border: 0;
+  clip-path: inset(50%);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
 @media (max-width: 600px) {
   .mission-stage-viewport { aspect-ratio: 1.8 / 1; min-height: 180px; }
   .mission-stage { border-radius: 14px 14px 10px 10px; }
   .mission-stage > svg { aspect-ratio: 1.8 / 1; min-height: 180px; }
   .mission-stage-label { font-size: 18px; }
   .mission-stage figcaption { padding: 8px 12px 10px; font-size: 11px; }
+  .mission-stage figcaption[data-cue-active='true'] { padding: 6px 10px; }
+  .mission-stage-change-cue [data-change-cue-label] { padding: 3px 5px; }
 }
 
 @media (max-width: 380px) {
