@@ -2,6 +2,7 @@ import type { Edition } from './types';
 import type { I18nText, JourneyAudienceId, JourneyConnectionKind, JourneyDefinition, JourneyPersonaDefinition, JourneyQuestionDefinition, JourneyStepDefinition, ReadingJourneys } from './journey-types';
 import { MISSION_ROUNDS } from './journey-mission-content';
 import { MISSION_VISUALS } from './mission-visual-content';
+import { MISSION_3D_ACTIONS } from './mission-3d-actions';
 import { validateMissionVisual } from './mission-visual-validation';
 
 const t = (zh: string, en: string): I18nText => ({ zh, en });
@@ -131,7 +132,13 @@ export const JOURNEY_2026: JourneyDefinition = {
         const mission = rounds[index];
         const visual = MISSION_VISUALS[mission.id];
         if (!visual) throw new Error('curated mission needs a visual scene');
-        return { ...entry, mission: { ...mission, visual } };
+        const actions = MISSION_3D_ACTIONS[mission.id];
+        if (!actions) throw new Error('curated mission needs physical actions');
+        const choices = Object.fromEntries(Object.entries(visual.choices).map(([id, frame]) => {
+          if (!actions[id]?.length) throw new Error('curated choice needs physical actions');
+          return [id, { ...frame, actions: actions[id] }];
+        }));
+        return { ...entry, mission: { ...mission, visual: { ...visual, choices } } };
       }) };
     }),
   })),

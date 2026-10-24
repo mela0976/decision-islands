@@ -62,7 +62,7 @@ function dimensionsKey(size: Vec3): string {
 
 export function createMission3DAssets(): Mission3DAssets {
   const geometryCache = new Map<string, THREE.BufferGeometry>();
-  const materials = new Set<THREE.MeshStandardMaterial>();
+  const materials = new Map<THREE.MeshStandardMaterial, {opacity: number; transparent: boolean; depthWrite: boolean}>();
   const rooms = new Map<MissionSetting, THREE.Group>();
   const entities = new Map<string, Mission3DModel>();
   let disposed = false;
@@ -149,7 +149,7 @@ export function createMission3DAssets(): Mission3DAssets {
       transparent: (paint.opacity ?? 1) < 1,
       depthWrite: (paint.opacity ?? 1) >= 1,
     });
-    materials.add(material);
+    materials.set(material, {opacity: material.opacity, transparent: material.transparent, depthWrite: material.depthWrite});
     const mesh = new THREE.Mesh(geometry(shape, size), material);
     mesh.name = name;
     mesh.position.set(position[0], position[1], position[2]);
@@ -775,9 +775,10 @@ export function createMission3DAssets(): Mission3DAssets {
     model.root.traverse((object) => {
       if (!(object instanceof THREE.Mesh)) return;
       const material = object.material as THREE.MeshStandardMaterial;
-      material.opacity = 1;
-      material.transparent = false;
-      material.depthWrite = true;
+      const initial = materials.get(material)!;
+      material.opacity = initial.opacity;
+      material.transparent = initial.transparent;
+      material.depthWrite = initial.depthWrite;
     });
   };
 
@@ -825,7 +826,7 @@ export function createMission3DAssets(): Mission3DAssets {
       if (disposed) return;
       disposed = true;
       for (const value of geometryCache.values()) value.dispose();
-      for (const value of materials) value.dispose();
+      for (const value of materials.keys()) value.dispose();
       geometryCache.clear();
       materials.clear();
       rooms.clear();

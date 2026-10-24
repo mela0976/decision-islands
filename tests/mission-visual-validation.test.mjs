@@ -10,6 +10,9 @@ const frame = () => ({description:text('Visible scene'),entities:[{id:'person',k
 const definition = () => ({setting:'office',title:text('Workspace'),initial:frame(),choices:{a:frame(),b:frame()}});
 test('custom book visual frames accept named props and valid handoff references', () => {
   assert.doesNotThrow(()=>validateMissionVisual(definition(),['a','b']));
+  const data = definition();
+  data.choices.a.actions = [{kind:'review',actor:'person',target:'draft',prop:'draft'}];
+  assert.doesNotThrow(()=>validateMissionVisual(data,['a','b']));
 });
 test('invalid visual data is rejected before any book or stage state is installed', () => {
   for(const mutate of [
@@ -19,5 +22,8 @@ test('invalid visual data is rejected before any book or stage state is installe
     d=>{d.initial.entities[0].scale=0;},d=>{d.initial.entities[0].opacity=2;},d=>{d.initial.entities[0].pose='jump';},
     d=>{d.initial.entities[0].label={zh:'x',en:''};},d=>{d.initial.flows[0].to='missing';},
     d=>{d.initial.flows[0].to='draft';},d=>{d.initial.flows[0].kind='script';},d=>{d.initial.flows.push({...d.initial.flows[0]});},
+    d=>{d.initial.actions='invalid';}, d=>{d.initial.actions=[{kind:'review',actor:'draft',target:'person'}];},
+    d=>{d.initial.actions=[{kind:'review',actor:'person',target:'missing'}];}, d=>{d.initial.actions=[{kind:'jump',actor:'person',target:'draft'}];},
+    d=>{d.initial.actions=[{kind:'review',actor:'person',target:'draft',prop:'missing'}];},
   ]) { const data=definition();mutate(data);assert.throws(()=>validateMissionVisual(data,['a','b'])); }
 });

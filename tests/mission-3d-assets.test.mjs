@@ -135,6 +135,11 @@ test('entity assets reuse stable IDs while keeping distinct entities materials i
   assert.deepEqual(reused.root.rotation.toArray(), [0, 0, 0, 'XYZ']);
   assert.equal(reused.joints.leftArm.rotation.x, 0);
   assert.equal(meshes(reused.root)[0].material.opacity, 1);
+  const lens = meshes(assets.entity('magnifier', 'lens').root).find(mesh => mesh.material.opacity < 1);
+  const originalLens = {opacity:lens.material.opacity,transparent:lens.material.transparent,depthWrite:lens.material.depthWrite};
+  lens.material.opacity = 0;
+  assets.entity('magnifier', 'lens');
+  assert.deepEqual({opacity:lens.material.opacity,transparent:lens.material.transparent,depthWrite:lens.material.depthWrite}, originalLens, 'cached optics preserve their intended transparent material');
   assets.dispose();
 });
 

@@ -254,7 +254,7 @@ function syncExplorer() {
   motion = !explorerState.reducedMotion && !explorerState.paused;
   journeyUI?.setMotion(motion && !reader.open);
   world?.setState(explorerState);
-  world?.setMotion(motion);
+  world?.setMotion(motion && !guidedReading);
   explorerUI?.render(explorerState);
   $('#motion').textContent = motion ? t('◌ 動態開啟', '◌ Motion on') : t('◌ 動態暫停', '◌ Motion paused');
   $('#motion').setAttribute('aria-pressed', String(motion));

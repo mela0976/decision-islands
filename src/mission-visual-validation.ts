@@ -32,5 +32,15 @@ export function validateMissionVisual(visual: MissionVisualDefinition, choices: 
       if (!entities.has(flow.from) || !entities.has(flow.to) || flow.from === flow.to) throw new Error('invalid visual flow endpoints');
       if (!['share', 'review', 'handoff', 'pause'].includes(flow.kind)) throw new Error('unknown visual flow');
     }
+    if (frame.actions !== undefined) {
+      if (!Array.isArray(frame.actions) || frame.actions.length > 8) throw new Error('invalid mission actions');
+      for (const action of frame.actions) {
+        const actor = frame.entities.find(entity => entity.id === action.actor);
+        if (!actor || !['adult', 'child', 'elder', 'robot'].includes(actor.kind) || actor.opacity === 0) throw new Error('mission action needs a visible actor');
+        if (!entities.has(action.target) || action.target === action.actor || frame.entities.find(entity => entity.id === action.target)?.opacity === 0) throw new Error('invalid mission action target');
+        if (!['show', 'review', 'operate', 'handoff', 'pause'].includes(action.kind)) throw new Error('unknown mission action');
+        if (action.prop !== undefined && (!entities.has(action.prop) || frame.entities.find(entity => entity.id === action.prop)?.opacity === 0)) throw new Error('invalid mission action prop');
+      }
+    }
   }
 }

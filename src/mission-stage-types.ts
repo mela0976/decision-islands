@@ -24,6 +24,13 @@ export interface MissionVisualFrame {
   description: I18nText;
   entities: readonly MissionSceneEntity[];
   flows: readonly MissionSceneFlow[];
+  actions?: readonly MissionSceneAction[];
+}
+export interface MissionSceneAction {
+  kind: 'show' | 'review' | 'operate' | 'handoff' | 'pause';
+  actor: string;
+  target: string;
+  prop?: string;
 }
 export interface MissionVisualDefinition {
   setting: MissionSetting;

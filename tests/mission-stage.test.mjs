@@ -3,13 +3,17 @@ import assert from 'node:assert/strict';
 import { chromium } from '@playwright/test';
 import { createServer } from 'vite';
 
-test('illustrated mission stage moves, settles, retargets, and respects lifecycle', async () => {
+test('no-WebGL mission fallback moves, settles, retargets, and respects lifecycle', async () => {
   const server = await createServer({ server: { port: 0, host: '127.0.0.1', hmr: false } });
   await server.listen();
   const address = server.httpServer.address();
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage();
+    await page.addInitScript(() => {
+      const getContext = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function(kind, ...args) { return String(kind).includes('webgl') ? null : getContext.call(this, kind, ...args); };
+    });
     const origin = `http://127.0.0.1:${address.port}`;
     await page.route(`${origin}/__mission_fixture`, route => route.fulfill({contentType:'text/html',body:'<!doctype html><html><head></head><body><main id="fixture" style="width:720px"></main></body></html>'}));
     await page.goto(`${origin}/__mission_fixture`);
