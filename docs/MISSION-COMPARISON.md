@@ -36,7 +36,7 @@ Model the Domain將展示狀態與採用答案分開。Prove It Works以真WebGL
 
 Python來源與匯入測試13項通過，check_public讀回22篇文章、22份PDF且findings空。系統Python缺pypdf，舊暫存venv連到已不存在的Python，故以本次專用/tmp/decision-islands-comparison-venv安裝鎖定requirements後測試，未變更系統Python。
 
-完整npm test首次為59/60，仍在投影掃描後的page.screenshot逾時。新增336連續繪製狀態增加軟體GPU待處理工作是原因假設，未直接量測內部佇列。測試改在每次繪製後呼叫WebGL finish完成該次GPU工作再取下一狀態，沒有放寬截圖timeout、畫面或尺寸斷言。結果待重跑。
+完整npm test首次為59/60，仍在投影掃描後的page.screenshot逾時。新增336連續繪製狀態增加軟體GPU待處理工作是原因假設，未直接量測內部佇列。測試改在每次繪製後呼叫WebGL finish完成該次GPU工作再取下一狀態，沒有放寬截圖timeout、畫面或尺寸斷言。完整重跑60/60通過，包含最終暖色工作區提示；Linux CI待發布驗證。
 
 SVG全站檢查初次在手動切換後立即斷言零動畫失敗，讀回17項皆為reduced-motion CSS transition的0.01ms狀態，非人物動畫。改為最多1秒等待瀏覽器下一次動畫清理，再維持零動畫斷言，完整48回合96選擇、手機、英文、減少動態及中間畫格測試通過。
 
