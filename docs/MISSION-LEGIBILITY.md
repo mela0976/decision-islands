@@ -43,3 +43,7 @@ Astra唯讀獨立審查camera/lifecycle/phase/cache及6張實際畫面，未發�
 完整3d-missions-browser通過48回合96分支真WebGL結果差異、同canvas、preview/adopt/retry隔離、390×844與360×740場景及44px以上兩選項、節慶保持。三組代表動畫中間/操作/結果像素不同；figure phase在approach/interact/result時正確更新。重播、暫停、拖曳、預覽中真context loss切SVG保留採用答案及可繼續作答通過，errors空。
 
 主代理親自檢視這次更新的3d-mobile-360.png與390.png，確認大人物、大道具、準備/操作/結果overlay、caption及兩選項沒有互相遮擋。96個靜態結果通過與3組動態抽查分開記錄，未稱96段動畫逐幀全驗。只修改3D展示及回饋，不改原任務選項、文章或其他書籍資料。
+
+## 雲端測試排程修正
+
+第一次發布run40055438332在npm test為58/59，失敗為mission-3d-stage.test.mjs:70的page.screenshot超過30秒；144-frame可讀性掃描與其餘58項通過，部署未執行。新增掃描與既有WebGL/截圖測試共用軟體GPU，原本Node跨檔案平行執行會同時占用該資源。將npm test改為--test-concurrency=1以序列化檔案，不略過或放寬任何斷言。修正後本機完整59/59通過，接著重新驗證雲端。應將資源競爭視為已採取措施的原因推論，不把單次逾時當作已證明所有可能原因。
