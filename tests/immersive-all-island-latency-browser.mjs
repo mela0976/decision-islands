@@ -9,13 +9,15 @@ const outputDir = resolve(process.env.PERF_OUTPUT || 'test-results/immersive-int
 const outputFile = join(outputDir, 'results.json');
 const thresholdMs = 2000;
 const timeoutMs = 10000;
-const requestedOrigin = process.env.PERF_ORIGIN ? new URL(process.env.PERF_ORIGIN) : null;
+const requestedBaseUrlValue = process.env.PERF_BASE_URL || null;
+const requestedBaseUrl = requestedBaseUrlValue ? new URL(requestedBaseUrlValue) : null;
 
-if (requestedOrigin) {
-  assert.ok(['http:', 'https:'].includes(requestedOrigin.protocol), 'PERF_ORIGIN must use HTTP or HTTPS');
-  assert.equal(requestedOrigin.username, '', 'PERF_ORIGIN must not include credentials');
-  assert.equal(requestedOrigin.password, '', 'PERF_ORIGIN must not include credentials');
-  assert.ok(requestedOrigin.pathname === '/' && !requestedOrigin.search && !requestedOrigin.hash, 'PERF_ORIGIN must be an origin without a path, query, or hash');
+if (requestedBaseUrl) {
+  assert.ok(['http:', 'https:'].includes(requestedBaseUrl.protocol), 'PERF_BASE_URL must use HTTP or HTTPS');
+  assert.equal(requestedBaseUrl.username, '', 'PERF_BASE_URL must not include credentials');
+  assert.equal(requestedBaseUrl.password, '', 'PERF_BASE_URL must not include credentials');
+  assert.ok(!/[?#]/.test(requestedBaseUrlValue), 'PERF_BASE_URL must not include a query or hash');
+  requestedBaseUrl.pathname = `${requestedBaseUrl.pathname.replace(/\/+$/, '')}/`;
 }
 
 const result = {
@@ -35,10 +37,10 @@ const result = {
     serviceWorkers: 'blocked',
     browserContext: 'fresh, non-persistent Chromium context',
     renderer: 'Chromium ANGLE SwiftShader',
-    route: '/immersive/?latency-fixture=warm-22-island',
+    relativeEntry: 'immersive/?latency-fixture=warm-22-island',
   },
   machine: { loadAverageAtStart: loadavg(), cpuCount: cpus().length },
-  target: { kind: requestedOrigin ? 'PERF_ORIGIN' : 'local production preview', origin: requestedOrigin?.origin || null },
+  target: { kind: requestedBaseUrl ? 'PERF_BASE_URL' : 'local production preview', baseUrl: null, finalPageUrl: null },
   warmWorld: null,
   inventory: [],
   islands: [],
@@ -181,11 +183,11 @@ async function captureScreenshots(lastCase) {
 }
 
 try {
-  if (!requestedOrigin) server = await preview({ preview: { host: '127.0.0.1', port: 0, strictPort: false } });
-  const origin = requestedOrigin?.origin || `http://127.0.0.1:${server.httpServer.address().port}`;
-  result.target.origin = origin;
-  const targetUrl = new URL('/immersive/', origin);
-  targetUrl.searchParams.set('latency-fixture', 'warm-22-island');
+  if (!requestedBaseUrl) server = await preview({ preview: { host: '127.0.0.1', port: 0, strictPort: false } });
+  const baseUrl = requestedBaseUrl || new URL(`http://127.0.0.1:${server.httpServer.address().port}/`);
+  result.target.baseUrl = baseUrl.href;
+  const targetUrl = new URL('immersive/?latency-fixture=warm-22-island', baseUrl);
+  result.target.finalPageUrl = targetUrl.href;
 
   browser = await chromium.launch({
     headless: true,

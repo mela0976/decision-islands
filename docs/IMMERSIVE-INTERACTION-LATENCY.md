@@ -11,7 +11,13 @@ npm run build
 node tests/immersive-all-island-latency-browser.mjs
 ```
 
-預設使用本機 production preview。量測結果寫入 `test-results/immersive-interaction-latency/results.json`。完成 22 座島後，fixture 只擷取兩張代表畫面。要測公開站，設定 `PERF_ORIGIN` 為只有協定和主機的 origin，例如 `https://example.com`。
+預設使用本機 production preview。量測結果寫入 `test-results/immersive-interaction-latency/results.json`。完成 22 座島後，fixture 只擷取兩張代表畫面。最終部署後要測 GitHub Pages，從 repo 根目錄執行：
+
+```sh
+PERF_BASE_URL=https://mela0976.github.io/decision-islands/ node tests/immersive-all-island-latency-browser.mjs
+```
+
+`PERF_BASE_URL` 可包含站點子路徑，但不能包含帳密、query 或 hash。Fixture 會正規化結尾斜線，並保留子路徑開啟 `immersive/`。
 
 ## 條件與門檻
 
