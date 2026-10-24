@@ -33,7 +33,14 @@ try {
   await page.locator('#game-controls button').first().click();
   await page.waitForFunction(() => document.querySelector('#game-impact').innerText.trim().length > 0);
   const result = (await page.locator('#game-impact').innerText()).trim();
-  assert.ok(result.length > 20);
+  const effect = await page.evaluate(() => {
+    const state = window.immersive.world.getState();
+    const currentScene = window.immersive.data.scenes.find(scene => scene.articleId === state.current);
+    const outcome = currentScene?.interaction.outcomes.find(item => item.choiceId === state.interaction?.scenarioChoice);
+    return { expected: outcome?.visualEffect.reactionText, effectId: state.interaction?.effectId, objects: state.interaction?.scenarioObjects?.length };
+  });
+  assert.equal(result, effect.expected);
+  assert.ok(effect.effectId && effect.objects > 0);
   assert.equal(errors.length, 0, errors.join('\n'));
 
   const evidence = {
@@ -45,6 +52,7 @@ try {
     articleCharacters,
     interactionChoices: choices,
     interactionResult: result,
+    scenarioEffect: effect,
     browserErrors: errors,
     deploymentCommit: process.env.DEPLOYMENT_COMMIT || 'not-supplied',
   };
