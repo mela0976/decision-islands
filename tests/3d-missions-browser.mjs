@@ -30,6 +30,7 @@ async function task(page, audience, role, question) {
   assert.equal(await page.locator('.mission-stage svg').count(), 0, 'normal path uses actual 3D rather than a hidden SVG');
 }
 async function pixels(page) {
+  if (await page.locator('.mission-stage[data-cue-active="true"]').count()) await page.clock.fastForward(2300);
   const canvas = page.locator('.mission-stage-canvas');
   let bounds = await canvas.boundingBox();
   if (bounds.y < 0 || bounds.y + bounds.height > page.viewportSize().height) {
@@ -41,6 +42,7 @@ async function pixels(page) {
 try {
   if (!process.env.TEST_MOTION_ONLY) {
   const { ctx, page } = await boot();
+  await page.clock.install();
   const routes = [];
   for (const audience of ['marketing', 'everyday']) {
     await picker(page); await page.locator(`[data-audience="${audience}"]`).click();
@@ -94,6 +96,7 @@ try {
   await ctx.close();
   for (const [width, height] of [[390, 844], [360, 740]]) {
     const { ctx, page } = await boot({ viewport: { width, height } });
+    await page.clock.install();
     await task(page, 'everyday', 'family');
     const stage = await page.locator('.mission-stage').boundingBox();
     assert.ok(stage.width > 290 && stage.y >= 0 && stage.y + stage.height < height);
