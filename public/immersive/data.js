@@ -7,6 +7,11 @@ const ARTICLE_ORDER = [
   'I01', 'I02', 'P01', 'P02', 'P03', 'P04', 'P05', 'P06', 'P07', 'P08', 'P09',
   'M01', 'M02', 'M03', 'M04', 'M05', 'A01', 'A02', 'A03', 'A04', 'A05', 'A06',
 ];
+const INSIGHT_STAMPS = {
+  truth: ['P01', 'P07'], trust: ['I02', 'P04', 'A02'], preference: ['P05'],
+  memory: ['P06', 'P09', 'A03'], attention: ['P08', 'M02'], people: ['P03', 'M01', 'M05'],
+  judgment: ['I01', 'M03'], experience: ['P02', 'M04', 'A01'], governance: ['A04'], delegation: ['A05', 'A06'],
+};
 
 const CHAPTERS = [
   { id: 'intro', title: '序章群島', englishTitle: 'Intro', themeId: 'paper-shore', center: { x: -110, z: -110 }, articleRange: [0, 2] },
@@ -535,6 +540,7 @@ export function buildData(edition) {
       articleId: article.id,
       interactionId: interactionDefinition.id,
       interactionType: interactionDefinition.kind,
+      insightStampId: Object.entries(INSIGHT_STAMPS).find(([, ids]) => ids.includes(island.id))[0],
       setting: design.setting,
       lifeEvent: design.lifeEvent,
       protagonistId: design.protagonistId,

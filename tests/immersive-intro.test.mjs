@@ -73,7 +73,7 @@ test('real Three geometry travels from book through tower and coasts, then relea
     const intro = h.createBookIntro({ host: h.host, onCaption: (caption) => captions.push(caption), onComplete: () => completed++ });
     const playing = intro.play();
     const phases = [];
-    for (const now of [0, 1600, 3000, 4400, 6100, 7100]) { h.advance(now); phases.push(intro.getState().phase); }
+    for (const now of [0, 1600, 3000, 4700, 6100, 7100]) { h.advance(now); phases.push(intro.getState().phase); }
     assert.deepEqual(phases, ['cover', 'opening', 'tower', 'archipelago', 'archipelago', 'arrival']);
     assert.equal(intro.getState().pagecount, 28);
     const coasts = h.renderers[0].scene.children.filter((object) => object.geometry?.type === 'BoxGeometry' && object.children.some((child) => child.type === 'Group'));

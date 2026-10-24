@@ -15,7 +15,14 @@ export function mulberry32(seed) {
 
 export async function createWorld({ canvas, data, onIslandSelect = () => {}, onObjectSelect = () => {}, onTransitionStage = () => {}, reducedMotion = false }) {
   if (!canvas || !data?.islands?.length) throw new Error('缺少群島畫布或內容資料。');
-  if (document.fonts) await document.fonts.load('600 42px "Publication Sans TW"', `${data.scenes.map(item=>item.coreDevice?.label||'').join('')}阿綺小岳映蓁芬姐`);
+  const setupStartedAt = performance.now();
+  const initialArticleId = data.islands[0].articleId || data.articles?.[0]?.id;
+  const initialScene = data.scenes?.find(item => item.articleId === initialArticleId);
+  const initialFontText = `${data.islands[0].id} · ${initialScene?.coreDevice?.label || data.articles?.[0]?.title || ''} 阿綺小岳映蓁芬姐`;
+  if (document.fonts) await Promise.all([
+    document.fonts.load('600 42px "Publication Sans TW"', initialFontText),
+    document.fonts.load('600 28px "Publication Sans TW"', '阿綺小岳映蓁芬姐'),
+  ]);
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, innerWidth < 700 ? 1.4 : 1.8));
   renderer.shadowMap.enabled = true;
@@ -38,7 +45,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
   scene.add(new THREE.HemisphereLight('#fff7e6', '#566764', 1.3));
   const sunlight = new THREE.DirectionalLight('#fff0d3', 2.5);
   sunlight.position.set(-25, 55, 30);
-  sunlight.castShadow = true;
+  sunlight.castShadow = false;
   sunlight.shadow.mapSize.set(1024, 1024);
   Object.assign(sunlight.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30 });
   sunlight.shadow.bias = -0.001;
@@ -47,7 +54,6 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
   const materials = new Map();
   const textures = new Set();
   const labels = new Set();
-  await document.fonts?.load('600 28px PublicationSansTW');
   const random = mulberry32(202601);
   function geometry(type) {
     if (!geometries.has(type)) geometries.set(type, type === 'ball' ? new THREE.SphereGeometry(1, 12, 8) : type === 'cylinder' ? new THREE.CylinderGeometry(1, 1, 1, 12) : type === 'cone' ? new THREE.ConeGeometry(1, 1, 8) : type === 'ring' ? new THREE.TorusGeometry(1, 0.12, 6, 28) : new THREE.BoxGeometry(1, 1, 1));
@@ -66,15 +72,18 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     const lines = String(text).match(/.{1,12}/gu)?.slice(0, 4) || [''];
     const surface = document.createElement('canvas'); surface.width = 512; surface.height = speech ? 32 + lines.length * 51 : 128;
     const context = surface.getContext('2d');
-    context.fillStyle = '#fff9ed'; context.beginPath(); context.roundRect(4, 4, 504, surface.height - 8, 24); context.fill();
-    context.strokeStyle = '#b5ad97'; context.lineWidth = 4; context.stroke();
-    context.fillStyle = color; context.font = `600 ${!speech && String(text).length <= 3 ? 88 : 42}px "Publication Sans TW", sans-serif`; context.textAlign = 'center'; context.textBaseline = 'middle';
-    if (speech) {
-      lines.forEach((line, i) => context.fillText(line, 256, 40 + i * 51, 468));
-    } else context.fillText(text, 256, 64, 466);
+    const draw = () => {
+      context.clearRect(0, 0, surface.width, surface.height);
+      context.fillStyle = '#fff9ed'; context.beginPath(); context.roundRect(4, 4, 504, surface.height - 8, 24); context.fill();
+      context.strokeStyle = '#b5ad97'; context.lineWidth = 4; context.stroke();
+      context.fillStyle = color; context.font = `600 ${!speech && String(text).length <= 3 ? 88 : 42}px "Publication Sans TW", sans-serif`; context.textAlign = 'center'; context.textBaseline = 'middle';
+      if (speech) lines.forEach((line, i) => context.fillText(line, 256, 40 + i * 51, 468));
+      else context.fillText(text, 256, 64, 466);
+    };
+    draw();
     const texture = new THREE.CanvasTexture(surface); texture.colorSpace = THREE.SRGBColorSpace; textures.add(texture);
     const mat = new THREE.SpriteMaterial({ map: texture, depthTest: false }); materials.set(`label-${materials.size}`, mat);
-    const sprite = new THREE.Sprite(mat); sprite.userData.screenWidth = width; sprite.userData.aspect = surface.height / surface.width; sprite.renderOrder = 3; labels.add(sprite); return sprite;
+    const sprite = new THREE.Sprite(mat); sprite.userData.screenWidth = width; sprite.userData.aspect = surface.height / surface.width; sprite.userData.redraw = () => { draw(); texture.needsUpdate = true; }; sprite.renderOrder = 3; labels.add(sprite); return sprite;
   }
   const sea = mesh(scene, 'cylinder', '#79b9bd', [0, -0.9, 0], [230, 0.35, 230]);
   sea.receiveShadow = true;
@@ -287,11 +296,11 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
   const crowdHair = new THREE.InstancedMesh(geometry('ball'), material('#514136'), 100); crowdHair.count = crowd.count; cast.add(crowdHair);
   const crowdEyes = new THREE.InstancedMesh(geometry('ball'), material('#293934'), 200); crowdEyes.count = crowd.count * 2; cast.add(crowdEyes);
   const dummy = new THREE.Object3D();
-  const crowdSeeds = Array.from({ length: 100 }, (_, i) => { crowd.setColorAt(i, new THREE.Color(['#ac6750', '#8d9b5b', '#5d8995', '#b6898b', '#686b76', '#d0a95f'][i % 6])); return { angle: random() * Math.PI * 2, radius: 4 + random() * 1.7, speed: .02 + random() * .045, scale: .18 + random() * .08 }; });
+  const crowdSeeds = Array.from({ length: 100 }, (_, i) => { crowd.setColorAt(i, new THREE.Color(['#ac6750', '#8d9b5b', '#5d8995', '#b6898b', '#686b76', '#d0a95f'][i % 6])); return { angle: random() * Math.PI * 2, radius: 4 + random() * 1.7, speed: .02 + random() * .045, scale: .18 + random() * .08, pausedTotal: 0, pauseStartedAt: null }; });
   function updateCrowd(elapsed) {
     for (let i = 0; i < crowd.count; i++) {
-      const seed = crowdSeeds[i], angle = encounter?.npcIndex === i ? encounter.angle : seed.angle + elapsed * seed.speed;
-      dummy.position.set(Math.cos(angle) * seed.radius, 1.45, Math.sin(angle) * seed.radius); dummy.rotation.y = -angle; dummy.scale.set(seed.scale, .65 + Math.sin(elapsed + i) * .025, seed.scale); dummy.updateMatrix(); crowd.setMatrixAt(i, dummy.matrix);
+      const seed = crowdSeeds[i], effectiveElapsed = seed.pauseStartedAt === null ? Math.max(0, elapsed - seed.pausedTotal) : Math.max(0, seed.pauseStartedAt - seed.pausedTotal), angle = encounter?.npcIndex === i ? encounter.angle : seed.angle + effectiveElapsed * seed.speed;
+      dummy.position.set(Math.cos(angle) * seed.radius, 1.45, Math.sin(angle) * seed.radius); dummy.rotation.y = -angle; dummy.scale.set(seed.scale, .65 + Math.sin(effectiveElapsed + i) * .025, seed.scale); dummy.updateMatrix(); crowd.setMatrixAt(i, dummy.matrix);
       dummy.position.y += .5; dummy.scale.setScalar(seed.scale * .85); dummy.updateMatrix(); crowdHeads.setMatrixAt(i, dummy.matrix);
       dummy.position.y += .09; dummy.position.z -= .025; dummy.scale.set(seed.scale * .87, seed.scale * .48, seed.scale * .83); dummy.updateMatrix(); crowdHair.setMatrixAt(i, dummy.matrix);
       const facing = encounter?.npcIndex === i ? Math.atan2(camera.position.x - cast.position.x - Math.cos(angle) * seed.radius, camera.position.z - cast.position.z - Math.sin(angle) * seed.radius) : 0;
@@ -347,7 +356,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
   }
   const recommendationGroup = new THREE.Group(); scene.add(recommendationGroup);
   let recommendations = [], recommendationObjects = [];
-  let current = entries[0], journey = null, disposed = false, mode = 'story', frame = 0, time = 0, last = performance.now(), hover = null, audio = null, sound = false, active = !document.hidden;
+  let current = entries[0], journey = null, disposed = false, mode = 'story', frame = 0, time = 0, last = performance.now(), hover = null, audio = null, sound = false, active = !document.hidden, externallyActive = true, renderedFrames = 0, shadowRestoreTimer, firstDrawAt = null, firstDrawShadowCasting = null, shadowRestoredAt = null;
   let previewed = null, encounter = null, speech = null, season = 'christmas', interactionPose = null;
   updateCrowd(0);
   const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
@@ -486,8 +495,13 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
   }
   function setEncounter(characterId = null, npcIndex = null) {
     setSpeech('');
+    if (Number.isInteger(encounter?.npcIndex)) {
+      const previous = crowdSeeds[encounter.npcIndex];
+      if (previous.pauseStartedAt !== null) previous.pausedTotal += Math.max(0, time - previous.pauseStartedAt);
+      previous.pauseStartedAt = null;
+    }
     encounter = characterId ? { characterId, npcIndex: Number.isInteger(npcIndex) && npcIndex >= 0 && npcIndex < crowd.count ? npcIndex : null } : null;
-    if (encounter && Number.isInteger(encounter.npcIndex)) { const seed = crowdSeeds[encounter.npcIndex]; encounter.angle = seed.angle + time * seed.speed; }
+    if (encounter && Number.isInteger(encounter.npcIndex)) { const seed = crowdSeeds[encounter.npcIndex]; seed.pauseStartedAt = time; encounter.angle = seed.angle + Math.max(0, time - seed.pausedTotal) * seed.speed; }
     if (encounter && encounter.npcIndex === null) { const actor = actors.find(a => a.id === characterId); if (actor) { actor.state = 'conversation'; const cameraLocal = camera.position.clone().sub(cast.position); actor.root.rotation.y = Math.atan2(cameraLocal.x - actor.root.position.x, cameraLocal.z - actor.root.position.z); actor.head.rotation.set(0, 0, 0); } }
     return encounter;
   }
@@ -576,7 +590,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     try { audio ||= new (window.AudioContext || window.webkitAudioContext)(); audio.resume(); const oscillator = audio.createOscillator(), gain = audio.createGain(); oscillator.type = 'sine'; oscillator.frequency.setValueAtTime(392, audio.currentTime); oscillator.frequency.exponentialRampToValueAtTime(587, audio.currentTime + .15); gain.gain.setValueAtTime(.025, audio.currentTime); gain.gain.exponentialRampToValueAtTime(.001, audio.currentTime + .35); oscillator.connect(gain).connect(audio.destination); oscillator.start(); oscillator.stop(audio.currentTime + .35); } catch { sound = false; }
   }
   function resize() { if (disposed) return; const bounds = canvas.getBoundingClientRect(); const width = Math.max(1, bounds.width), height = Math.max(1, bounds.height); renderer.setSize(width, height, false); camera.aspect = width / height; camera.fov = width < 700 ? 46 : 40; camera.updateProjectionMatrix(); }
-  function visibility() { active = !document.hidden; last = performance.now(); }
+  function visibility() { active = externallyActive && !document.hidden; last = performance.now(); }
   function tick(now) {
     if (disposed) return; frame = requestAnimationFrame(tick);
     const dt = Math.min((now - last) / 1000, .05); last = now; if (!active) return; time += dt;
@@ -618,18 +632,37 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
       sprite.scale.set(scale / parentScale, scale * sprite.userData.aspect / parentScale, 1);
     }
     renderer.render(scene, camera);
+    if (renderedFrames === 0) { firstDrawAt = performance.now(); firstDrawShadowCasting = sunlight.castShadow; }
+    renderedFrames++;
+    if (renderedFrames === 1) shadowRestoreTimer = setTimeout(() => {
+      shadowRestoreTimer = undefined;
+      if (disposed) return;
+      sunlight.castShadow = true;
+      renderer.shadowMap.needsUpdate = true;
+      shadowRestoredAt = performance.now();
+    }, 450);
   }
   canvas.addEventListener('pointerdown', onDown); canvas.addEventListener('pointerup', onUp); canvas.addEventListener('pointermove', onMove); canvas.addEventListener('pointerleave', onLeave);
   document.addEventListener('visibilitychange', visibility); window.addEventListener('resize', resize);
   setSeason('christmas'); resize(); focus(current.articleId, { animate: false }); frame = requestAnimationFrame(tick);
+  const allLabelText = `${data.islands.map((island, index) => `${identify(island, index)} · ${data.scenes?.find(item => item.articleId === island.articleId)?.coreDevice?.label || ''}`).join(' ')} 阿綺小岳映蓁芬姐`;
+  void Promise.all([
+    document.fonts?.load('600 42px "Publication Sans TW"', allLabelText),
+    document.fonts?.load('600 28px "Publication Sans TW"', allLabelText),
+  ]).then(() => labels.forEach(sprite => sprite.userData.redraw?.())).catch(() => undefined);
+  const setupMs = performance.now() - setupStartedAt;
   return {
     focus, resize, applyInteraction, preview, setRecommendations, setSeason, setEncounter, setSpeech, setMode,
     skipTransition() { return journey ? focus(journey.destination.articleId, { animate: false, relation: journey.relation }) : false; },
     cancelTransition() { return journey ? focus(current.articleId, { animate: false }) : false; },
     setPopulation(count) { crowd.count = Math.max(10, Math.min(100, Math.round(Number(count) || 10))); crowdHeads.count = crowd.count; crowdHair.count = crowd.count; crowdEyes.count = crowd.count * 2; updateCrowd(reducedMotion ? 0 : time); },
     setReducedMotion(value) { reducedMotion = Boolean(value); if (reducedMotion && journey) focus(journey.destination.articleId, { animate: false, relation: journey.relation }); },
+    setActive(value) { externallyActive=Boolean(value);visibility(); },
+    getNPCState(index) { const seed=crowdSeeds[index]; if(!seed||index>=crowd.count)return null;const effective=seed.pauseStartedAt===null?Math.max(0,time-seed.pausedTotal):Math.max(0,seed.pauseStartedAt-seed.pausedTotal);const angle=seed.angle+effective*seed.speed;const position=new THREE.Vector3(Math.cos(angle)*seed.radius,1.45,Math.sin(angle)*seed.radius).add(cast.position);const screen=position.clone().project(camera),rect=canvas.getBoundingClientRect();return {index,angle,speed:seed.speed,walkPhase:(effective+index)%(Math.PI*2),paused:seed.pauseStartedAt!==null,position:{x:position.x,y:position.y,z:position.z},screen:{x:rect.left+(screen.x+1)*rect.width/2,y:rect.top+(1-screen.y)*rect.height/2,z:screen.z}}; },
+    getCharacterScreenState() { return actors.map(actor=>{const position=actor.root.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0,1.5,0));const screen=position.project(camera),rect=canvas.getBoundingClientRect();return {id:actor.id,name:actor.name,screen:{x:rect.left+(screen.x+1)*rect.width/2,y:rect.top+(1-screen.y)*rect.height/2,z:screen.z}};}); },
+    getRenderState() { return {active,renderedFrames,disposed,setupMs,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,textureCount:renderer.info.memory.textures,programCount:renderer.info.programs?.length||0,shadowEnabled:renderer.shadowMap.enabled,shadowCasting:sunlight.castShadow,firstDrawShadowCasting,shadowRestoreMs:shadowRestoredAt===null||firstDrawAt===null?null:shadowRestoredAt-firstDrawAt}; },
     setSound(enabled) { sound = Boolean(enabled); if (sound) chime(); },
     getState() { return { current: current.articleId, currenttarget: journey?.destination.articleId || current.articleId, currentTarget: journey?.destination.articleId || current.articleId, mode, population: crowd.count, reducedMotion, transitioning: Boolean(journey), stage: journey ? STAGES[Math.max(0, journey.phase)] : 'arrival', renderedislandcount: entries.length, renderedIslandCount: entries.length, detailedIslandCount: entries.filter(i => i.detail.visible).length, silhouetteIslandCount: entries.filter(i => i.silhouette.visible).length, characters: actors.map(a => ({ id: a.id, name: a.name, state: a.state, habit: a.habit, expression: a.expression, position: a.root.position.toArray() })), previewed, recommendations: recommendations.map(route => ({ sourceArticleId: route.sourceArticleId, targetArticleId: route.targetArticleId, relationType: route.relationType, editorialReason: route.editorialReason, transitionQuestion: route.transitionQuestion, canonical: route.canonical, previewVisible: route.object.visible, points: [0, .5, 1].map(t => route.curve.getPoint(t).toArray()) })), carry: { kind: carryKind, visible: carry.visible, morph: carryMorph, phase: journey ? STAGES[Math.max(0, journey.phase)] : 'arrival', shapes: carryKind === 'photo-evidence-bridge' ? { photoScale: photo.scale.toArray(), evidenceCards: evidenceCards.map(o => ({ position: o.position.toArray(), rotationX: o.rotation.x, visible: o.visible })) } : carryKind === 'product-service-journey' ? { productScale: product.scale.toArray(), listRotationX: list.rotation.x, serviceSteps: serviceSteps.map(o => ({ position: o.position.toArray(), scale: o.scale.x, visible: o.visible })) } : carryKind === 'model-limits-scale' ? { cardFlip: modelCard.rotation.y, frameworkScale: scaleFrame.scale.x } : {}, objectCount: carryKind ? carryForms.get(carryKind).getObjectsByProperty('isMesh', true).length : 0 }, coastLinks, exploredLightCount: entries.filter(i => i.exploredLight.visible).length, season, decoratedIslandCount: entries.filter(i => i.decorations.children.length).length, encounter: encounter ? { ...encounter } : null, speech: speech?.userData.text || '', interaction: current.interaction ? { ...current.interaction, baselineRestored: current.interaction.before && matches(current.baseline) && matches(current.actorBaseline), propPosition: current.core.position.toArray(), propRotation: current.core.rotation.toArray().slice(0, 3), outcomeObjectCount: current.outcome.children.length } : null, camera: { position: camera.position.toArray(), target: controls.target.toArray() }, visited: entries.filter(i => i.visited).map(i => i.articleId), drawCalls: renderer.info.render.calls }; },
-    dispose() { if (disposed) return; disposed = true; cancelAnimationFrame(frame); clearRecommendations(); controls.dispose(); canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointerup', onUp); canvas.removeEventListener('pointermove', onMove); canvas.removeEventListener('pointerleave', onLeave); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('resize', resize); for (const geo of geometries.values()) geo.dispose(); for (const mat of materials.values()) mat.dispose(); for (const texture of textures) texture.dispose(); for (const object of [crowd, crowdHeads, crowdHair, crowdEyes]) object.dispose(); renderer.dispose(); audio?.close(); scene.clear(); },
+    dispose() { if (disposed) return; disposed = true; cancelAnimationFrame(frame); if (shadowRestoreTimer) clearTimeout(shadowRestoreTimer); clearRecommendations(); controls.dispose(); canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointerup', onUp); canvas.removeEventListener('pointermove', onMove); canvas.removeEventListener('pointerleave', onLeave); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('resize', resize); for (const geo of geometries.values()) geo.dispose(); for (const mat of materials.values()) mat.dispose(); for (const texture of textures) texture.dispose(); for (const object of [crowd, crowdHeads, crowdHair, crowdEyes]) object.dispose(); renderer.dispose(); audio?.close(); scene.clear(); },
   };
 }

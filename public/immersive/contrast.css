@@ -8,6 +8,7 @@ header{background:#faf7eff5;border:1px solid #cbd2c4;border-radius:14px;padding:
 .brand span{color:#354b40;font-weight:500}
 aside,#story,dialog{background:var(--panel);border-color:#adb8a7;box-shadow:0 10px 35px #182f2924}
 #status{background:var(--panel);color:#263d32;border:1px solid #b6c0af;font-size:12px;top:99px;line-height:1.65;max-width:min(670px,90vw)}
+#status a{pointer-events:auto}
 #chapter-label,.eyebrow,#article-list small,#byline,#note-status,#recommendations small{color:var(--muted-ink);font-weight:500}
 #chapter-label,.eyebrow{font-size:11px;letter-spacing:.1em}
 #article-list small,#byline,#note-status,#recommendations small{font-size:13px}
@@ -32,5 +33,12 @@ body:has(#game[open]) #story{display:none}
 @media(max-width:650px){#game{inset:auto 0 0;width:100%;max-height:46dvh;padding:12px 18px;border-radius:16px 16px 0 0}#game h2{font-size:18px;margin:6px 0}#game-intro{font-size:14px;line-height:1.65}#game-visual{display:none}#game-controls{font-size:14px;gap:6px}#game-result{font-size:14px;line-height:1.65}}
 aside{top:135px;border-radius:16px}
 #story{border-radius:16px}
+#story[data-traveling=true] #island-title,#story[data-traveling=true] #chapter-label{display:none}
+#intro{background:transparent}
+#intro-caption{position:relative;z-index:1;background:#faf7ef;color:#182f29;padding:10px 16px;border:1px solid #acb8a6;border-radius:8px;max-width:90vw;text-align:center;margin-top:min(62dvh,500px)}
+#skip-intro{position:relative;z-index:1}
+#stamp-list{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:18px}
+#stamp-list span{font-size:12px;border:1px solid #899887;border-radius:5px;padding:5px 7px;color:#415348;background:#faf7ef}
+#stamp-list span.collected{color:#fffdf7;background:#304d3a;border-color:#304d3a}
 @media(min-width:900px){#story{bottom:88px}#story nav{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:8px 14px;background:#faf7ef;border:1px solid #aebba7;border-radius:40px;box-shadow:0 5px 20px #182f2920;gap:20px}#story nav button{min-width:100px}}
 @media(max-width:650px){header{left:8px;right:8px;top:8px;padding:7px 8px;border-radius:12px}.brand span{font-size:7px}.brand{font-size:22px}header button{font-size:11px;min-height:44px;padding:7px}#status{top:88px;left:12px;font-size:11px;max-width:calc(100vw - 24px);padding:5px 8px}#story{max-height:39dvh}#chapter-label{font-size:11px}#dialogue{font-size:15px;color:#182f29}aside{top:134px}body.fallback #story{top:153px}body.fallback #catalog{top:430px}#reading-content{font-weight:400}}

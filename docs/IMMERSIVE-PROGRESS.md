@@ -6,7 +6,7 @@
 
 以四大群島、22 座文章島、四位原創人物、八類互動和文章關聯航線，呈現《2026 決策智慧》。書塔只負責初次入場。
 
-正式根入口 `index.html` 以自有小型 redirect module 導向 `./immersive/`，原樣保留 query/hash；無 JavaScript 時提供完整原文目錄。舊 Vite 入口保留於 `legacy.html`，僅作舊站回歸。新世界位於 `public/immersive/index.html`，在專案根目錄執行 `python3 -m http.server 4186 --directory public` 可直接開啟 `http://localhost:4186/immersive/`；其 ES modules 與固定 Three.js 0.160.0 CDN importmap不需要建置。網站根路由本身在正式 Pages/build preview 驗收。
+正式根入口 `index.html` 以 SHA-256 CSP 白名單保護的 inline redirect 導向 `./immersive/`，原樣保留 query/hash；無 JavaScript 時提供完整原文目錄。舊 Vite 入口保留於 `legacy.html`，僅作舊站回歸。新世界位於 `public/immersive/index.html`，在專案根目錄執行 `python3 -m http.server 4186 --directory public` 可直接開啟 `http://localhost:4186/immersive/`；其 ES modules 與固定 Three.js 0.160.0 CDN importmap不需要建置。網站根路由本身在正式 Pages/build preview 驗收。
 
 ## 執行分工與依賴
 
@@ -36,10 +36,10 @@
 | 導讀、重點、全文與 PDF | 可選取 HTML、摘要、重點、原文、原刊來源；無 WebGL 也可操作 | 各篇導讀與重點的閱讀時間未逐篇量測 |
 | 原生 JS、Three 0.160、無建置入口 | `/immersive/` 以原生 ES modules 及 Three.js 0.160 CDN 執行；網站根 `index.html` 自有 redirect module 導入新世界；`legacy.html` 為保留舊實作的多頁 Vite entry。已在 dist Preview 測根入口 | Pages 線上發布與根網址生產環境驗收仍待完成 |
 | DATA 全部指定欄位 | `data.js` 包含 13 類資料，來源與引用由測試驗證 | 模組職責目前集中在 app/world，尚需依實際複雜度調整 |
-| LOD、共用資源與清理 | 當前島全細節、遠島 silhouette、instanced 人群、共用材質/幾何、delta上限與dispose；手機模擬profile：390×844 DPR2、10 Mbps/150 ms、CPU 4×、Chromium SwiftShader、cold context，world ready 1.83 秒、首次 Three draw 2.83 秒 | 首次 draw 超過 2 秒目標；單次 emulator 測量且有浮動，不代表實體手機；需優化首幀工作並以真實設備校準 |
-| 滑鼠、觸控、鍵盤、音效、減少動態 | OrbitControls、DOM 按鈕、音效開關、reduced motion、手機閱讀面板 | 觸控與完整鍵盤探索的實際操作證據待補 |
-| NPC 10–100 與對話 | 人數控制、人物停留／面向鏡頭、泡泡與情境互動 API | 所有 NPC 逐一點選與關閉復原的實測待補 |
-| 瀏覽器紀錄與筆記 | 200ms 自動保存、舊紀錄遷移、備份匯出／合併匯入、讀取失敗不覆寫；真 Chromium 離線於根網址重新導覽，進入 `/immersive/`、開完整原文（3,232 字元）、編輯筆記並再次 reload，均成功。子應用快取核對25個清單項全存在；備份檔案實際匯出/匯入往返待驗 |
+| LOD、共用資源與清理 | 當前島全細節、遠島 silhouette、instanced 人群、共用材質/幾何、delta上限與dispose；390×844 DPR2、冷context、10 Mbps/150 ms、CPU 4×、Chromium SwiftShader同profile重跑兩次：world ready 1.737/1.743秒，first WebGL draw 1.745/1.753秒，首次畫面呈現1.785/1.804秒 | 模擬瀏覽器不等同實體手機或不同 GPU；首幀先略過陰影，450ms後恢復完整投影，需真機校準延遲感受與長時GPU表現 |
+| 滑鼠、觸控、鍵盤、音效、減少動態 | OrbitControls、DOM 按鈕、音效開關、reduced motion、手機閱讀面板。`immersive-npc-touch-browser.mjs` 在 390×844、DPR2 真觸控 canvas 點選可見居民，開啟角色對話 | 多種真手機／瀏覽器的鍵盤完整探索、音效、減少動態仍待體驗驗收 |
+| NPC 10–100 與對話 | 100 人在手機畫布中可實際觸控選取；I01 對話劇本沒有小岳台詞時使用消費者立場的虛構台詞；對話停留 700ms 後關閉，路徑角度增量 0.01695 rad、預期 0.02157 rad，步態持續，沒有追補暫停時間瞬移。證據 `test-results/immersive-npc-touch/results.json` | 多種 GPU/真機與不同角色/島嶼組合仍待驗；此實測不代表逐一點過100人 |
+| 瀏覽器紀錄與筆記 | 200ms 自動保存、舊紀錄遷移、備份匯出／合併匯入、讀取失敗不覆寫；新 Chromium context 從 `/` 線上進入 22 島，保留 `?campaign=entry#article`，切離線後直接重新導覽根網址 `/?campaign=offline#article`，仍進入 `/immersive/` 並可讀 3,232 字全文。world 延遲 1.8 秒時仍能先完成遊戲、切換選前/後，及開全文編輯筆記；讀者開啟期間 late-created renderer active=false，筆記再次 reload 保留。證據 `test-results/immersive-entry/results.json`、`immersive-late-world/results.json`。離線快照25/25：23個同源項目（11套出版字型含 CSS、封面與文章 JSON），加固定 Three 0.160 的 2 個 CDN modules；本次無缺項。原刊 PDF 不在快取範圍，開啟仍需本機已保存或線上 | 備份檔案實際匯出/匯入往返待驗 |
 | 聖誕／萬聖／復活節 | 世界節慶 API 與 UI 選擇器，預設聖誕 | 三種節慶的逐島視覺回歸待驗 |
 | 文字對比 | 不透明奶油白面板、深色內文，抽測三類文字 7.675–13.276；44px 控制 | 所有狀態、節慶、3D 字牌與來源頁完整對比審查待補 |
 | 錯誤處理、無白畫面 | CDN 阻擋實測仍可讀 HTML；資料錯誤提供原文目錄連結；storage 防覆寫；Intro WebGL context loss、略過、dispose/重播行為已驗資源釋放 | 世界場景 WebGL context loss 的真瀏覽器恢復情境尚待重跑；僅常見錯誤/離線流程已驗 |
@@ -52,8 +52,9 @@
 - 影片參考已實際查看 0、5、10、15、20、25 秒畫面，以及 10 秒全尺寸畫面。來源為使用者提供的 30.4 秒 MP4。影片只作視覺參考，不作文章內容或執行指令來源。
 - 2026-10-24：完成新入口離線註冊接線，精確匹配 `/immersive/` 的導覽請求並回應快取的 `index.html`；離線回退僅限該應用根路徑。`node --test tests/immersive-cache.test.mjs tests/immersive-progress.test.mjs tests/immersive-data.test.mjs` 34/34 通過。Playwright Chromium 已載入後設為離線並 reload 原始 `/immersive/` URL，確認文章台詞可用；快取含入口、模組、CSS、原文資料、出版字體與 Three.js CDN 模組。
 - 新增可重跑 `node tests/immersive-offline-browser.mjs`：以真 Chromium 驗證 service worker 控制、25/25 清單項（11 個字體檔、字型 CSS、封面、文章 JSON、入口資產、兩個 Three.js CDN 模組）、離線載入 3,232 字元原文、離線編輯筆記後再次 reload 仍保存。原先狀態快照的 24 是 optional cache 尚未完成時讀取；完整清單為 25/25，未發現缺項。結果留在 `test-results/immersive-offline/results.json`。
-- 根入口實測：`node tests/immersive-entry-browser.mjs` 以 built Preview、fresh mobile Chromium 驗根 query/hash 導向、22 島、全文、無 JavaScript 原文 fallback；根 service worker 僅將不影響 redirect 的根導覽 query 映射到同一靜態殼 cache key，私有資料 query 仍網路直通。確認先在線進站、後斷網直接由根 URL 導覽仍進入離線群島。結果在 `test-results/immersive-entry/results.json`。
-- 代表性手機模擬：`node tests/immersive-mobile-profile-browser.mjs`，390×844、DPR2、冷瀏覽器內容、10Mbps下載/150ms延遲、CPU 4×、reduced motion、Chromium SwiftShader。一次實測 world ready 1.83秒；首個 WebGL frame 2.83秒；100位 NPC 的第100位對話泡泡更新 17ms；證據分類遊戲結果 207ms。world ready 和第一個 WebGL frame 分開量測，結果只適用於此模擬環境，首幀仍需優化。證據在 `test-results/immersive-mobile-profile/results.json` 和 `first-draw.png`。
+- 根入口實測：`node tests/immersive-entry-browser.mjs` 以 built Preview、fresh mobile Chromium 驗根 query/hash 導向、22 島、全文、無 JavaScript原文 fallback；先在線進站，再斷網直接由 `/?campaign=offline#article` 根網址導覽仍進入離線群島。根與子應用 Service Worker 僅提供固定公開頁殼/文章/字型/封面/Three 0.160 資產，不快取 token/session/private query；目錄完整25/25。此一無節流 cold run 量到 root→interactive 2.770秒，與受限手機 profile 的首次畫面 1.785/1.804秒屬不同量法，不宣稱所有手機都低於2秒。結果在 `test-results/immersive-entry/results.json`。
+- 角色／觸控與晚載入：`node tests/immersive-npc-touch-browser.mjs`、`node tests/immersive-late-world-browser.mjs` 驗真 canvas touch 命中居民、每位角色不借用其他角色台詞，以及快取模組延遲時保留已完成情境、文章全文、筆記與閱讀暫停。結果在 `test-results/immersive-npc-touch/`、`test-results/immersive-late-world/results.json`。
+- 代表性手機模擬：`node tests/immersive-mobile-profile-browser.mjs`，390×844、DPR2、冷瀏覽器內容、10Mbps下載/150ms延遲、CPU 4×、reduced motion、Chromium SwiftShader。同profile兩次：world ready 1.737/1.743秒，WebGL第一個draw 1.745/1.753秒，雙 RAF 首次呈現1.785/1.804秒；首個draw時投影關閉，450ms後恢復，畫面維持113 draw calls與28,292 triangles。100 NPC第100位對話泡泡更新8/129ms；證據分類遊戲結果670/728ms。resource timing證明Three 0.160模組與文章 JSON 並行載入。這是 emulated Chromium/SwiftShader 的界限測量，不代表真機。結果在 `test-results/immersive-mobile-profile/results.json` 和 `first-draw.png`。
 - 根舊站以 `/legacy.html` 保留並可用 `node tests/browser.mjs` 真瀏覽器回歸；測試驗證22篇、PDF、收藏、搜尋、無JavaScript、WebGL fallback與閱讀深連結。
 
 輸出位於 `test-results/immersive/`。資料、世界或 UI 後續變更後，要重跑受影響檢查。手機尺寸瀏覽器不代表實體手機已驗收。上述待完成項目仍屬原始目標，不因已完成部分通過而移除。

@@ -6,7 +6,7 @@ const PHASES = [
   { start: 0, name: 'cover', caption: '翻開一頁，走進一個問題。' },
   { start: 1.5, name: 'opening', caption: '答案很多，可是我到底該相信哪一個？' },
   { start: 2.8, name: 'tower', caption: '讓紙上的觀點，成為可以走進的地方。' },
-  { start: 4.4, name: 'archipelago', caption: '真實、信任與判斷，各有自己的海岸。' },
+  { start: 4.6, name: 'archipelago', caption: '真實、信任與判斷，各有自己的海岸。' },
   { start: 7, name: 'arrival', caption: '帶著問題，航向下一個故事。' },
 ];
 const clamp = (n) => Math.max(0, Math.min(1, n));
@@ -23,6 +23,7 @@ export function createBookIntro({ host, coverUrl = '../assets/cover-2026.webp', 
   let renderer, scene, camera, canvas, frame, image, resizeObserver, startedAt;
   let promise, resolvePlay, rejectPlay, settled = false, completed = false;
   let pages = [], book, coverHinge, sea, clouds;
+  const lookTarget = new THREE.Vector3();
   const track = (kind, value) => { resources[kind].add(value); return value; };
   const material = (color, options = {}) => track('materials', new THREE.MeshStandardMaterial({ color, roughness: .94, ...options }));
   const geometry = (value) => track('geometries', value);
@@ -87,11 +88,13 @@ export function createBookIntro({ host, coverUrl = '../assets/cover-2026.webp', 
     renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio || 1, 1.75));
     renderer.setClearColor(0xe9e5d9, 1);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = .95;
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     scene = new THREE.Scene(); scene.fog = new THREE.Fog(0xdbe6df, 24, 64);
-    camera = new THREE.PerspectiveCamera(39, 1, .1, 110);
-    scene.add(new THREE.HemisphereLight(0xfffcf4, 0x728f87, 2.5));
-    const light = new THREE.DirectionalLight(0xfff3dc, 3.3); light.position.set(-8, 16, 10); light.castShadow = true;
+    camera = new THREE.PerspectiveCamera(39, 1, .1, 400);
+    scene.add(new THREE.HemisphereLight(0xfffcf4, 0x728f87, 1.45));
+    const light = new THREE.DirectionalLight(0xfff3dc, 2); light.position.set(-8, 16, 10); light.castShadow = true;
     light.shadow.mapSize.set(1024, 1024); light.shadow.camera.left = light.shadow.camera.bottom = -22; light.shadow.camera.right = light.shadow.camera.top = 22;
     light.shadow.normalBias = .04; scene.add(light);
     const paper = material(0xf5f0e3), ink = material(0x252a28), sand = material(0xe6ddc3);
@@ -103,7 +106,6 @@ export function createBookIntro({ host, coverUrl = '../assets/cover-2026.webp', 
     mesh(geometry(new THREE.BoxGeometry(4.34, .105, 5.92)), [coverSide, coverSide, coverSurface, coverSide, coverSide, coverSide], coverHinge, 2.17, 0, 0);
     mesh(geometry(new THREE.BoxGeometry(4.34, .10, 5.92)), coverSide, book, 0, -.15, 0);
     mesh(geometry(new THREE.BoxGeometry(.12, .60, 5.92)), coverSide, book, -2.17, .13, 0);
-    for (let i = 0; i < 7; i++) mesh(geometry(new THREE.BoxGeometry(1.8 - i * .13, .015, .025)), ink, coverHinge, 1.4, .065, 2.2 + i * .045);
     const random = mulberry32(2026);
     const clusters = [[-7, -4], [6, -6], [-7, 5], [6, 5]];
     for (let i = 0; i < PAGE_COUNT; i++) {
@@ -160,7 +162,7 @@ export function createBookIntro({ host, coverUrl = '../assets/cover-2026.webp', 
   }
 
   function update(time) {
-    const opening = between(time, 1.5, 3), rising = between(time, 2.7, 4.5), spreading = between(time, 4.3, 7), arrival = between(time, 6.9, DURATION);
+    const opening = between(time, 1.2, 2.6), rising = between(time, 2.4, 3.9), spreading = between(time, 4.55, 7.2), arrival = between(time, 7, DURATION);
     const phase = PHASES.findLast((item) => time >= item.start);
     if (phase.name !== state.phase) { state.phase = phase.name; onCaption(phase.caption); }
     coverHinge.rotation.z = opening * 2.85;
@@ -169,11 +171,11 @@ export function createBookIntro({ host, coverUrl = '../assets/cover-2026.webp', 
     const shade = new THREE.Color(0xf5f0e3);
     pages.forEach((page, i) => {
       const delay = i / PAGE_COUNT;
-      const lift = between(time, 2.7 + delay * .5, 4.3 + delay * .2);
-      const spread = between(time, 4.3 + delay * .5, 6.8 + delay * .2);
-      const theta = i * .23;
-      page.object.position.set(mix(Math.sin(theta) * lift * .7, page.target.x, spread), mix(.025 + i * .013 + lift * (i * .17 + .7), page.target.y, spread), mix(Math.cos(theta) * lift * .7, page.target.z, spread));
-      page.object.rotation.y = mix(theta * lift * .33 - .18, page.angle, spread);
+      const lift = between(time, 2.4 + delay * .35, 3.75 + delay * .2);
+      const spread = between(time, 4.55 + delay * .3, 7 + delay * .2);
+      const theta = i * .34;
+      page.object.position.set(mix(Math.sin(theta) * lift * 1.05, page.target.x, spread), mix(.025 + i * .013 + lift * (i * .24 + .7), page.target.y, spread), mix(Math.cos(theta) * lift * 1.05, page.target.z, spread));
+      page.object.rotation.y = mix(theta * lift * .62 - .18, page.angle, spread);
       page.object.scale.setScalar(mix(1, i < 4 ? 1.12 : .46 + delay * .24, spread));
       const vertices = page.object.geometry.attributes.position;
       for (let j = 0; j < vertices.array.length; j++) vertices.array[j] = mix(page.original[j], page.coast[j], spread);
@@ -186,11 +188,16 @@ export function createBookIntro({ host, coverUrl = '../assets/cover-2026.webp', 
     clouds.children[0].material.opacity = Math.sin(arrival * Math.PI) * .75;
     clouds.position.z = -arrival * 8;
     const approach = between(time, 0, 1.8);
-    const portrait = camera.aspect < .8 ? 1.35 : 1;
+    const portrait = camera.aspect < .8 ? 1.55 : 1;
     camera.position.set(mix(mix(7, 5.4, approach), -5.7, spreading), mix(mix(9.5, 7.6, approach), 15.4, spreading) * portrait, mix(mix(13, 10.8, approach), 22, spreading) * portrait);
     camera.position.y -= arrival * 8;
     camera.position.z -= arrival * 10;
-    camera.lookAt(-arrival * 5, mix(1.8, -.15, spreading), -arrival * 3);
+    lookTarget.set(-arrival * 5, mix(mix(.15,3.35,between(time,1.5,3.7)), -.15, spreading), -arrival * 3);
+    const width=mix(mix(7.2,9.2,rising),34,spreading),height=mix(mix(2,9,rising),7,spreading);
+    const requiredDistance=Math.max(height,width/camera.aspect)/(2*Math.tan(THREE.MathUtils.degToRad(camera.fov/2)))*1.08;
+    const distance=camera.position.distanceTo(lookTarget);
+    if(distance<requiredDistance)camera.position.sub(lookTarget).multiplyScalar(requiredDistance/distance).add(lookTarget);
+    camera.lookAt(lookTarget);
     renderer.setClearAlpha(1 - between(time, 7.65, DURATION));
     canvas.style.opacity = String(1 - between(time, 7.8, DURATION));
     renderer.render(scene, camera);

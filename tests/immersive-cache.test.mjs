@@ -214,7 +214,9 @@ async function dispatchLifecycle(name) {
 
 async function dispatchFetch(url, init = {}) {
   const promises = [];
-  const request = new Request(url, init);
+  const { mode, ...requestInit } = init;
+  const request = new Request(url, requestInit);
+  if (mode) Object.defineProperty(request, 'mode', { value: mode });
   const event = {
     request,
     waitUntil: promise => promises.push(Promise.resolve(promise)),
@@ -233,7 +235,7 @@ function currentCache() {
 }
 
 function currentCacheName() {
-  return [...cacheStorage.entries.keys()].find(name => name.startsWith(scopePrefix) && name.endsWith('2026-10-24.1'));
+  return [...cacheStorage.entries.keys()].find(name => name.startsWith(scopePrefix) && name.endsWith('2026-10-24.3'));
 }
 
 function coreUrls() {
@@ -331,12 +333,30 @@ test('only exact public GET assets are intercepted and version queries map to th
     [`${new URL('../data/2026.json', appScope).href}?token=private`, {}],
     [new URL('../data/2026.json', appScope).href, { headers: { authorization: 'Bearer private' } }],
     [new URL('../data/2026.json', appScope).href, { headers: { range: 'bytes=0-15' } }],
-    [new URL('../data/2026.json', appScope).href, { credentials: 'include' }],
     ['https://cdn.jsdelivr.net/npm/other@1.0.0/module.js', { mode: 'cors' }],
   ]) {
     assert.equal((await dispatchFetch(url, init)).intercepted, false, `must pass through ${url}`);
   }
   assert.equal(fetchCalls.length, 0);
+});
+
+test('app-root campaign navigation maps to cached index while private query data passes through', async () => {
+  const cache = currentCache();
+  const indexUrl = new URL('./index.html', appScope).href;
+  const campaign = await dispatchFetch(`${appScope.href}?campaign=offline#article`, { mode: 'navigate', credentials: 'include' });
+  assert.equal(campaign.intercepted, true);
+  assert.equal(campaign.response.body, cache.entries.get(indexUrl).body);
+  assert.equal(fetchCalls.length, 0);
+  const publicStyle = await dispatchFetch(new URL('./style.css', appScope).href, { credentials: 'include' });
+  assert.equal(publicStyle.intercepted, true, 'browser-owned credentials are accepted only for an exact public static asset');
+  assert.equal(publicStyle.response.body, cache.entries.get(new URL('./style.css', appScope).href).body);
+  const publicEdition = await dispatchFetch(new URL('../data/2026.json', appScope).href, { credentials: 'include' });
+  assert.equal(publicEdition.intercepted, true, 'the exact published edition snapshot is public and static');
+  assert.equal((await dispatchFetch(new URL('../data/notes.json', appScope).href, { credentials: 'include' })).intercepted, false);
+  for (const name of ['token', 'session', 'user']) {
+    const result = await dispatchFetch(`${appScope.href}?${name}=private#article`, { mode: 'navigate', credentials: 'include' });
+    assert.equal(result.intercepted, false, `${name} query is never cached`);
+  }
 });
 
 test('CDN errors, opaque responses, partial responses, and quota failures never enter the cache', async () => {

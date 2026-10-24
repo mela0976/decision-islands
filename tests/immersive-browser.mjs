@@ -14,6 +14,7 @@ try {
   const state=await page.evaluate(()=>window.immersive.world?.getState());
   assert.ok(state,'WebGL world initialized');assert.equal(state.renderedIslandCount,22);assert.equal(state.characters.length,4);
   await page.locator('#read').click();await page.locator('#reader[open]').waitFor();
+  if(await page.evaluate(()=>Boolean(window.immersive.world.getRenderState))){const paused=await page.evaluate(()=>window.immersive.world.getRenderState());assert.equal(paused.active,false);await page.waitForTimeout(80);assert.equal(await page.evaluate(()=>window.immersive.world.getRenderState().renderedFrames),paused.renderedFrames,'reading stops background GPU draws');}
   await page.locator('#note').fill('手機與桌面閱讀筆記');await page.locator('#mark-read').click();await page.keyboard.press('Escape');
   await page.reload();await page.waitForFunction(()=>window.immersive);await page.locator('#read').click();
   assert.equal(await page.locator('#note').inputValue(),'手機與桌面閱讀筆記');assert.match(await page.locator('#mark-read').innerText(),/已讀完/);await page.keyboard.press('Escape');
@@ -26,7 +27,7 @@ try {
   assert.equal(await page.locator('#game-controls select').count(),5);await page.getByRole('button',{name:'把資訊放上證據桌'}).click();
   await page.locator('#game-after:not([hidden])').waitFor();await page.locator('#compare').click();assert.match(await page.locator('#game-result').innerText(),/選擇前/);await page.keyboard.press('Escape');
   const games=[
-   ['2026-03','保留待查，補足依據'],['2026-07','依照我的條件比較'],['2026-10','停下來排出「先問人，再問 AI」'],['2026-11','把這段回憶留在廣場'],['2026-12','查看條件與推論邊界'],['2026-14','把資訊放上證據桌'],['2026-17','修復這一段旅程'],['2026-22','啟動協作'],
+   ['2026-03','保留待查，補足依據'],['2026-07','依照我的條件比較'],['2026-10','停下來排出「先問人，再問 AI」'],['2026-11','把這段回憶留在廣場'],['2026-12','查看條件與推論邊界'],['2026-14','把資訊放上證據桌'],['2026-17','修復這一段旅程'],['2026-20','把資訊放上證據桌'],['2026-22','啟動協作'],
   ];
   for(const [id,action]of games){
    await page.evaluate(id=>window.immersive.visit(id,null,false),id);await page.locator('#interact').click();
@@ -36,6 +37,7 @@ try {
    await page.locator('#game-after:not([hidden])').waitFor();assert.ok((await page.locator('#game-result').innerText()).length>20);await page.locator('#game-evidence summary').click();assert.ok((await page.locator('#game-evidence').innerText()).includes('觀點來源'));
    const after=await page.evaluate(()=>window.immersive.world.getState().interaction);assert.ok(after.outcomeObjectCount>0,`${id} choice creates visible scene objects`);await page.locator('#replay').click();assert.equal(await page.evaluate(()=>window.immersive.world.getState().interaction.baselineRestored),true,`${id} replay restores original scene`);await page.keyboard.press('Escape');
   }
+  assert.equal(await page.evaluate(()=>new Set(window.immersive.progress.stamps).size),10,'all ten insight footprints are collectible');
   await page.evaluate(()=>window.immersive.visit('2026-07',null,false));
   await page.screenshot({path:`test-results/immersive/${viewport.width}-world.png`});
   const contrast=await page.evaluate(()=>{

@@ -12,7 +12,7 @@ try {
   await page.goto(process.env.TEST_URL || 'http://127.0.0.1:4186/immersive/');
   await page.waitForFunction(() => window.immersive?.world);
   await page.evaluate(async () => {
-    const { createWorld } = await import('/immersive/world.js');
+    const { createWorld } = await import(new URL('world.js', location.href).href);
     const data = window.immersive.data;
     window.immersive.world.dispose();
     const canvas = document.createElement('canvas'); canvas.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;z-index:999'; document.body.append(canvas);

@@ -230,6 +230,7 @@ test('chapter themes, reading progress, and Traditional Chinese labels are compl
   assert.ok(data.visualThemes.every(({ palette, motifs, atmosphere }) => palette.length >= 3 && motifs.length >= 3 && atmosphere));
   assert.deepEqual(data.progressConfig.modes, ['story', 'explore']);
   assert.equal(data.progressConfig.insightStamps.length, 10);
+  assert.deepEqual([...new Set(data.scenes.map(scene=>scene.insightStampId))].sort(),data.progressConfig.insightStamps.map(stamp=>stamp.id).sort());
   assert.equal(data.progressConfig.stampsAreReadingFootprints, true);
   assert.equal(data.progressConfig.interactionsAreOptional, true);
   assert.equal(data.i18n.locale, 'zh-TW');

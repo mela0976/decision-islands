@@ -1,9 +1,20 @@
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v3';
 const MAX_CACHE_ENTRIES = 80;
 const scopePath = new URL(self.registration.scope).pathname;
 const scopeKey = encodeURIComponent(scopePath);
 const CACHE_PREFIX = `decision-islands-shell:${scopeKey}:`;
 const CACHE_NAME = CACHE_PREFIX + CACHE_VERSION;
+const IMMERSIVE_ROOT = new URL('immersive/', self.registration.scope);
+const IMMERSIVE_PATHS = new Set([
+  './index.html', './app.js', './data.js', './world.js', './intro.js', './progress.js', './cache.js', './style.css', './contrast.css',
+  '../data/2026.json', '../fonts/publication.css', '../assets/cover-2026.webp',
+  '../fonts/publication-latin-2a33d5d6a5.woff2', '../fonts/publication-tc-supplement-0537efd18e.woff2',
+  ...Array.from({ length: 9 }, (_, index) => `../fonts/publication-tw-variable-${index}-${['a744bc8b6c','6cb5b4634b','773e05b1bc','81c18e680d','57e2764204','5d4b6c9d18','4358d63bf0','0b34eb3fe3','7a1dc60589'][index]}.woff2`),
+].map(path => new URL(path, IMMERSIVE_ROOT).href));
+const IMMERSIVE_CDN_URLS = new Set([
+  'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js',
+  'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js',
+]);
 const activeHashedAssets = new Set();
 let currentEditionUrl = null;
 let cacheMutationQueue = Promise.resolve();
@@ -12,20 +23,22 @@ function cachePolicy(request) {
   if (!request || request.method !== 'GET') return 'network';
   let url;
   try { url = new URL(request.url); } catch { return 'network'; }
-  if (url.origin !== self.location.origin || !url.pathname.startsWith(scopePath) || /\.pdf$/i.test(url.pathname)) return 'network';
+  if (url.origin !== self.location.origin) return IMMERSIVE_CDN_URLS.has(url.href) ? 'cache-first' : 'network';
+  if (!url.pathname.startsWith(scopePath) || /\.pdf$/i.test(url.pathname)) return 'network';
   if (/(?:^|\/)(?:api|auth|private|notes?|session|token)(?:\/|$)/i.test(url.pathname)) return 'network';
   const isScopeRoot = url.pathname === scopePath || url.pathname === `${scopePath}index.html`;
-  const isRootRedirectNavigation = request.mode === 'navigate' && url.pathname === scopePath;
-  if (!isRootRedirectNavigation) {
-    for (const [name, value] of url.searchParams) {
-      if (name === 'v' && /^[A-Za-z0-9._-]{1,64}$/.test(value)) continue;
-      if (name === 'lang' && /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(value)) continue;
-      return 'network';
-    }
+  const isRootShellNavigation = request.mode === 'navigate' && isScopeRoot;
+  const isImmersiveRootNavigation = request.mode === 'navigate' && url.pathname === IMMERSIVE_ROOT.pathname;
+  for (const [name, value] of url.searchParams) {
+    if ((isRootShellNavigation || isImmersiveRootNavigation) && name === 'campaign' && /^[A-Za-z0-9._~-]{1,80}$/.test(value)) continue;
+    if (name === 'v' && /^[A-Za-z0-9._-]{1,64}$/.test(value)) continue;
+    if (name === 'lang' && /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(value)) continue;
+    return 'network';
   }
   const isHtmlNavigation = request.mode === 'navigate' && /\.html?$/i.test(url.pathname);
-  if (request.mode === 'navigate' && !isScopeRoot && !isHtmlNavigation) return 'network';
-  const isShellNavigation = isScopeRoot || isHtmlNavigation;
+  if (request.mode === 'navigate' && !isScopeRoot && !isImmersiveRootNavigation && !isHtmlNavigation) return 'network';
+  if (url.origin === self.location.origin && IMMERSIVE_PATHS.has(url.href)) return 'cache-first';
+  const isShellNavigation = isScopeRoot || isImmersiveRootNavigation || isHtmlNavigation;
   if (isShellNavigation) return 'stale';
   if (/\/data\/[^/]+\.json$/i.test(url.pathname)) return 'stale';
   if (/\/fonts\/[^/]+\.css$/i.test(url.pathname)) return 'stale';
@@ -41,6 +54,8 @@ function canonicalCacheRequest(request) {
     // The main entry only redirects; campaign parameters do not change its body.
     // Drop them from the cache key while the redirect script preserves them.
     url.search = '';
+  } else if (request.mode === 'navigate' && url.pathname === IMMERSIVE_ROOT.pathname) {
+    url = new URL('./index.html', IMMERSIVE_ROOT);
   } else {
     const versionValues = url.searchParams.getAll('v');
     const languageValues = url.searchParams.getAll('lang');
@@ -196,7 +211,7 @@ self.addEventListener('fetch', event => {
 
   const cachePromise = caches.open(CACHE_NAME).catch(() => null);
   const cachedPromise = cachePromise
-    .then(cache => cache ? cache.match(cacheKey).catch(() => undefined) : undefined)
+    .then(async cache => cache ? (await cache.match(cacheKey).catch(() => undefined)) || await caches.match(cacheKey).catch(() => undefined) : await caches.match(cacheKey).catch(() => undefined))
     .catch(() => undefined);
   if (policy === 'cache-first') {
     const updatePromise = cachedPromise.then(cached => cached ? null : cachePromise.then(cache => cache

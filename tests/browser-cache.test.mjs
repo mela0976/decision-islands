@@ -161,6 +161,7 @@ const cacheStorage = {
     return cacheBuckets.get(name);
   },
   async keys() { return [...cacheBuckets.keys()]; },
+  async match(request) { for (const cache of cacheBuckets.values()) { const response = await cache.match(request); if (response) return response; } return undefined; },
   async delete(name) { return cacheBuckets.delete(name); },
 };
 globalThis.self = {
@@ -276,7 +277,7 @@ test('cache-first hashed assets do not refetch on repeat visits, and quota error
   cacheBuckets.clear();
   let freshCache;
   globalThis.fetch = async () => response(200, 'network survives quota');
-  const cachePromise = cacheStorage.open('decision-islands-shell:%2Fproject%2F:v1');
+  const cachePromise = cacheStorage.open('decision-islands-shell:%2Fproject%2F:v2');
   freshCache = await cachePromise;
   freshCache.failPut = true;
   const quotaResult = await dispatchFetch('https://app.example/project/data/catalog.json');
@@ -327,8 +328,29 @@ test('root redirect navigation ignores campaign queries in its cache key while p
   globalThis.fetch = async () => { throw new Error('offline'); };
   const offline = await dispatchFetch('https://app.example/project/?campaign=offline', { mode: 'navigate', destination: 'document' });
   assert.equal(offline.result.body, 'redirect entry');
+  const privateNavigation = await dispatchFetch('https://app.example/project/?token=private', { mode: 'navigate', destination: 'document' });
+  assert.equal(privateNavigation.intercepted, false, 'private root navigation queries are never cached');
+  const assetCampaign = await dispatchFetch('https://app.example/project/immersive/app.js?campaign=online');
+  assert.equal(assetCampaign.intercepted, false, 'campaign parameters are allowed only on shell navigation, not other assets');
   const privateQuery = await dispatchFetch('https://app.example/project/data/catalog.json?token=private');
   assert.equal(privateQuery.intercepted, false);
+});
+
+test('root worker serves the immersive app root and public CDN modules from the scoped offline snapshot', async () => {
+  cacheBuckets.clear();
+  const appCache = await cacheStorage.open('decision-immersive:%2Fproject%2Fimmersive%2F:2026-10-24.3');
+  await appCache.put(request('https://app.example/project/immersive/index.html'), response(200, 'immersive shell'));
+  await appCache.put(request('https://app.example/project/immersive/style.css'), response(200, 'immersive css'));
+  await appCache.put(request('https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js'), response(200, 'three module', 'cors'));
+  globalThis.fetch = async () => { throw new Error('offline'); };
+  const nav = await dispatchFetch('https://app.example/project/immersive/?campaign=offline', { mode: 'navigate', destination: 'document' });
+  assert.equal(nav.result.body, 'immersive shell');
+  const css = await dispatchFetch('https://app.example/project/immersive/style.css');
+  assert.equal(css.result.body, 'immersive css');
+  const three = await dispatchFetch('https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js', { mode: 'cors' });
+  assert.equal(three.result.body, 'three module');
+  const privateNav = await dispatchFetch('https://app.example/project/immersive/?token=private', { mode: 'navigate', destination: 'document' });
+  assert.equal(privateNav.intercepted, false);
 });
 
 test('resource seeding is bounded to 80 URLs and app-scoped cache cleanup leaves other caches intact', async () => {

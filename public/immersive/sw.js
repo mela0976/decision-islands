@@ -1,5 +1,5 @@
 // Bump this value when any core asset changes so each release keeps one complete snapshot.
-const CACHE_VERSION = '2026-10-24.1';
+const CACHE_VERSION = '2026-10-24.3';
 const MAX_CACHE_ENTRIES = 60;
 const OPTIONAL_CACHE_TIMEOUT_MS = 5000;
 const APP_SCOPE = new URL(self.registration.scope);
@@ -142,7 +142,7 @@ async function installOptional(cache) {
 }
 
 function cacheableRequest(request) {
-  if (!request || request.method !== 'GET' || request.credentials === 'include') return null;
+  if (!request || request.method !== 'GET') return null;
   if (request.headers?.has('authorization') || request.headers?.has('range')) return null;
 
   let url;
@@ -155,6 +155,17 @@ function cacheableRequest(request) {
   if (url.username || url.password) return null;
 
   if (url.origin === APP_SCOPE.origin) {
+    if (request.mode === 'navigate' && url.pathname === APP_SCOPE.pathname) {
+      for (const [name, value] of url.searchParams) {
+        if (name === 'campaign' && /^[A-Za-z0-9._~-]{1,80}$/.test(value)) continue;
+        if (name === 'lang' && /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(value)) continue;
+        if (name === 'v' && /^[A-Za-z0-9._-]{1,64}$/.test(value)) continue;
+        return null;
+      }
+      url = new URL('./index.html', APP_SCOPE);
+      return { url, key: url.href };
+    }
+    if (request.credentials === 'include' && !LOCAL_URLS.has(url.href)) return null;
     if (url.search) {
       const versions = url.searchParams.getAll('v');
       if ([...url.searchParams].length !== 1 || versions.length !== 1 || !/^[A-Za-z0-9._-]{1,64}$/.test(versions[0])) {
@@ -166,7 +177,7 @@ function cacheableRequest(request) {
     return { url, key: url.href };
   }
 
-  if (request.mode !== 'cors' || !CDN_URL_SET.has(url.href)) return null;
+  if (request.credentials === 'include' || request.mode !== 'cors' || !CDN_URL_SET.has(url.href)) return null;
   return { url, key: url.href };
 }
 
@@ -225,25 +236,6 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-  // Static hosts often serve the scoped index for /immersive/ online, but the
-  // navigation request itself is not an asset URL in the cache manifest.
-  // Resolve that exact app root to the already cached entry document offline.
-  if (event.request?.mode === 'navigate') {
-    let navigationUrl;
-    try { navigationUrl = new URL(event.request.url); } catch { navigationUrl = null; }
-    if (navigationUrl?.origin === APP_SCOPE.origin && navigationUrl.pathname === APP_SCOPE.pathname) {
-      event.respondWith((async () => {
-        const entry = { url: new URL('index.html', APP_SCOPE), key: new URL('index.html', APP_SCOPE).href };
-        try {
-          const cache = await caches.open(CACHE_NAME);
-          const cached = await cache.match(entry.key);
-          if (cached) return cached;
-        } catch { /* Fall through to the normal network navigation. */ }
-        return fetch(event.request);
-      })());
-      return;
-    }
-  }
   const entry = cacheableRequest(event.request);
   if (!entry) return;
   event.respondWith(serveFromCache(event.request, entry));

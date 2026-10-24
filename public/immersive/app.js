@@ -26,6 +26,15 @@ const contentControls=['read','interact','bookmark','previous','next','mark-read
 contentControls.forEach(id=>{$(id).disabled=true;});
 const chapterNames = { intro: 'INTRO / 序章群島', people: 'PEOPLE / 人本群島', model: 'MODEL / 洞察群島', ai: 'AI / 行動群島' };
 const safeSource = path => /^sources\/2026-\d{2}\.pdf$/.test(path) ? `../${path}` : '../read/2026/index.html';
+const offSceneDialogue = {
+  achi: '等一下，我想先把這件事放回工作的情境裡，看看它會影響哪個決定。',
+  yue: '先等等，這個答案跟我現在要做的選擇有什麼關係？',
+  yingzhen: '我想先看這個說法有哪些依據，還有它沒回答什麼。',
+  fenjie: '先不用急著往下，我想知道你現在最需要處理哪一步。',
+};
+function dialogueForCharacter(characterId, sceneData) {
+  return sceneData?.dialogue?.find(line => line.characterId === characterId)?.text || offSceneDialogue[characterId] || '我們先停一下，看看眼前這件事還需要哪些線索。';
+}
 
 function renderCatalog() {
   if(!DATA)return;
@@ -73,6 +82,24 @@ function recommend(id) {
   return [next, ...ranked.filter(e => e.targetArticleId !== next?.targetArticleId)].filter((e, i, all) => e && all.findIndex(x => x?.targetArticleId === e.targetArticleId) === i).slice(0, 3);
 }
 
+function syncWorldState() {
+  if (!world || !DATA) return;
+  world.setPopulation(Number($('population').value));
+  world.setReducedMotion(reducedMotion);
+  world.setSeason($('season').value);
+  world.setMode(progress.state.mode);
+  if (current) world.focus(current, { animate: false });
+  if ($('game').open && gameState) {
+    world.setEncounter(gameState.characterId, gameState.npcIndex);
+    world.setSpeech(gameState.speech);
+    if (gameState.result !== null) {
+      world.applyInteraction(gameState.articleId, { kind: gameState.kind, choices: gameState.choices, scenarioChoice: gameState.scenarioChoice, result: gameState.result, before: gameState.before });
+      world.setRecommendations(recommend(gameState.articleId));
+    }
+  }
+  if ($('reader').open) world.setActive(false);
+}
+
 function renderReading() {
   const a = article(current), s = scene(current); $('reading-content').replaceChildren();
   $('reader-title').textContent = a.title; $('byline').textContent = `${a.authors} · 原刊第 ${a.printedStart}–${a.printedEnd} 頁`;
@@ -112,11 +139,11 @@ function openGame(object = null) {
   if(world&&world.getState().current!==id)world.focus(id,{animate:false});
   const previousInteraction=world?.getState().interaction;
   if(previousInteraction&&!previousInteraction.before)world.applyInteraction(id,{...previousInteraction,before:true});
-  gameState = { articleId: id, kind, choices: [], result: null, before: false, token: Symbol(), started: performance.now() };
+  gameState = { articleId: id, kind, choices: [], result: null, before: false, characterId: object?.characterId || s?.protagonistId, npcIndex: object?.npcIndex ?? null, speech: dialogueForCharacter(object?.characterId || s?.protagonistId, s), token: Symbol(), started: performance.now() };
   $('game-title').textContent = object?.characterId ? '和島上的朋友一起想一想' : s?.setting || article(id).title;
   $('game-intro').textContent = s?.lifeEvent || s?.interaction?.prompt;
-  world?.setEncounter?.(object?.characterId || s?.protagonistId,object?.npcIndex??null);
-  world?.setSpeech?.(s?.dialogue?.find(line => line.characterId === object?.characterId)?.text || s?.dialogue?.[0]?.text || s?.lifeEvent);
+  world?.setEncounter?.(gameState.characterId,gameState.npcIndex);
+  world?.setSpeech?.(gameState.speech);
   $('game-controls').replaceChildren(); $('game-result').textContent = ''; $('game-after').hidden = true;
   $('game-evidence')?.remove();
   $('story-ending')?.remove();
@@ -183,6 +210,7 @@ function finishGame(choices, result) {
   const outcome=s?.interaction?.outcomes?.find(item=>item.choiceId===choiceId);
   if(outcome)result=`${outcome.title}。${outcome.text}\n${result}`;
   gameState.choices = choices; gameState.result = result; gameState.before = false;
+  gameState.speech = physicalReaction;
   $('game-result').textContent = result;
   world?.setSpeech?.(physicalReaction);
   $('game-visual').classList.add('changed'); $('game-after').hidden = false; $('compare').textContent = '查看選擇前';
@@ -246,13 +274,18 @@ $('world').addEventListener('webglcontextlost',event=>{event.preventDefault();co
 
 async function boot() {
   try {
+    // Download the fixed Three.js module graph alongside the article edition;
+    // createWorld still waits for data and a mounted canvas before touching GPU.
+    const worldModulePromise=import('./world.js').then(module=>({module}),error=>({error}));
     const response=await fetch('../data/2026.json'); if(!response.ok)throw Error('文章資料暫時無法載入');
     DATA=buildData(await response.json()); if(DATA.articles.length!==22||DATA.islands.length!==22)throw Error('文章與島嶼資料不完整');
     contentControls.forEach(id=>{$(id).disabled=false;});
     current=article(progress.state.last)?.id||'2026-01'; renderCatalog(); visit(current,null,false);
     $('mode').textContent=progress.state.mode==='story'?'故事探索':'自由閱讀';
     let expired=false,worldTimeout;
-    const worldReady=Promise.race([import('./world.js').then(async m=>{
+    const worldReady=Promise.race([worldModulePromise.then(async ({module,error})=>{
+      if(error)throw error;
+      const m=module;
       const created=await m.createWorld({
         canvas:$('world'),data:DATA,reducedMotion,onIslandSelect:id=>visit(id),
         onObjectSelect:object=>{
@@ -272,7 +305,7 @@ async function boot() {
       if(expired){created.dispose();throw Error('3D 載入逾時');}return created;
     }),new Promise((_,reject)=>{worldTimeout=setTimeout(()=>{expired=true;reject(Error('3D 載入逾時'));},15000);})]).then(value=>({value}),error=>({error}));
     await intro();
-    try { const loaded=await worldReady;clearTimeout(worldTimeout);if(loaded.error)throw loaded.error;if(contextFailed){loaded.value.dispose();throw Error('3D 連線中斷');}world=loaded.value; world.setPopulation(Number($('population').value)); visit(current,null,false);world.setMode(progress.state.mode);if($('reader').open)world.setActive(false);status('拖曳探索・滾輪縮放・點選人物或道具。'); }
+    try { const loaded=await worldReady;clearTimeout(worldTimeout);if(loaded.error)throw loaded.error;if(contextFailed){loaded.value.dispose();throw Error('3D 連線中斷');}world=loaded.value; syncWorldState();status('拖曳探索・滾輪縮放・點選人物或道具。'); }
     catch(error){document.body.classList.add('fallback');$('catalog').hidden=false;status(`${error.message}。已切換可閱讀全部文章的 2D 模式。`);}
     window.immersive={get data(){return DATA;},get world(){return world;},get progress(){return progress.state;},visit,openGame};
   } catch(error) { document.body.classList.add('fallback');status(error.message);$('dialogue').replaceChildren();const a=text('a','開啟完整原文目錄',$('dialogue'));a.href='../read/2026/index.html'; }
