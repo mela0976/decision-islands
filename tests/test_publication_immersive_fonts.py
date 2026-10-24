@@ -1,5 +1,7 @@
 import json
 import re
+import sys
+import tempfile
 import unicodedata
 import unittest
 from collections import Counter
@@ -9,6 +11,8 @@ from fontTools.ttLib import TTFont
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
+from build_publication_fonts import asset_name_matches_content
 
 
 def is_han_or_hangul(character):
@@ -136,6 +140,28 @@ class PublicationImmersiveFontCoverageTest(unittest.TestCase):
         self.assertEqual(manifest["latinCodepoints"], sorted(latin_cmap))
         sample = set(map(ord, "I01 P05 Publication Sans TW 0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz"))
         self.assertTrue(sample <= latin_cmap)
+
+    def test_reuse_rejects_valid_font_with_wrong_filename_hash(self):
+        manifest = json.loads((ROOT / "public/fonts/manifest.json").read_text(encoding="utf-8"))
+        entry = next(face for face in manifest["files"] if face["file"].startswith("publication-tw-variable-0-"))
+        original = ROOT / "public/fonts" / entry["file"]
+        font = TTFont(original)
+        cmap = set(font.getBestCmap())
+        self.assertEqual(font.flavor, "woff2")
+        self.assertEqual(font["name"].getDebugName(1), "Decision Publication Sans TW")
+        self.assertEqual(str(entry["weight"]), "250 900")
+        self.assertTrue(set(entry["codepoints"]) <= cmap)
+        self.assertTrue(asset_name_matches_content(original))
+
+        actual_hash = re.search(r"-([0-9a-f]{10})\.woff2$", original.name).group(1)
+        wrong_hash = "0" * 10 if actual_hash != "0" * 10 else "f" * 10
+        with tempfile.TemporaryDirectory() as temp_dir:
+            wrong_name = original.name.rsplit("-", 1)[0] + f"-{wrong_hash}.woff2"
+            wrong_path = Path(temp_dir) / wrong_name
+            wrong_path.write_bytes(original.read_bytes())
+            wrong_font = TTFont(wrong_path)
+            self.assertEqual(set(wrong_font.getBestCmap()), cmap)
+            self.assertFalse(asset_name_matches_content(wrong_path))
 
 
 if __name__ == "__main__":

@@ -8,7 +8,7 @@
 
 產生器保留原刊的九個 TW chunk 與 TC 補字分組。它只把既有字型 shard 尚未涵蓋的 immersive Han 與 Hangul 字元放入獨立的 `Publication Sans TW` shard。這個 shard 使用 Source Han Sans TW Variable，CSS 字重範圍為 250 到 900。CSS 的 `unicode-range` 只列出該 shard 實際收錄的字碼。
 
-重跑產生器時，如果原始字型雜湊、manifest 字集、CSS family、weight、Unicode range、檔案內部 family、variable weight 軸與 WOFF2 cmap 都吻合，產生器會重用既有檔案。其他情況會重建所需字型，並刪除未被新 CSS 引用的舊 shard。檔名後十碼是 WOFF2 內容 SHA-256。
+重跑產生器時，如果原始字型雜湊、manifest 字集、CSS family、weight、Unicode range、檔案內部 family、variable weight 軸、WOFF2 cmap 與檔名 hash 都吻合，產生器會重用既有檔案。其他情況會重建所需字型，並刪除未被新 CSS 引用的舊 shard。檔名後十碼是 WOFF2 內容 SHA-256。
 
 目前來源快照含 927 個不同的 immersive Han 與 Hangul 字碼，其中 25 個不在基準 CSS range 和 WOFF2 cmap 內。`publication-tw-ui` shard 收錄這 25 個字碼。
 
@@ -28,7 +28,7 @@ node --test tests/publication-fonts.test.mjs
 
 ## 字型未涵蓋的字元
 
-`manifest.json` 的 `missingCodepoints` 會列出目前字型沒有的請求字元。U+200B 是零寬空白。下列 15 個介面符號沒有收入字型，沿用平台符號 fallback：
+`manifest.json` 的 `missingCodepoints` 列出 Source Han Sans TW Variable 與 Source Han Sans TC Light 的 cmap 都無法提供的請求字元。這個欄位不是發佈產物的 coverage 報告。回歸測試會用原始語料逐字核對實際 CSS range 與 WOFF2 cmap。U+200B 是零寬空白。下列 15 個介面符號沒有收入字型，沿用平台符號 fallback：
 
 `U+21BA ↺`、`U+21BB ↻`、`U+2301 ⌁`、`U+2302 ⌂`、`U+2304 ⌄`、`U+2315 ⌕`、`U+2316 ⌖`、`U+25F7 ◷`、`U+2637 ☷`、`U+263C ☼`、`U+263E ☾`、`U+2659 ♙`、`U+265F ♟`、`U+270E ✎`、`U+2726 ✦`。
 

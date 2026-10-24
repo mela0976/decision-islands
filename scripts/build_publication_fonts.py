@@ -24,6 +24,11 @@ def rename(font, family, style):
             top.FamilyName, top.FullName = family, names[4]
 
 
+def asset_name_matches_content(path):
+    match = re.search(r'-([0-9a-f]{10})\.woff2$', path.name)
+    return bool(match and match.group(1) == sha256(path.read_bytes()).hexdigest()[:10])
+
+
 def build(source_dir, root):
     output = root / 'public/fonts'
     output.mkdir(parents=True, exist_ok=True)
@@ -63,7 +68,8 @@ def build(source_dir, root):
             face = previous_faces.get(entry['file'])
             expected_font_family = 'Decision Publication Sans TC' if weight == '300' else 'Decision Publication Sans TW'
             if (not path.is_file() or not face or face[:2] != ('Publication Sans TW', weight)
-                    or face[2] != set(codepoints) or entry.get('bytes') != path.stat().st_size):
+                    or face[2] != set(codepoints) or entry.get('bytes') != path.stat().st_size
+                    or not asset_name_matches_content(path)):
                 continue
             font = TTFont(path)
             axes = {axis.axisTag: (axis.minValue, axis.maxValue) for axis in font['fvar'].axes} if 'fvar' in font else {}
@@ -216,7 +222,8 @@ def build(source_dir, root):
                       and latin_face and 'Publication Latin' in latin_face.group(1)
                       and latin_weight.group(1).strip() == '100 900'
                       and latin_range.group(1).strip() == 'U+20-FF'
-                      and (output / latin_name).is_file())
+                      and (output / latin_name).is_file()
+                      and asset_name_matches_content(output / latin_name))
     if reusable_latin:
         font = TTFont(output / latin_name)
         latin_axes = {axis.axisTag: (axis.minValue, axis.maxValue) for axis in font['fvar'].axes} if 'fvar' in font else {}
