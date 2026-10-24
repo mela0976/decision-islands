@@ -21,10 +21,10 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.15;
+  renderer.toneMappingExposure = .94;
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#e6edf0');
-  scene.fog = new THREE.Fog('#e6edf0', 100, 230);
+  scene.background = new THREE.Color('#b8d6d9');
+  scene.fog = new THREE.Fog('#b8d6d9', 155, 290);
   const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 500);
   camera.position.set(31, 28, 39);
   const controls = new OrbitControls(camera, canvas);
@@ -34,8 +34,8 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
   controls.maxDistance = 160;
   controls.maxPolarAngle = Math.PI * 0.47;
   controls.target.set(0, 0, 0);
-  scene.add(new THREE.HemisphereLight('#fff9e9', '#879597', 2.5));
-  const sunlight = new THREE.DirectionalLight('#fff4dc', 3.2);
+  scene.add(new THREE.HemisphereLight('#fff7e6', '#566764', 1.3));
+  const sunlight = new THREE.DirectionalLight('#fff0d3', 2.5);
   sunlight.position.set(-25, 55, 30);
   sunlight.castShadow = true;
   sunlight.shadow.mapSize.set(1024, 1024);
@@ -45,6 +45,8 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
   const geometries = new Map();
   const materials = new Map();
   const textures = new Set();
+  const labels = new Set();
+  await document.fonts?.load('600 28px PublicationSansTW');
   const random = mulberry32(202601);
   function geometry(type) {
     if (!geometries.has(type)) geometries.set(type, type === 'ball' ? new THREE.SphereGeometry(1, 12, 8) : type === 'cylinder' ? new THREE.CylinderGeometry(1, 1, 1, 12) : type === 'cone' ? new THREE.ConeGeometry(1, 1, 8) : type === 'ring' ? new THREE.TorusGeometry(1, 0.12, 6, 28) : new THREE.BoxGeometry(1, 1, 1));
@@ -59,17 +61,21 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     object.position.set(...position); object.scale.set(...scale); object.rotation.y = rotation;
     object.castShadow = true; object.receiveShadow = true; parent.add(object); return object;
   }
-  function label(text, color = '#263f42') {
-    const surface = document.createElement('canvas'); surface.width = 512; surface.height = 128;
+  function label(text, color = '#263f42', width = 144, speech = false) {
+    const surface = document.createElement('canvas'); surface.width = 512; surface.height = speech ? 256 : 128;
     const context = surface.getContext('2d');
-    context.fillStyle = '#f9f5e9'; context.fillRect(0, 0, 512, 128);
-    context.fillStyle = color; context.font = '600 34px sans-serif'; context.textAlign = 'center'; context.textBaseline = 'middle';
-    context.fillText(text, 256, 64, 482);
+    context.fillStyle = '#fff9ed'; context.beginPath(); context.roundRect(4, 4, 504, surface.height - 8, 24); context.fill();
+    context.strokeStyle = '#b5ad97'; context.lineWidth = 4; context.stroke();
+    context.fillStyle = color; context.font = '600 42px PublicationSansTW, sans-serif'; context.textAlign = 'center'; context.textBaseline = 'middle';
+    if (speech) {
+      const lines = String(text).match(/.{1,12}/gu)?.slice(0, 4) || [''];
+      lines.forEach((line, i) => context.fillText(line, 256, 48 + i * 51, 468));
+    } else context.fillText(text, 256, 64, 466);
     const texture = new THREE.CanvasTexture(surface); texture.colorSpace = THREE.SRGBColorSpace; textures.add(texture);
     const mat = new THREE.SpriteMaterial({ map: texture, depthTest: false }); materials.set(`label-${materials.size}`, mat);
-    const sprite = new THREE.Sprite(mat); sprite.scale.set(8, 2, 1); return sprite;
+    const sprite = new THREE.Sprite(mat); sprite.userData.screenWidth = width; sprite.userData.aspect = surface.height / surface.width; sprite.renderOrder = 3; labels.add(sprite); return sprite;
   }
-  const sea = mesh(scene, 'cylinder', '#b5ced0', [0, -0.9, 0], [230, 0.35, 230]);
+  const sea = mesh(scene, 'cylinder', '#79b9bd', [0, -0.9, 0], [230, 0.35, 230]);
   sea.receiveShadow = true;
   const waterLines = new THREE.Group(); scene.add(waterLines);
   for (let i = 0; i < 45; i++) mesh(waterLines, 'box', '#d0e0de', [(random() - .5) * 190, -.68, (random() - .5) * 150], [2 + random() * 6, .025, .09], random() * .4);
@@ -205,10 +211,19 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     const lawn = mesh(root, 'cylinder', theme.color, [0, .85, 0], [6.5, .18, 5.1]);
     const detail = new THREE.Group(); root.add(detail);
     const article = data.articles?.find(a => a.id === entry.articleId);
-    const sign = label(`${canonical}  ${article?.title || entry.title || ''}`); sign.position.set(0, 6.8, -1); root.add(sign);
-    const island = { ...entry, canonical, chapter, articleId: entry.articleId || article?.id || canonical, root, detail, sign, sceneData: data.scenes?.find(s => s.articleId === entry.articleId), color: theme.color, reactionUntil: 0, visited: false };
+    const sceneData = data.scenes?.find(s => s.articleId === entry.articleId);
+    const sign = label(`${canonical} · ${(sceneData?.coreDevice?.label || article?.title || '').slice(0, 11)}`); sign.position.set(0, 6, -1); root.add(sign);
+    const silhouette = new THREE.Group(); root.add(silhouette);
+    const outcome = new THREE.Group(); detail.add(outcome);
+    const decorations = new THREE.Group(); root.add(decorations);
+    const island = { ...entry, canonical, chapter, articleId: entry.articleId || article?.id || canonical, root, detail, silhouette, outcome, decorations, sign, sceneData, color: theme.color, reactionUntil: 0, visited: false };
     tag(coast, island, 'island', 'coast'); tag(lawn, island, 'island', 'ground');
     islands.set(island.articleId, island); buildScene(island, index); detail.visible = false;
+    const landmarks = detail.children.filter(o => o.isMesh).sort((a, b) => b.scale.x * b.scale.y * b.scale.z - a.scale.x * a.scale.y * a.scale.z).slice(0, 5);
+    for (const landmark of new Set([island.core, ...landmarks])) { const clone = landmark.clone(); silhouette.add(clone); tag(clone, island, 'island', 'landmark'); }
+    island.baseline = capture(detail);
+    island.baseline[0].visible = true;
+    island.highlight = mesh(root, 'ring', '#aa7948', [0, 1.08, 0], [7.6, 6.3, 7.6]); island.highlight.rotation.x = Math.PI / 2; island.highlight.visible = false;
   });
   const routes = new THREE.Group(); scene.add(routes);
   const entries = [...islands.values()];
@@ -243,34 +258,52 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     const arms = [-1, 1].map(side => mesh(root, 'cylinder', profile.color, [side * .34, .75, 0], [.08, .65, .08]));
     const legs = [-1, 1].map(side => mesh(root, 'cylinder', '#58625e', [side * .14, .2, 0], [.095, .55, .1]));
     const prop = mesh(root, 'box', i === 0 ? '#a68459' : i === 1 ? '#4c5c62' : i === 2 ? '#f5e8ca' : '#d8b67a', [.4, 1.04, .2], i === 0 ? [.04, .35, .04] : [.22, .3, .04]);
-    const name = label(profile.name); name.scale.set(1.7, .42, 1); name.position.y = 2; root.add(name);
-    root.scale.setScalar(1.2);
+    const name = label(profile.name, '#263f42', 52); name.position.y = 2.12; root.add(name);
+    root.scale.setScalar(1.4);
     const configured = data.characters?.find(c => c.name === profile.name || c.id === profile.id);
-    return { ...profile, id: configured?.id || profile.id, root, body, head, eyes, brows, mouth, arms, legs, prop, phase: i * 1.7, state: 'observe', stateUntil: 2 + i, base: new THREE.Vector3(-3 + i * 2, 1.1, 3), reaction: 0 };
+    return { ...profile, id: configured?.id || profile.id, root, body, head, eyes, brows, mouth, arms, legs, prop, phase: i * 1.7, state: 'observe', stateUntil: 2 + i, base: new THREE.Vector3(...[[-2.4, 1.1, 2.2], [1, 1.1, 3.1], [-.7, 1.1, -.8], [3.3, 1.1, 1.4]][i]), reaction: 0, expression: 'neutral' };
   });
-  const crowd = new THREE.InstancedMesh(geometry('cylinder'), material('#adac94'), 100); crowd.count = 34; crowd.castShadow = true; cast.add(crowd);
+  const crowd = new THREE.InstancedMesh(geometry('cylinder'), material('#ffffff'), 100); crowd.count = 24; crowd.castShadow = true; cast.add(crowd);
   const crowdHeads = new THREE.InstancedMesh(geometry('ball'), material('#d4b397'), 100); crowdHeads.count = crowd.count; crowdHeads.castShadow = true; cast.add(crowdHeads);
+  const crowdHair = new THREE.InstancedMesh(geometry('ball'), material('#514136'), 100); crowdHair.count = crowd.count; cast.add(crowdHair);
+  const crowdEyes = new THREE.InstancedMesh(geometry('ball'), material('#293934'), 200); crowdEyes.count = crowd.count * 2; cast.add(crowdEyes);
   const dummy = new THREE.Object3D();
-  const crowdSeeds = Array.from({ length: 100 }, () => ({ angle: random() * Math.PI * 2, radius: 2.6 + random() * 2.8, speed: .05 + random() * .08, scale: .2 + random() * .09 }));
+  const crowdSeeds = Array.from({ length: 100 }, (_, i) => { crowd.setColorAt(i, new THREE.Color(['#ac6750', '#8d9b5b', '#5d8995', '#b6898b', '#686b76', '#d0a95f'][i % 6])); return { angle: random() * Math.PI * 2, radius: 4 + random() * 1.7, speed: .02 + random() * .045, scale: .18 + random() * .08 }; });
   function updateCrowd(elapsed) {
     for (let i = 0; i < crowd.count; i++) {
-      const seed = crowdSeeds[i], angle = seed.angle + elapsed * seed.speed;
+      const seed = crowdSeeds[i], angle = encounter?.npcIndex === i ? encounter.angle : seed.angle + elapsed * seed.speed;
       dummy.position.set(Math.cos(angle) * seed.radius, 1.45, Math.sin(angle) * seed.radius); dummy.rotation.y = -angle; dummy.scale.set(seed.scale, .65 + Math.sin(elapsed + i) * .025, seed.scale); dummy.updateMatrix(); crowd.setMatrixAt(i, dummy.matrix);
       dummy.position.y += .5; dummy.scale.setScalar(seed.scale * .85); dummy.updateMatrix(); crowdHeads.setMatrixAt(i, dummy.matrix);
+      dummy.position.y += .09; dummy.position.z -= .025; dummy.scale.set(seed.scale * .87, seed.scale * .48, seed.scale * .83); dummy.updateMatrix(); crowdHair.setMatrixAt(i, dummy.matrix);
+      const facing = encounter?.npcIndex === i ? Math.atan2(camera.position.x - cast.position.x - Math.cos(angle) * seed.radius, camera.position.z - cast.position.z - Math.sin(angle) * seed.radius) : 0;
+      for (let side = 0; side < 2; side++) { const lateral = side ? .07 : -.07; dummy.position.set(Math.cos(angle) * seed.radius + lateral * Math.cos(facing) + seed.scale * .75 * Math.sin(facing), 1.95, Math.sin(angle) * seed.radius + seed.scale * .75 * Math.cos(facing) - lateral * Math.sin(facing)); dummy.rotation.y = facing; dummy.scale.set(.022, .025, .022); dummy.updateMatrix(); crowdEyes.setMatrixAt(i * 2 + side, dummy.matrix); }
     }
-    crowd.instanceMatrix.needsUpdate = true; crowdHeads.instanceMatrix.needsUpdate = true;
+    for (const object of [crowd, crowdHeads, crowdHair, crowdEyes]) object.instanceMatrix.needsUpdate = true;
   }
-  updateCrowd(0);
   const carry = mesh(scene, 'box', '#fff2d2', [0, 0, 0], [.65, .85, .05]); carry.visible = false;
   let current = entries[0], journey = null, disposed = false, mode = 'story', frame = 0, time = 0, last = performance.now(), hover = null, audio = null, sound = false, active = !document.hidden;
+  let previewed = null, encounter = null, speech = null, season = 'christmas', interactionPose = null;
+  updateCrowd(0);
   const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
   function updateLOD(target = null) {
-    for (const island of entries) { island.detail.visible = island === current || island === target; island.sign.visible = mode === 'explore' || island === current || island === target; }
+    for (const island of entries) {
+      island.detail.visible = island === current || island === target || island.articleId === previewed;
+      island.silhouette.visible = !island.detail.visible;
+      island.sign.visible = mode === 'explore' || island === current || island === target || island.articleId === previewed;
+      island.highlight.visible = island.articleId === previewed;
+    }
   }
   function placeCast() {
     cast.position.copy(current.root.position);
-    for (const actor of actors) { actor.root.position.copy(actor.base); actor.state = 'arrive'; actor.stateUntil = time + 1; actor.reaction = time + 1.4; }
+    interactionPose = null; encounter = null; setSpeech('');
+    const protagonist = current.sceneData?.protagonistId;
+    for (const actor of actors) {
+      actor.base.set(...[[-2.4, 1.1, 2.2], [1, 1.1, 3.1], [-.7, 1.1, -.8], [3.3, 1.1, 1.4]][actors.indexOf(actor)]);
+      if (actor.id === protagonist) actor.base.set(current.coreRest.x - 1.5, 1.1, Math.max(1.4, current.coreRest.z + 1.6));
+      actor.root.position.copy(actor.base); actor.state = 'arrive'; actor.expression = 'neutral'; actor.stateUntil = time + 1; actor.reaction = time + 1.4;
+    }
     sunlight.position.copy(current.root.position).add(new THREE.Vector3(-25, 55, 30)); sunlight.target.position.copy(current.root.position);
+    if (current.interaction) applyInteraction(current.articleId, current.interaction);
   }
   function emitStage(stage, destination, relation) { onTransitionStage(stage, { articleId: destination.articleId, question: relation?.transitionQuestion || '', visual: relation?.transitionVisual || '', relation }); }
   function finish(destination) { current = destination; current.visited = true; journey = null; carry.visible = false; controls.enabled = true; updateLOD(); placeCast(); }
@@ -278,8 +311,9 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     const destination = islands.get(articleId) || entries.find(i => i.canonical === articleId);
     if (!destination || disposed) return false;
     journey = null; controls.enabled = true; carry.visible = false;
-    const endTarget = destination.root.position.clone().add(new THREE.Vector3(0, 1.5, 0));
-    const endPosition = destination.root.position.clone().add(new THREE.Vector3(12.5, 12, 17));
+    const portrait = canvas.clientWidth < 700;
+    const endTarget = destination.root.position.clone().add(new THREE.Vector3(0, portrait ? -3.2 : 1.2, 0));
+    const endPosition = destination.root.position.clone().add(portrait ? new THREE.Vector3(19, 23, 30) : new THREE.Vector3(12.5, 12, 17));
     updateLOD(destination);
     if (!animate || reducedMotion) {
       for (const stage of STAGES) emitStage(stage, destination, relation);
@@ -297,7 +331,9 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     raycaster.setFromCamera(pointer, camera);
     const visible = object => { for (let node = object; node; node = node.parent) if (!node.visible) return false; return true; };
     const actorTargets = actors.flatMap(actor => { actor.root.traverse(object => { if (object.isMesh) object.userData.pick = { articleId: current.articleId, objectId: `character-${actor.id}`, characterId: actor.id, kind: 'character' }; }); return actor.root.children.flatMap(c => c.isMesh ? [c] : c.children.filter(n => n.isMesh)); });
-    return raycaster.intersectObjects([...pickables, ...actorTargets], false).find(hit => visible(hit.object))?.object.userData.pick;
+    const hit = raycaster.intersectObjects([...pickables, ...actorTargets, crowd, crowdHeads], false).find(hit => visible(hit.object));
+    if (hit?.object === crowd || hit?.object === crowdHeads) { const npcIndex = hit.instanceId; const actor = actors[npcIndex % actors.length]; return { articleId: current.articleId, objectId: `resident-${npcIndex}`, characterId: actor.id, npcIndex, kind: 'character' }; }
+    return hit?.object.userData.pick;
   }
   let press = null;
   function onDown(event) { press = { x: event.clientX, y: event.clientY }; }
@@ -310,18 +346,134 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     chime();
   }
   function onMove(event) { if (press || journey) return; const hit = pick(event); const next = hit?.articleId || null; if (next !== hover) { hover = next; canvas.style.cursor = hit ? 'pointer' : 'grab'; for (const island of entries) island.sign.visible = mode === 'explore' || island === current || island.articleId === hover; } }
+  function capture(group) {
+    const snapshot = [];
+    group.traverse(object => snapshot.push({ object, position: object.position.clone(), quaternion: object.quaternion.clone(), scale: object.scale.clone(), visible: object.visible, material: object.material }));
+    return snapshot;
+  }
+  function restore(snapshot) {
+    for (const item of snapshot) { const object = item.object; object.position.copy(item.position); object.quaternion.copy(item.quaternion); object.scale.copy(item.scale); object.visible = item.visible; if (item.material) object.material = item.material; }
+  }
+  function matches(snapshot) { return snapshot.every(s => s.object.position.equals(s.position) && s.object.quaternion.equals(s.quaternion) && s.object.scale.equals(s.scale) && s.object.visible === s.visible && s.object.material === s.material); }
+  function preview(articleId) { previewed = islands.has(articleId) ? articleId : entries.find(i => i.canonical === articleId)?.articleId || null; updateLOD(journey?.destination); return previewed; }
+  function setSeason(value = 'christmas') {
+    season = ['christmas', 'halloween', 'easter', 'none'].includes(String(value).toLowerCase()) ? String(value).toLowerCase() : 'christmas';
+    for (const island of entries) {
+      const g = island.decorations; g.clear();
+      if (season === 'christmas') {
+        mesh(g, 'cylinder', '#7b5943', [-4.8, 1.5, -1], [.13, 1, .13]);
+        for (let n = 0; n < 3; n++) mesh(g, 'cone', ['#547953', '#3f6949', '#62894f'][n], [-4.8, 1.9 + n * .6, -1], [1.05 - n * .2, 1.3, 1.05 - n * .2]);
+        mesh(g, 'ball', '#d7a34f', [-4.8, 3.9, -1], [.16, .2, .16]);
+        mesh(g, 'box', '#b96353', [-4.1, 1.2, -.4], [.65, .5, .6]); mesh(g, 'box', '#d5ab60', [-5.1, 1.25, .1], [.55, .6, .55]);
+      } else if (season === 'halloween') {
+        for (let n = 0; n < 3; n++) { const x = -5 + n * .65; mesh(g, 'ball', n % 2 ? '#d3883f' : '#b85e35', [x, 1.4, -1 + n % 2], [.45, .4, .42]); mesh(g, 'cylinder', '#5b6c46', [x, 1.85, -1 + n % 2], [.06, .22, .06]); for (const side of [-1, 1]) mesh(g, 'box', '#443c36', [x + side * .14, 1.45, -.64 + n % 2], [.08, .09, .04]); }
+      } else if (season === 'easter') {
+        mesh(g, 'cylinder', '#b39066', [-4.4, 1.2, -.5], [.9, .4, .65]); mesh(g, 'ring', '#a98157', [-4.4, 1.8, -.5], [.9, .75, .7]);
+        for (let n = 0; n < 3; n++) mesh(g, 'ball', ['#c889a5', '#8dab7b', '#e1b567'][n], [-5 + n * .6, 1.7, -.4], [.25, .38, .25]);
+      }
+    }
+    return season;
+  }
+  function setSpeech(text = '') {
+    if (speech) { speech.removeFromParent(); textures.delete(speech.material.map); speech.material.map.dispose(); speech.material.dispose(); labels.delete(speech); for (const [key, value] of materials) if (value === speech.material) materials.delete(key); speech = null; }
+    if (!text || !encounter) return;
+    speech = label(String(text), '#253e36', canvas.clientWidth < 700 ? 170 : 220, true); cast.add(speech);
+    if (Number.isInteger(encounter.npcIndex)) { const seed = crowdSeeds[encounter.npcIndex]; speech.position.set(Math.cos(encounter.angle) * seed.radius, 3.7, Math.sin(encounter.angle) * seed.radius); }
+    else { const actor = actors.find(a => a.id === encounter.characterId); if (actor) speech.position.copy(actor.root.position).add(new THREE.Vector3(0, 4.3, 0)); }
+    speech.userData.text = String(text);
+  }
+  function setEncounter(characterId = null, npcIndex = null) {
+    setSpeech('');
+    encounter = characterId ? { characterId, npcIndex: Number.isInteger(npcIndex) && npcIndex >= 0 && npcIndex < crowd.count ? npcIndex : null } : null;
+    if (encounter && Number.isInteger(encounter.npcIndex)) { const seed = crowdSeeds[encounter.npcIndex]; encounter.angle = seed.angle + time * seed.speed; }
+    if (encounter && encounter.npcIndex === null) { const actor = actors.find(a => a.id === characterId); if (actor) { actor.state = 'conversation'; const cameraLocal = camera.position.clone().sub(cast.position); actor.root.rotation.y = Math.atan2(cameraLocal.x - actor.root.position.x, cameraLocal.z - actor.root.position.z); actor.head.rotation.set(0, 0, 0); } }
+    return encounter;
+  }
+  function setMode(value) {
+    mode = value === 'explore' ? 'explore' : 'story';
+    if (mode === 'story') { focus(current.articleId, { animate: !reducedMotion }); return; }
+    journey = null; controls.enabled = true; carry.visible = false; setEncounter(null);
+    const bounds = new THREE.Box3(); for (const island of entries) bounds.expandByPoint(island.root.position);
+    const center = bounds.getCenter(new THREE.Vector3()); const extent = bounds.getSize(new THREE.Vector3());
+    const distance = Math.max(extent.z + 20, (extent.x + 20) / Math.max(.4, camera.aspect)) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) * 1.1;
+    controls.maxDistance = Math.max(210, distance * 1.5); camera.far = Math.max(500, distance * 3); camera.updateProjectionMatrix();
+    controls.target.copy(center); camera.position.copy(center).add(new THREE.Vector3(distance * .18, distance * .83, distance * .7)); controls.update(); updateLOD();
+  }
   function applyInteraction(articleId, payload = {}) {
     const island = islands.get(articleId); if (!island) return false;
-    island.reactionUntil = time + 2.8; island.lastInteraction = payload.kind || 'choice';
-    island.core.material = material(payload.result?.correct === false ? '#d0a17d' : '#d6bd67');
-    for (const actor of actors) { actor.state = actor.habit === 'note' ? 'verify' : 'respond'; actor.stateUntil = time + 2.8; actor.reaction = time + 2.8; }
+    const kind = payload.kind || island.sceneData?.interactionType;
+    const supported = ['sourceverification', 'purchase', 'attention', 'memory', 'persona', 'judgment', 'journey', 'delegation'];
+    if (!supported.includes(kind) || !payload.choices) { for (const actor of actors) actor.reaction = time + 1.8; return true; }
+    const choices = Array.isArray(payload.choices) ? payload.choices.map(String) : [String(payload.choices)];
+    island.actorBaseline ||= capture(cast);
+    restore(island.baseline); island.outcome.clear();
+    if (island === current) restore(island.actorBaseline);
+    const before = Boolean(payload.before);
+    const impact = { kind, choices, before, layout: 'waiting', expression: 'neutral', checkpoint: false };
+    interactionPose = island === current ? impact : interactionPose;
+    island.interaction = impact;
+    if (before) { for (const actor of actors) actor.state = 'comparison-before'; return true; }
+    const g = island.outcome;
+    function part(type, color, position, scale, rotation = 0) { return mesh(g, type, color, position, scale, rotation); }
+    function pose(actorId, x, z, expression) { const actor = actors.find(a => a.id === actorId || a.habit === actorId); if (actor && island === current) { actor.root.position.set(x, 1.1, z); actor.root.rotation.y = -.25; actor.expression = expression; actor.state = 'demonstrate'; actor.head.rotation.z = expression === 'concerned' ? -.15 : .04; actor.brows.forEach((b, i) => b.rotation.z = expression === 'concerned' ? (i ? -.35 : .35) : 0); actor.mouth.scale.set(expression === 'smile' ? .16 : .07, expression === 'concerned' ? .035 : .018, .02); } }
+    if (kind === 'sourceverification') {
+      const hold = choices.includes('hold');
+      for (let i = 0; i < 3; i++) { const card = part('box', i < choices.length - 1 ? '#87a17a' : '#d5b591', [-1.6 + i * 1.5, 2.7, 1], [1.05, 1.45, .12], (i - 1) * .2); card.rotation.z = hold ? .08 : -.08; part('box', '#5a736a', [-1.6 + i * 1.5, 2.75, 1.08], [.6, .06, .03]); }
+      island.core.rotation.y += hold ? -.55 : .55; island.core.position.x += hold ? -1 : .8;
+      pose('note', -1.4, 2.5, hold ? 'thoughtful' : 'concerned'); pose('pen', 1.4, 2.7, hold ? 'thoughtful' : 'concerned');
+      impact.layout = hold ? 'evidence-held-for-verification' : 'unverified-image-on-desk'; impact.expression = hold ? 'thoughtful' : 'concerned';
+    } else if (kind === 'purchase') {
+      const selected = choices.includes('high') ? 1 : choices.includes('price') ? 0 : 2;
+      for (let i = 0; i < 3; i++) part('box', ['#bc8e55', '#b77673', '#638f85'][i], [i === selected ? 1 : -2 + i * 2, i === selected ? 2.1 : 1.5, i === selected ? 3 : 1], [i === selected ? 1.05 : .65, .9, .65]);
+      island.core.position.set(1, 2.1, 3); island.core.scale.multiplyScalar(1.2);
+      pose('phone', 1.2, 3.9, selected === 1 ? 'smile' : 'thoughtful'); pose('bell', 3.5, 2.4, 'smile');
+      impact.layout = ['budget-product-selected', 'familiar-brand-selected', 'service-product-selected'][selected]; impact.expression = selected === 1 ? 'smile' : 'thoughtful';
+    } else if (kind === 'attention') {
+      const activeChoice = choices.includes('active'), recalled = choices.includes('human');
+      for (let i = 0; i < 4; i++) { const board = part('box', activeChoice ? '#c29251' : '#8f9c96', [-2.4 + i * 1.6, 2.2, 1], [1.2, 1.6, .18]); board.rotation.y = activeChoice ? (i - 1.5) * .12 : Math.PI / 2; }
+      island.core.scale.y *= activeChoice ? 1.35 : .65; island.core.rotation.y += activeChoice ? -.3 : .8;
+      pose('phone', activeChoice ? 0 : 3.7, activeChoice ? 3.2 : 1.8, recalled ? 'smile' : 'concerned');
+      impact.layout = activeChoice ? 'participation-boards-open' : 'passerby-boards-sideways'; impact.expression = recalled ? 'smile' : 'concerned';
+    } else if (kind === 'memory') {
+      for (const [i, item] of choices.entries()) { const x = -2 + i * 1.8; if (item === 'radio') { part('box', '#987451', [x, 1.8, 2], [1.25, .8, .65]); part('ring', '#594d43', [x, 1.8, 2.35], [.26, .26, .26]); } else if (item === 'cup') { part('cylinder', '#b87a69', [x, 1.8, 2], [.35, .65, .35]); part('ring', '#b87a69', [x + .35, 1.8, 2], [.25, .25, .25]); } else part('box', '#dfbc78', [x, 1.8, 2], [1.2, .05, .6], -.2); }
+      island.core.rotation.y += choices.length * .2; pose('phone', -.5, 3.5, choices.length ? 'smile' : 'thoughtful');
+      impact.layout = choices.length ? `memory-objects-${choices.join('-')}` : 'memory-still-unfound'; impact.expression = choices.length ? 'smile' : 'thoughtful';
+    } else if (kind === 'persona') {
+      const commute = choices.includes('commute'), narrow = choices.includes('narrow');
+      if (commute) { part('box', '#64878a', [0, 2.2, 0], [4.7, 2.2, .25]); for (let i = 0; i < 3; i++) part('box', '#c2d3cd', [-1.5 + i * 1.5, 2.5, .15], [1, .9, .08]); }
+      else { part('box', '#a07d78', [0, 1.5, 1], [3, .9, 1]); part('box', '#c4aa8a', [-2.2, 1.5, 1.5], [.9, .5, .9]); }
+      for (let i = 0; i < (narrow ? 1 : 3); i++) part('box', ['#9ab49a', '#bb9eb5', '#c8ae77'][i], [-2 + i * 1.7, 2.7, 2.5], [.8, 1.1, .1]);
+      island.core.position.y += .5; pose('note', 1.3, 3.1, narrow ? 'concerned' : 'thoughtful');
+      impact.layout = `${commute ? 'commute' : 'home'}-${narrow ? 'single-source-boundary' : 'mixed-context-evidence'}`; impact.expression = narrow ? 'concerned' : 'thoughtful';
+    } else if (kind === 'judgment') {
+      const bins = ['data', 'estimate', 'inference', 'unknown'];
+      for (let i = 0; i < 4; i++) { const x = -2.7 + i * 1.8; part('box', ['#729a85', '#c3a468', '#aa8ba0', '#727e8a'][i], [x, 1.6, 2], [1.35, .3, 1.2]); }
+      choices.forEach((choice, i) => part('box', '#f2e7cb', [-2.7 + Math.max(0, bins.indexOf(choice)) * 1.8, 1.86 + i * .12, 2], [1, .07, .7], (i - 1.5) * .08));
+      island.core.rotation.z = choices.every((c, i) => c === bins[i]) ? 0 : .16; pose('note', -.5, 3.7, 'thoughtful');
+      impact.layout = `evidence-sorted-${choices.join('-')}`; impact.expression = 'thoughtful';
+    } else if (kind === 'journey') {
+      const repaired = !choices.includes('ad'), station = Math.max(0, ['find', 'compare', 'confirm'].indexOf(choices[0]));
+      for (let i = 0; i < 3; i++) part('box', i === station ? '#b67f59' : '#789b8e', [-3 + i * 3, 1.2, 2], [2.3, .2, 1]);
+      const barrier = part('box', '#a37d6a', [-3 + station * 3, 1.9, repaired ? .5 : 2], [.22, 1.4, 1.4]); barrier.rotation.y = repaired ? Math.PI / 2 : 0;
+      if (choices.includes('explain')) part('box', '#f0dfb4', [-3 + station * 3, 2.6, 1], [1.8, 1.3, .1]);
+      pose('phone', repaired ? 2.3 : -3 + station * 3, 3, repaired ? 'smile' : 'concerned'); pose('bell', choices.includes('human') ? 1.2 : 3.7, 3, repaired ? 'smile' : 'concerned');
+      impact.layout = repaired ? `path-${station}-${choices[1]}-repaired` : `path-${station}-still-blocked`; impact.expression = repaired ? 'smile' : 'concerned';
+    } else {
+      const unsafe = choices.includes('auto') && !choices.includes('draft'); const confirm = choices.includes('confirm') || unsafe;
+      part('box', '#6b9a9b', [-1.6, 2.1, 1.5], [1.4, 1.8, 1.2]); part('box', '#e4d0a7', [1, 1.9, 1.5], [2.4, .2, 1.8]);
+      part('box', unsafe ? '#ba735b' : '#7f9b74', [.1, 2.5, 1.5], [.16, 2.1, confirm ? 2.8 : .4], confirm ? .1 : Math.PI / 2);
+      if (confirm) part('cone', '#be9b51', [1.5, 2.4, 1.5], [.4, .5, .4]);
+      island.core.rotation.y += unsafe ? -.6 : .6; pose('pen', .6, 3.1, unsafe ? 'concerned' : 'thoughtful'); pose('bell', unsafe ? 1.8 : 3.5, 2.6, unsafe ? 'concerned' : 'smile');
+      impact.layout = unsafe ? 'agent-paused-human-takeover' : confirm ? 'agent-waits-at-confirmation-gate' : 'agent-draft-on-human-desk'; impact.checkpoint = confirm; impact.expression = unsafe ? 'concerned' : 'thoughtful';
+    }
+    for (const actor of actors) actor.state = island === current ? 'demonstrate' : actor.state;
     return true;
   }
   function chime() {
     if (!sound) return;
     try { audio ||= new (window.AudioContext || window.webkitAudioContext)(); audio.resume(); const oscillator = audio.createOscillator(), gain = audio.createGain(); oscillator.type = 'sine'; oscillator.frequency.setValueAtTime(392, audio.currentTime); oscillator.frequency.exponentialRampToValueAtTime(587, audio.currentTime + .15); gain.gain.setValueAtTime(.025, audio.currentTime); gain.gain.exponentialRampToValueAtTime(.001, audio.currentTime + .35); oscillator.connect(gain).connect(audio.destination); oscillator.start(); oscillator.stop(audio.currentTime + .35); } catch { sound = false; }
   }
-  function resize() { if (disposed) return; const bounds = canvas.getBoundingClientRect(); const width = Math.max(1, bounds.width), height = Math.max(1, bounds.height); renderer.setSize(width, height, false); camera.aspect = width / height; camera.updateProjectionMatrix(); }
+  function resize() { if (disposed) return; const bounds = canvas.getBoundingClientRect(); const width = Math.max(1, bounds.width), height = Math.max(1, bounds.height); renderer.setSize(width, height, false); camera.aspect = width / height; camera.fov = width < 700 ? 46 : 40; camera.updateProjectionMatrix(); }
   function visibility() { active = !document.hidden; last = performance.now(); }
   function tick(now) {
     if (disposed) return; frame = requestAnimationFrame(tick);
@@ -336,6 +488,7 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
     } else controls.update();
     if (!reducedMotion) {
       for (const actor of actors) {
+        if (interactionPose || (encounter?.characterId === actor.id && encounter.npcIndex === null)) continue;
         const phase = time * actor.pace + actor.phase;
         if (time > actor.stateUntil) { actor.state = ['observe', 'walk', 'think', 'compare'][Math.floor(time / (3 + actor.pace) + actor.phase) % 4]; actor.stateUntil = time + 2.5 + actor.pace; }
         const walking = actor.state === 'walk';
@@ -353,20 +506,26 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
         actor.prop.rotation.z = actor.habit === 'pen' ? phase * 1.8 : actor.habit === 'phone' ? Math.sin(phase) * .12 : actor.habit === 'note' ? Math.sin(phase * 2) * .08 : Math.sin(phase * .4) * .04;
       }
       updateCrowd(time);
-      current.core.position.y = current.coreRest.y + (current.reactionUntil > time ? Math.sin(time * 6) * .15 : 0);
+    }
+    const point = new THREE.Vector3();
+    for (const sprite of labels) {
+      sprite.getWorldPosition(point);
+      const distance = camera.position.distanceTo(point);
+      const scale = (sprite.userData.screenWidth / Math.max(1, canvas.clientHeight)) * distance * 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+      const parentScale = sprite.parent?.getWorldScale(new THREE.Vector3()).x || 1;
+      sprite.scale.set(scale / parentScale, scale * sprite.userData.aspect / parentScale, 1);
     }
     renderer.render(scene, camera);
   }
   canvas.addEventListener('pointerdown', onDown); canvas.addEventListener('pointerup', onUp); canvas.addEventListener('pointermove', onMove);
   document.addEventListener('visibilitychange', visibility); window.addEventListener('resize', resize);
-  resize(); focus(current.articleId, { animate: false }); frame = requestAnimationFrame(tick);
+  setSeason('christmas'); resize(); focus(current.articleId, { animate: false }); frame = requestAnimationFrame(tick);
   return {
-    focus, resize, applyInteraction,
-    setMode(value) { mode = value === 'explore' ? 'explore' : 'story'; controls.maxDistance = mode === 'explore' ? 210 : 110; updateLOD(journey?.destination); },
-    setPopulation(count) { crowd.count = Math.max(10, Math.min(100, Math.round(Number(count) || 10))); crowdHeads.count = crowd.count; updateCrowd(reducedMotion ? 0 : time); },
+    focus, resize, applyInteraction, preview, setSeason, setEncounter, setSpeech, setMode,
+    setPopulation(count) { crowd.count = Math.max(10, Math.min(100, Math.round(Number(count) || 10))); crowdHeads.count = crowd.count; crowdHair.count = crowd.count; crowdEyes.count = crowd.count * 2; updateCrowd(reducedMotion ? 0 : time); },
     setReducedMotion(value) { reducedMotion = Boolean(value); if (reducedMotion && journey) focus(journey.destination.articleId, { animate: false, relation: journey.relation }); },
     setSound(enabled) { sound = Boolean(enabled); if (sound) chime(); },
-    getState() { return { current: current.articleId, currenttarget: journey?.destination.articleId || current.articleId, currentTarget: journey?.destination.articleId || current.articleId, mode, population: crowd.count, reducedMotion, transitioning: Boolean(journey), stage: journey ? STAGES[Math.max(0, journey.phase)] : 'arrival', renderedislandcount: entries.length, renderedIslandCount: entries.length, detailedIslandCount: entries.filter(i => i.detail.visible).length, characters: actors.map(a => ({ id: a.id, name: a.name, state: a.state, habit: a.habit })), visited: entries.filter(i => i.visited).map(i => i.articleId), drawCalls: renderer.info.render.calls }; },
-    dispose() { if (disposed) return; disposed = true; cancelAnimationFrame(frame); controls.dispose(); canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointerup', onUp); canvas.removeEventListener('pointermove', onMove); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('resize', resize); for (const geo of geometries.values()) geo.dispose(); for (const mat of materials.values()) mat.dispose(); for (const texture of textures) texture.dispose(); crowd.dispose(); crowdHeads.dispose(); renderer.dispose(); audio?.close(); scene.clear(); },
+    getState() { return { current: current.articleId, currenttarget: journey?.destination.articleId || current.articleId, currentTarget: journey?.destination.articleId || current.articleId, mode, population: crowd.count, reducedMotion, transitioning: Boolean(journey), stage: journey ? STAGES[Math.max(0, journey.phase)] : 'arrival', renderedislandcount: entries.length, renderedIslandCount: entries.length, detailedIslandCount: entries.filter(i => i.detail.visible).length, silhouetteIslandCount: entries.filter(i => i.silhouette.visible).length, characters: actors.map(a => ({ id: a.id, name: a.name, state: a.state, habit: a.habit, expression: a.expression, position: a.root.position.toArray() })), previewed, season, decoratedIslandCount: entries.filter(i => i.decorations.children.length).length, encounter: encounter ? { ...encounter } : null, speech: speech?.userData.text || '', interaction: current.interaction ? { ...current.interaction, baselineRestored: current.interaction.before && matches(current.baseline) && matches(current.actorBaseline), propPosition: current.core.position.toArray(), propRotation: current.core.rotation.toArray().slice(0, 3), outcomeObjectCount: current.outcome.children.length } : null, camera: { position: camera.position.toArray(), target: controls.target.toArray() }, visited: entries.filter(i => i.visited).map(i => i.articleId), drawCalls: renderer.info.render.calls }; },
+    dispose() { if (disposed) return; disposed = true; cancelAnimationFrame(frame); controls.dispose(); canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointerup', onUp); canvas.removeEventListener('pointermove', onMove); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('resize', resize); for (const geo of geometries.values()) geo.dispose(); for (const mat of materials.values()) mat.dispose(); for (const texture of textures) texture.dispose(); for (const object of [crowd, crowdHeads, crowdHair, crowdEyes]) object.dispose(); renderer.dispose(); audio?.close(); scene.clear(); },
   };
 }
