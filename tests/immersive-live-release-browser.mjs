@@ -37,10 +37,13 @@ try {
     const state = window.immersive.world.getState();
     const currentScene = window.immersive.data.scenes.find(scene => scene.articleId === state.current);
     const outcome = currentScene?.interaction.outcomes.find(item => item.choiceId === state.interaction?.scenarioChoice);
-    return { expected: outcome?.visualEffect.reactionText, effectId: state.interaction?.effectId, objects: state.interaction?.scenarioObjects?.length };
+    return { expected: outcome?.visualEffect.reactionText, effectId: state.interaction?.effectId, objects: state.interaction?.scenarioObjects?.length, characterEvent: state.characterEvent };
   });
   assert.equal(result, effect.expected);
   assert.ok(effect.effectId && effect.objects > 0);
+  assert.equal(effect.characterEvent?.effectId, effect.effectId);
+  assert.equal(effect.characterEvent.complete, true);
+  assert.equal(effect.characterEvent.supported, true);
   assert.equal(errors.length, 0, errors.join('\n'));
 
   const evidence = {
