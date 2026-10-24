@@ -285,6 +285,10 @@ function openGame(object = null) {
   const previousInteraction=world?.getState().interaction;
   if(previousInteraction&&!previousInteraction.before)world.applyInteraction(id,{...previousInteraction,before:true});
   gameState = { articleId: id, kind, choices: [], result: null, before: false, characterId: object?.characterId || s?.protagonistId, npcIndex: object?.npcIndex ?? null, speech: dialogueForCharacter(object?.characterId || s?.protagonistId, s), token: Symbol(), started: performance.now() };
+  const characterLine = s?.dialogue?.find(line => line.characterId === gameState.characterId);
+  const characterName = DATA.characters.find(character => character.id === gameState.characterId)?.name;
+  $('game-dialogue').hidden = !characterLine;
+  $('game-dialogue').textContent = characterLine ? `${characterName}：「${characterLine.text}」` : '';
   $('game-title').textContent = object?.characterId ? '和島上的朋友一起想一想' : s?.coreDevice?.label || article(id).title;
   $('game-intro').textContent = s?.lifeEvent || s?.interaction?.prompt;
   world?.setEncounter?.(gameState.characterId,gameState.npcIndex);
@@ -384,10 +388,13 @@ $('game-adjust').onclick=()=>{
 async function intro() {
   if (progress.state.introSeen || reducedMotion) return;
   $('intro').hidden = false;
+  $('intro').showModal();
   $('intro-book').hidden=true;
   let sequence,finished=false,resolveSkip;
   const skipped=new Promise(resolve=>{resolveSkip=resolve;});
-  $('skip-intro').onclick=()=>{finished=true;sequence?.skip();resolveSkip();};
+  const finishIntro = () => { if(finished)return;finished=true;sequence?.skip();resolveSkip(); };
+  $('skip-intro').onclick=finishIntro;
+  $('intro').addEventListener('cancel',event=>{event.preventDefault();finishIntro();},{once:true});
   const animation=import('./intro.js').then(async module=>{
     if(finished)return;
     sequence=await module.createBookIntro({host:$('intro'),reducedMotion,onCaption:caption=>{$('intro-caption').textContent=caption;}});
@@ -396,7 +403,7 @@ async function intro() {
   });
   try{await Promise.race([animation,skipped]);}
   catch{status('開場動畫未能載入，直接進入閱讀群島。');}
-  finally{finished=true;sequence?.dispose();$('intro').hidden=true;$('intro-book').replaceChildren();progress.state.introSeen=true;progress.save();}
+  finally{finished=true;sequence?.dispose();if($('intro').open)$('intro').close();$('intro').hidden=true;$('intro-book').replaceChildren();progress.state.introSeen=true;progress.save();$('map-toggle').focus({preventScroll:true});}
 }
 
 $('skip-arrival').onclick=()=>{world?.skipArrival?.();$('arrival-controls').hidden=true;};

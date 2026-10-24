@@ -24,6 +24,9 @@ a{color:#244d3b;text-decoration-thickness:1.5px;text-underline-offset:3px}
 nav button{color:#304a3c;font-weight:500}
 #game-result{background:#edf0e5;border-left:3px solid #5c724f;padding:10px 12px;color:#223b2e;border-radius:4px}
 #game-result:empty{display:none}
+#game-dialogue{margin:6px 0;padding:7px 10px;border-left:3px solid #607b52;background:#edf1e7;color:#263d32;font-size:14px;line-height:1.55}
+#game-dialogue[hidden]{display:none}
+#reading-content:focus-visible{outline:3px solid #8d3a1c;outline-offset:3px}
 #game-impact{margin:8px 0;padding:10px 12px;background:#edf0e5;border-left:3px solid #5c724f;border-radius:4px;line-height:1.6;font-weight:600}
 #game-full-result{margin:6px 0;color:#304337;font-size:13px}
 #game-full-result summary{min-height:44px;padding:11px 4px;cursor:pointer;font-weight:600}
@@ -42,7 +45,8 @@ body:has(#game[open]) #story{display:none}
 aside{top:135px;border-radius:16px}
 #story{border-radius:16px}
 #story[data-traveling=true] #island-title,#story[data-traveling=true] #chapter-label{display:none}
-#intro{background:transparent}
+#intro{width:100vw;height:100dvh;max-width:none;max-height:none;margin:0;padding:0;border:0;background:transparent}
+#intro::backdrop{background:transparent}
 #intro-caption{position:relative;z-index:1;background:#faf7ef;color:#182f29;padding:10px 16px;border:1px solid #acb8a6;border-radius:8px;max-width:90vw;text-align:center;margin-top:min(62dvh,500px)}
 #skip-intro{position:relative;z-index:1}
 #stamp-list{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:18px}
@@ -68,3 +72,4 @@ aside{top:135px;border-radius:16px}
 body[data-island-preview=true] dialog::backdrop{background:#172f3526;backdrop-filter:none}
 @media(max-width:650px){#story{display:grid;grid-template-rows:minmax(0,1fr) auto auto;overflow:hidden}#story-copy{min-height:0;overflow:auto;overscroll-behavior:contain}#story .actions{z-index:1;padding:5px 0 0;background:#f6f3e9ed}#reader{height:58dvh;max-height:58dvh}}
 @media(max-width:650px){#explore-tip{left:12px;top:133px;width:calc(100vw - 24px);padding:8px 10px;font-size:13px}#game{max-height:48dvh;padding:10px 16px}#game h2{font-size:17px;margin:4px 0}#game-intro{font-size:13px;line-height:1.45;margin:4px 0}#game-controls{font-size:13px;gap:4px}#game-impact{font-size:14px;line-height:1.5;margin:5px 0;padding:7px 9px}#game-full-result{font-size:12px}#game-full-result summary{min-height:40px;padding:9px 4px}#game-after:not([hidden]){grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;padding:5px 0}#game-after button{min-height:44px;padding:5px 2px;font-size:11px;line-height:1.25}#game-after #game-next{font-size:13px}}
+@media(max-width:650px){#game-dialogue{font-size:13px;margin:4px 0;padding:6px 8px}}
