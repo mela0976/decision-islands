@@ -6,7 +6,7 @@ import { createExplorerEngine } from './explorer-scene';
 import { ENTRANCE_DURATION_MS, sampleEntrance } from './entrance';
 import { HOLIDAYS } from './season';
 import type { Season } from './season';
-import type { ExplorerData, ExplorerEngine, ExplorerEvent, ExplorerSelection, ExplorerState } from './explorer-types';
+import type { ExplorerData, ExplorerEngine, ExplorerEvent, ExplorerSelection, ExplorerState, NpcSpeechCue } from './explorer-types';
 
 type Phase = 'cosmos' | 'transition' | 'islands' | 'disposed';
 type Options = {
@@ -16,12 +16,17 @@ type Options = {
 };
 
 export function createWorld(container: HTMLElement, options: Options) {
+  const compact = matchMedia('(max-width: 800px)').matches;
+  const entranceDuration = ENTRANCE_DURATION_MS;
   let phase: Phase = 'cosmos';
   let enabled = !options.reducedMotion;
   let season: Season = options.season ?? 'christmas';
   let ticking = false;
   let frame = 0, lastTick = 0, lastRender = 0, elapsed = 0;
   let visible = true, renderable = false, width = 1, height = 1;
+  let libraryShadersReady = false, engineShadersReady = false, prepareVersion = 0;
+  const pendingCompiles = new Set<Promise<unknown>>();
+  let gpuDisposed = false;
   let renderer: THREE.WebGLRenderer | undefined;
   let environmentTarget: THREE.WebGLRenderTarget | undefined;
   let engine: ExplorerEngine | undefined;
@@ -114,18 +119,24 @@ export function createWorld(container: HTMLElement, options: Options) {
   }
   function render() {
     if (phase === 'disposed' || !renderer || !renderable) return;
-    const shot = phase === 'transition' ? sampleEntrance(elapsed / ENTRANCE_DURATION_MS, width / height) : null;
+    const shot = phase === 'transition' ? sampleEntrance(elapsed / entranceDuration, width / height) : null;
     if (phase === 'islands' || shot?.stage === 'islands') {
-      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      if (!engineShadersReady) return;
       renderer.toneMappingExposure = 1;
       engine?.render(renderer);
     } else {
-      renderer.shadowMap.type = THREE.PCFShadowMap;
+      if (!libraryShadersReady) return;
       renderer.toneMappingExposure = libraryScene.group.visible ? 1 : 1.12;
       scene.environment = libraryScene.group.visible ? environmentTarget?.texture ?? null : null;
       scene.environmentIntensity = .18;
       renderer.render(scene, camera);
     }
+    root.dataset.rendered = 'true';
+    if (!root.dataset.firstFrameMs) {
+      root.dataset.firstFrameMs = String(performance.now());
+      root.dataset.firstFramePhase = phase;
+    }
+    if ((phase === 'islands' || shot?.stage === 'islands') && !root.dataset.islandFrameMs) root.dataset.islandFrameMs = String(performance.now());
   }
   function tick(now: number) {
     frame = 0;
@@ -140,7 +151,7 @@ export function createWorld(container: HTMLElement, options: Options) {
     } else if (phase === 'transition') {
       if (enabled && libraryScene.group.visible) libraryScene.update(delta);
       elapsed += delta * 1000;
-      const progress = Math.min(1, elapsed / ENTRANCE_DURATION_MS);
+      const progress = Math.min(1, elapsed / entranceDuration);
       const shot = sampleEntrance(progress, width / height);
       libraryScene.group.visible = shot.libraryVisible;
       cosmos.visible = shot.cosmosVisible;
@@ -194,21 +205,43 @@ export function createWorld(container: HTMLElement, options: Options) {
     labelHost.inert = true;
     options.onFallback?.(true, message);
   }
+  function disposeGpu() {
+    if (gpuDisposed) return;
+    gpuDisposed = true;
+    libraryScene.dispose();
+    pages.dispose(); covers.dispose(); spines.dispose();
+    cube.dispose(); pageMaterial.dispose(); coverMaterial.dispose(); starGeometry.dispose(); starMaterial.dispose();
+    environmentTarget?.dispose(); renderer?.dispose();
+  }
+  function retainCompile(promise: Promise<unknown>) {
+    pendingCompiles.add(promise);
+    const release = () => {
+      pendingCompiles.delete(promise);
+      if (phase === 'disposed' && !pendingCompiles.size) disposeGpu();
+    };
+    void promise.then(release, release);
+  }
   function contextLost(event: Event) {
     event.preventDefault();
     markFallback(english ? '3D graphics stopped. Reading and the theme map remain available.' : '3D 畫面已停止，仍可使用主題地圖與完整閱讀。');
     completeEnter();
   }
   try {
-    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'low-power' });
-    renderer.shadowMap.enabled = true;
+    renderer = new THREE.WebGLRenderer({ antialias: !compact, alpha: true, powerPreference: 'low-power' });
+    renderer.debug.checkShaderErrors = false;
+    renderer.shadowMap.enabled = !compact;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    const room = new RoomEnvironment();
-    const generator = new THREE.PMREMGenerator(renderer);
-    environmentTarget = generator.fromScene(room, .04);
-    room.traverse(object => { if (object instanceof THREE.InstancedMesh) object.dispose(); });
-    room.dispose(); generator.dispose();
+    if (!compact) {
+      const room = new RoomEnvironment();
+      const generator = new THREE.PMREMGenerator(renderer);
+      environmentTarget = generator.fromScene(room, .04);
+      room.traverse(object => { if (object instanceof THREE.InstancedMesh) object.dispose(); });
+      room.dispose(); generator.dispose();
+    }
+    scene.environment = environmentTarget?.texture ?? null;
+    scene.environmentIntensity = .18;
     renderer.domElement.setAttribute('role', 'img');
     renderer.domElement.setAttribute('aria-label', english ? 'Interactive reading islands. Use arrow keys to rotate; choose a theme from the list to explore.' : '互動閱讀群島。可用方向鍵旋轉，或從主題清單選擇探索。');
     renderer.domElement.tabIndex = 0;
@@ -221,10 +254,10 @@ export function createWorld(container: HTMLElement, options: Options) {
   function resize() {
     const bounds = container.getBoundingClientRect();
     width = Math.max(1, bounds.width); height = Math.max(1, bounds.height);
-    renderer?.setPixelRatio(Math.min(devicePixelRatio, width <= 800 ? 1.4 : 1.75));
+    renderer?.setPixelRatio(Math.min(devicePixelRatio, compact ? 1 : 1.75));
     renderer?.setSize(width, height, false);
     engine?.resize(width, height);
-    if (phase !== 'islands') setEntranceCamera(phase === 'transition' ? elapsed / ENTRANCE_DURATION_MS : 0);
+    if (phase !== 'islands') setEntranceCamera(phase === 'transition' ? elapsed / entranceDuration : 0);
     render(); wake();
   }
   const resizeObserver = new ResizeObserver(resize);
@@ -243,6 +276,19 @@ export function createWorld(container: HTMLElement, options: Options) {
   };
   document.addEventListener('visibilitychange', onVisibility);
   resize();
+  // KHR_parallel_shader_compile lets the browser keep handling input while
+  // the first library programs link. Drawing first would force a GPU readback.
+  if (renderer && renderable) {
+    const compilation = renderer.compileAsync(scene, camera);
+    retainCompile(compilation);
+    void compilation.then(() => {
+      if (phase === 'disposed') return;
+      libraryShadersReady = true;
+      render(); wake();
+    }).catch(() => {
+      if (phase !== 'disposed') markFallback(english ? '3D could not initialize. Reading remains available.' : '3D 暫時無法載入，仍可使用閱讀目錄。');
+    });
+  }
   return {
     enter() {
       if (phase === 'disposed' || phase === 'islands') return Promise.resolve();
@@ -258,10 +304,21 @@ export function createWorld(container: HTMLElement, options: Options) {
       else engine = createExplorerEngine({ data, canvas: renderer.domElement, labelHost, invalidate: wake,
         onSelection: selection => options.onSelection?.(selection), onMinute: minute => options.onMinute?.(minute), onEvents: events => options.onEvents?.(events) });
       if (explorerState) engine.setState(explorerState);
-      engine.resize(width, height); activateEngine(); render(); wake();
+      engine.resize(width, height);
+      engineShadersReady = false;
+      const version = ++prepareVersion;
+      const preparation = engine.prepare(renderer);
+      retainCompile(preparation);
+      void preparation.then(() => {
+        if (phase === 'disposed' || version !== prepareVersion) return;
+        engineShadersReady = true;
+        render(); wake();
+      }).catch(() => { if (phase !== 'disposed' && version === prepareVersion) markFallback(english ? '3D could not initialize. Reading remains available.' : '3D 暫時無法載入，仍可使用閱讀目錄。'); });
+      activateEngine(); render(); wake();
     },
     setState(state: Readonly<ExplorerState>) { explorerState = { ...state }; engine?.setState(state); wake(); },
     setSelection(selection: ExplorerSelection, focus = true) { engine?.setSelection(selection, { focus }); wake(); },
+    setNpcSpeech(cue: NpcSpeechCue | null) { engine?.setNpcSpeech(cue); wake(); },
     setSeason(value: Season) { season = value; root.dataset.season = value; libraryScene.setSeason(value); starMaterial.color.set(HOLIDAYS[value].glow); wake(); render(); },
     setMotion(value: boolean) {
       enabled = value; lastTick = 0;
@@ -280,10 +337,9 @@ export function createWorld(container: HTMLElement, options: Options) {
       resizeObserver.disconnect(); intersectionObserver.disconnect();
       document.removeEventListener('visibilitychange', onVisibility);
       renderer?.domElement.removeEventListener('webglcontextlost', contextLost);
-      engine?.dispose(); libraryScene.dispose();
-      pages.dispose(); covers.dispose(); spines.dispose();
-      cube.dispose(); pageMaterial.dispose(); coverMaterial.dispose(); starGeometry.dispose(); starMaterial.dispose();
-      environmentTarget?.dispose(); renderer?.dispose(); root.remove(); finishEnter?.(); finishEnter = undefined;
+      engine?.dispose();
+      if (!pendingCompiles.size) disposeGpu();
+      root.remove(); finishEnter?.(); finishEnter = undefined;
     },
   };
 }

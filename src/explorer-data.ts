@@ -196,7 +196,7 @@ export function buildExplorerData(config: ExplorerConfig, edition: Edition): Exp
         const { islandIds, ...base } = segment;
         return { ...base, itemIds: curated ? items.filter(i => islandIds.includes(i.islandId)).map(i => i.id) : [] };
     });
-    return { schemaVersion: 1, year: edition.year, title: config.title, seed: config.seed + edition.year - 2026, layout: { ...config.layout }, articles: [...edition.articles], islands, items, flows, roles: config.roles, daySegments, dayKeyframes: config.dayKeyframes };
+    return { schemaVersion: 1, year: edition.year, title: config.title, bookTitle: edition.title, seed: config.seed + edition.year - 2026, layout: { ...config.layout }, articles: [...edition.articles], islands, items, flows, roles: config.roles, daySegments, dayKeyframes: config.dayKeyframes };
 }
 export function initialExplorerState(language: 'zh' | 'en' = 'zh', reducedMotion = false): ExplorerState {
     return { selection: null, language, season: 'christmas', population: 30, query: '', tab: 'themes', minute: 600, paused: false, reducedMotion, names: false, walkers: true, flows: false, journal: false, journalFilter: null, birdseye: false, listOpen: false, detailOpen: false, chapter: null, completedArticleIds: [], bookmarkedArticleIds: [] };

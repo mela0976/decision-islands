@@ -29,7 +29,7 @@ export interface DayKeyframe {
 }
 export interface ExplorerLayout { radius: number; spacing: number; top: number; waterY: number }
 export interface ExplorerData {
-  schemaVersion: 1; year: number; title: I18nText; seed: number; layout: ExplorerLayout;
+  schemaVersion: 1; year: number; title: I18nText; bookTitle: string; seed: number; layout: ExplorerLayout;
   articles: readonly Article[]; islands: readonly ExplorerIsland[]; items: readonly ExplorerItem[];
   flows: readonly ExplorerFlow[]; roles: readonly ExplorerRole[];
   daySegments: readonly DaySegment[]; dayKeyframes: readonly DayKeyframe[];
@@ -46,6 +46,8 @@ export interface ExplorerConfig {
   dayKeyframes: readonly DayKeyframe[];
 }
 export interface ExplorerNpc { id: string; roleId: string; flowId: string | null; homeIslandId: string; articleIds: readonly string[] }
+export type NpcReaction = 'greet' | 'nod' | 'explain' | 'reflect';
+export interface NpcSpeechCue { walkerId: string; token: number; text: string; reaction: NpcReaction }
 export type ExplorerSelection = null | { kind: 'island'; islandId: string } | { kind: 'item'; itemId: string } | { kind: 'walker'; walkerId: string } | { kind: 'flow'; flowId: string };
 export type ExplorerCommand = { type: 'overview' } | { type: 'birdseye'; enabled: boolean } | { type: 'minute'; minute: number } | { type: 'paused'; paused: boolean }
   | { type: 'population'; count: number } | { type: 'season'; season: Season } | { type: 'chapter'; chapter: Chapter | null }
@@ -71,12 +73,12 @@ export interface PathGraph { nodes: readonly PathNode[]; edges: readonly PathEdg
 export interface RoutePath { nodeIds: readonly string[]; points: readonly Vec3[]; cumulative: readonly number[]; length: number }
 export interface WalkerSnapshot {
   id: string; flowId: string; role: string; cargo: CargoKind; position: Vec3; heading: number; phase: number;
-  direction: 1 | -1; status: 'moving' | 'waiting';
+  direction: 1 | -1; status: 'moving' | 'waiting' | 'talking';
 }
 export interface SimulationSnapshot { minute: number; day: DaySnapshot; activeItemIds: readonly string[]; walkers: readonly WalkerSnapshot[] }
 export interface ExplorerSimulation {
   update(dtSeconds: number, moving: boolean): readonly ExplorerEvent[];
-  setPopulation(count: number): void; setMinute(minute: number): void; snapshot(): SimulationSnapshot; reset(): void;
+  setEncounter(walkerId: string | null): void; setPopulation(count: number): void; setMinute(minute: number): void; snapshot(): SimulationSnapshot; reset(): void;
 }
 export interface ModelPlacement { id: string; model: ModelKind; position: Vec3; scale: number; color: string; rotation?: number }
 export interface ModelKit {
@@ -90,7 +92,9 @@ export interface ExplorerEngineOptions {
   onSelection(selection: ExplorerSelection): void; onMinute(minute: number): void; onEvents(events: readonly ExplorerEvent[]): void;
 }
 export interface ExplorerEngine {
+  prepare(renderer: WebGLRenderer): Promise<void>;
   setData(data: ExplorerData): void;
+  setNpcSpeech(cue: NpcSpeechCue | null): void;
   setSelection(selection: ExplorerSelection, options?: { focus?: boolean }): void;
   setState(state: Readonly<ExplorerState>): void; setActive(active: boolean): void;
   resize(width: number, height: number): void; update(dtSeconds: number): { dirty: boolean; continuous: boolean };
@@ -98,6 +102,8 @@ export interface ExplorerEngine {
   getWalkers(): readonly WalkerSnapshot[]; dispose(): void;
 }
 export interface ExplorerUICallbacks {
+  onLayout?(): void;
+  onNpcSpeech(cue: NpcSpeechCue | null): void;
   onSelection(selection: ExplorerSelection): void; onReadArticle(articleId: string): void; onCommand(command: ExplorerCommand): void;
   onThumbnail(itemId: string): string | null;
   onResolveWalker(walkerId: string): WalkerSnapshot | undefined;

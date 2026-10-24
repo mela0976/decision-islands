@@ -2,7 +2,7 @@ import * as T from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import type { ExplorerData, ExplorerEngine, ExplorerEngineOptions, ExplorerSelection, ExplorerState, WalkerSnapshot, ModelKit, Vec3 } from './explorer-types';
+import type { ExplorerData, ExplorerEngine, ExplorerEngineOptions, ExplorerSelection, ExplorerState, WalkerSnapshot, ModelKit, Vec3, NpcSpeechCue } from './explorer-types';
 import { initialExplorerState } from './explorer-data';
 import { axialToWorld, buildPathGraph, findRoute, itemPlacements } from './explorer-graph';
 import { createNpcRoster } from './explorer-npcs';
@@ -57,6 +57,10 @@ export function createExplorerEngine(options: ExplorerEngineOptions): ExplorerEn
   let selection: ExplorerSelection = null, pointer: { x: number; y: number; id: number; moved: boolean } | null = null;
   let flight: { time: number; from: T.Vector3; to: T.Vector3; fromTarget: T.Vector3; target: T.Vector3 } | null = null;
   let targetRT: T.WebGLRenderTarget | null = null;
+  let encounter: string | null = null, speech: NpcSpeechCue | null = null, reactionTime = 1.2;
+  const speechTokens = new Map<string, number>();
+  const bubbleElement = document.createElement('div'); bubbleElement.className = 'explorer-npc-speech'; bubbleElement.setAttribute('aria-hidden', 'true'); bubbleElement.hidden = true;
+  const bubble = new CSS2DObject(bubbleElement); bubble.center.set(.5, 1); scene.add(bubble);
   const invalidate = () => { if (!disposed) { dirty = true; options.invalidate(); } };
   const moving = () => active && !state.paused && !state.reducedMotion;
   const onChange = () => invalidate(); controls.addEventListener('change', onChange);
@@ -202,9 +206,10 @@ export function createExplorerEngine(options: ExplorerEngineOptions): ExplorerEn
       const walkerLabels: Label[] = [];
       const sprites = roster.map(npc => { const sprite = new T.Sprite(cargos.get('book')); sprite.scale.setScalar(.24); sprite.visible = false; walkerGroup.add(sprite); addLabel(new T.Vector3(), '', '', { kind: 'walker', walkerId: npc.id }, 'walker', npc.id); walkerLabels.push(dom.at(-1)!); return sprite; });
       const matrix = new T.Matrix4(), object = new T.Object3D(), rootMatrix = new T.Matrix4(), localMatrix = new T.Matrix4(), q = new T.Quaternion(), scale = new T.Vector3();
-      function updateWalkers(snapshot: readonly WalkerSnapshot[], _animate: boolean) {
+      const headPivot = new T.Vector3(0, .235, 0), xAxis = new T.Vector3(1, 0, 0), yAxis = new T.Vector3(0, 1, 0);
+      const headings = new Map<string, number>();
+      function updateWalkers(snapshot: readonly WalkerSnapshot[], animate: boolean, dt = 0) {
         options.canvas.dataset.npcPopulation = String(snapshot.length);
-        walkerGroup.visible = state.walkers;
         for (const part of parts) part.mesh.count = snapshot.length;
         shadow.count = snapshot.length;
         sprites.forEach((sprite, index) => { if (index >= snapshot.length) sprite.visible = false; });
@@ -212,15 +217,27 @@ export function createExplorerEngine(options: ExplorerEngineOptions): ExplorerEn
         const seasonalAccent = new T.Color(HOLIDAYS[state.season].accent);
         snapshot.forEach((w, index) => {
           const role = data.roles.find(r => r.id === w.role) ?? { accessory: 'badge', color: '#547d8a', skin: '#dbac8a' }, distance = camera.position.distanceTo(v3(w.position)), size = T.MathUtils.clamp(distance / 18, 1.15, 1.65) * (1 + (index % 5 - 2) * .035), phase = w.phase * 20, bob = w.status === 'moving' ? Math.abs(Math.sin(phase)) * .012 : 0;
-          q.setFromAxisAngle(new T.Vector3(0, 1, 0), w.heading); rootMatrix.compose(v3(w.position).add(new T.Vector3(0, bob, 0)), q, scale.setScalar(size));
+          const talking = w.status === 'talking', targetHeading = talking ? Math.atan2(camera.position.x - w.position[0], camera.position.z - w.position[2]) : w.heading;
+          const previousHeading = headings.get(w.id) ?? w.heading, delta = Math.atan2(Math.sin(targetHeading - previousHeading), Math.cos(targetHeading - previousHeading));
+          const heading = talking && animate ? previousHeading + delta * (1 - Math.exp(-dt * 12)) : targetHeading;
+          headings.set(w.id, heading);
+          const reacting = talking && speech?.walkerId === w.id && reactionTime < 1.2 && animate;
+          const envelope = reacting ? Math.sin(Math.PI * reactionTime / 1.2) ** 2 : 0;
+          const nod = envelope * Math.sin(reactionTime * (speech?.reaction === 'nod' ? 12 : 7)) * (speech?.reaction === 'reflect' ? .12 : .22);
+          const gesture = envelope * (speech?.reaction === 'explain' ? .65 : speech?.reaction === 'greet' ? .45 : .16);
+          q.setFromAxisAngle(yAxis, heading); rootMatrix.compose(v3(w.position).add(new T.Vector3(0, bob, 0)), q, scale.setScalar(size));
+          if (talking) { options.canvas.dataset.npcHeading = String(heading); options.canvas.dataset.npcFacingTarget = String(targetHeading); options.canvas.dataset.npcPosition = JSON.stringify(w.position); }
           for (const part of parts) {
             const walking = w.status === 'moving', arm = part.offset.y === .153, leg = part.offset.y === .056;
             let swing = walking && part.swing ? Math.sin(phase) * part.swing : 0;
             if (arm && (role.accessory === 'stroller' || role.accessory === 'bicycle')) swing = -.7;
+            else if (arm && part.offset.x > 0 && role.accessory !== 'cane' && role.accessory !== 'suitcase') swing -= gesture;
             if (leg && role.accessory === 'bicycle') swing = -.45 + (walking ? Math.sin(phase) * (part.swing ?? 0) * .55 : 0);
             object.position.copy(part.offset);
             if (arm || leg) { const pivot = arm ? .21 : .105, length = pivot - part.offset.y; object.position.y = pivot - Math.cos(swing) * length; object.position.z -= Math.sin(swing) * length; }
             object.rotation.set(swing, part.rotation ?? 0, 0); object.scale.copy(part.scale);
+            if (part.offset.y >= .28) { object.position.sub(headPivot).applyAxisAngle(xAxis, nod).add(headPivot); object.rotation.x += nod; }
+            if (arm && role.accessory !== 'stroller' && role.accessory !== 'bicycle') object.rotation.z = Math.sign(part.offset.x) * gesture * .28;
             if (part.filter && role.accessory !== part.filter) object.scale.setScalar(0);
             object.updateMatrix(); localMatrix.copy(object.matrix); matrix.multiplyMatrices(rootMatrix, localMatrix); part.mesh.setMatrixAt(index, matrix);
             if (!part.filter && part.offset.y === .14) part.mesh.setColorAt(index, new T.Color(role.color).lerp(seasonalAccent, .22));
@@ -234,11 +251,18 @@ export function createExplorerEngine(options: ExplorerEngineOptions): ExplorerEn
         });
         for (const part of parts) { part.mesh.instanceMatrix.needsUpdate = true; part.mesh.boundingSphere = null; if (part.mesh.instanceColor) part.mesh.instanceColor.needsUpdate = true; } shadow.instanceMatrix.needsUpdate = true;
       }
-      return { data, group, smallObjects, decorGlow, decorPools, get lastSeason() { return lastSeason; }, set lastSeason(value) { lastSeason = value; }, kit: builtKit, environment, graph, simulation, placements, dom, hits, islandHits, parts, flows, wall, updateWalkers, dispose() { kit!.dispose(); environment!.dispose(); for (const label of dom) label.element.remove(); for (const resource of owned) resource.dispose(); group.clear(); } };
+      return { data, group, walkerGroup, smallObjects, decorGlow, decorPools, get lastSeason() { return lastSeason; }, set lastSeason(value) { lastSeason = value; }, kit: builtKit, environment, graph, simulation, placements, dom, hits, islandHits, parts, flows, wall, updateWalkers, dispose() { kit!.dispose(); environment!.dispose(); for (const label of dom) label.element.remove(); for (const resource of owned) resource.dispose(); group.clear(); } };
     } catch (error) { kit?.dispose(); environment?.dispose(); for (const label of dom) label.element.remove(); for (const resource of owned) resource.dispose(); throw error; }
   }
   let resources: ReturnType<typeof build>;
   try { resources = build(options.data); } catch (error) { controls.dispose(); labels.domElement.remove(); if (originalTabindex === null) options.canvas.removeAttribute('tabindex'); throw error; }
+  const pendingPreparations = new Map<ReturnType<typeof build>, number>();
+  const retiredResources = new Set<ReturnType<typeof build>>();
+  function retire(value: ReturnType<typeof build>) {
+    for (const label of value.dom) label.element.remove();
+    if (pendingPreparations.has(value)) retiredResources.add(value);
+    else value.dispose();
+  }
   scene.add(resources.group); scene.fog = resources.environment.fog;
   function selectedIsland(): string | null {
     const current = selection;
@@ -246,8 +270,20 @@ export function createExplorerEngine(options: ExplorerEngineOptions): ExplorerEn
     if (current?.kind === 'item') return resources.data.items.find(i => i.id === current.itemId)?.islandId ?? null;
     return null;
   }
+  function syncEncounter() {
+    const current = selection;
+    const next = active && state.walkers && state.detailOpen && !state.listOpen && current?.kind === 'walker' && resources.simulation.snapshot().walkers.some(w => w.id === current.walkerId) ? current.walkerId : null;
+    if (next !== encounter) { speech = null; reactionTime = 1.2; }
+    encounter = next; resources.simulation.setEncounter(next);
+    options.canvas.dataset.npcEncounter = next ?? '';
+    options.canvas.dataset.npcReaction = speech && reactionTime < 1.2 && moving() ? speech.reaction : '';
+    bubbleElement.hidden = !speech || speech.walkerId !== next;
+    if (!bubbleElement.hidden) { const walker = resources.simulation.snapshot().walkers.find(w => w.id === next)!; bubble.position.copy(v3(walker.position)).add(new T.Vector3(0, .75, 0)); bubbleElement.textContent = `「${speech!.text}」`; }
+  }
   function refresh() {
+    syncEncounter();
     const snap = resources.simulation.snapshot(), ids = new Set<string>(); const island = selectedIsland();
+    resources.walkerGroup.visible = state.walkers;
     if (selection?.kind === 'item') ids.add(selection.itemId);
     else if (island) resources.data.islands.find(i => i.id === island)?.itemIds.forEach(id => ids.add(id));
     resources.kit.highlight(ids, new Set(snap.activeItemIds)); resources.kit.setNight(snap.day.night); resources.environment.applyDay(snap.day); if (resources.lastSeason !== state.season) { resources.environment.setSeason(state.season); resources.lastSeason = state.season; }
@@ -261,7 +297,7 @@ export function createExplorerEngine(options: ExplorerEngineOptions): ExplorerEn
       l.element.setAttribute('aria-label', l.full); l.element.setAttribute('aria-pressed', String(JSON.stringify(l.selection) === JSON.stringify(selection)));
     }
     resources.group.traverse(o => { if (o.userData.pinIsland) o.visible = o.userData.pinIsland === island; });
-    resources.updateWalkers(snap.walkers, moving()); invalidate();
+    invalidate();
   }
   function flyTo(target: T.Vector3, offset: T.Vector3) {
     if (state.detailOpen && width > 800) target.x += 1.5;
@@ -310,6 +346,23 @@ export function createExplorerEngine(options: ExplorerEngineOptions): ExplorerEn
   function collideLabels() {
     const viewport = options.canvas.getBoundingClientRect(), panels = Array.from(document.querySelectorAll<HTMLElement>('[data-explorer-panel]')).filter(e => !e.hidden && getComputedStyle(e).display !== 'none').map(e => e.getBoundingClientRect());
     const occupied: DOMRect[] = [], snap = resources.simulation.snapshot(), island = selectedIsland();
+    if (!bubbleElement.hidden) {
+      const projected = bubble.getWorldPosition(new T.Vector3()).project(camera);
+      bubbleElement.style.translate = '0px 0px';
+      bubbleElement.style.visibility = projected.z < -1 || projected.z > 1 ? 'hidden' : 'visible';
+      const rect = bubbleElement.getBoundingClientRect();
+      const xs = [0, viewport.left + 8 - rect.left, viewport.right - 8 - rect.right, ...panels.flatMap(p => [p.left - 10 - rect.right, p.right + 10 - rect.left])];
+      const ys = [0, viewport.top + 8 - rect.top, viewport.bottom - 8 - rect.bottom, ...panels.flatMap(p => [p.top - 10 - rect.bottom, p.bottom + 10 - rect.top])];
+      let placement: { x: number; y: number; cost: number } | null = null;
+      for (const x of xs) for (const y of ys) {
+        if (rect.left + x < viewport.left + 7 || rect.right + x > viewport.right - 7 || rect.top + y < viewport.top + 7 || rect.bottom + y > viewport.bottom - 7) continue;
+        if (panels.some(p => rect.left + x < p.right + 6 && rect.right + x > p.left - 6 && rect.top + y < p.bottom + 6 && rect.bottom + y > p.top - 6)) continue;
+        const cost = x * x + y * y + Math.max(0, y) * 20;
+        if (!placement || cost < placement.cost) placement = { x, y, cost };
+      }
+      if (placement) { bubbleElement.style.translate = `${placement.x}px ${placement.y}px`; occupied.push(bubbleElement.getBoundingClientRect()); }
+      else bubbleElement.style.visibility = 'hidden';
+    }
     for (const label of resources.dom) {
       const walker = label.type === 'walker' ? snap.walkers.find(w => w.id === label.owner) : null;
       const eligible = label.type === 'island' || label.type === 'item' && resources.data.items.find(i => i.id === label.owner)?.islandId === island || label.type === 'walker' && state.names && state.walkers && !!walker && camera.position.distanceTo(v3(walker.position)) < 14;
@@ -325,10 +378,26 @@ export function createExplorerEngine(options: ExplorerEngineOptions): ExplorerEn
   }
   overview(); refresh(); options.labelHost.hidden = true; options.labelHost.inert = true;
   return {
-    setData(data) { if (disposed) return; const next = build(data); const old = resources; resources = next; scene.add(next.group); scene.remove(old.group); scene.fog = next.environment.fog; selection = null; pointer = null; flight = null; elapsed = 0; next.simulation.setMinute(state.minute); next.environment.setMobile(width <= 800); old.dispose(); refresh(); },
+    async prepare(renderer: T.WebGLRenderer) {
+      if (disposed) return;
+      const preparing = resources;
+      pendingPreparations.set(preparing, (pendingPreparations.get(preparing) ?? 0) + 1);
+      try {
+        preparing.updateWalkers(preparing.simulation.snapshot().walkers, moving());
+        scene.updateMatrixWorld(true); camera.updateMatrixWorld(true);
+        await renderer.compileAsync(scene, camera);
+      } finally {
+        const remaining = pendingPreparations.get(preparing)! - 1;
+        if (remaining) pendingPreparations.set(preparing, remaining);
+        else { pendingPreparations.delete(preparing); if (retiredResources.delete(preparing)) preparing.dispose(); }
+      }
+    },
+    setData(data) { if (disposed) return; const next = build(data); const old = resources; resources = next; scene.add(next.group); scene.remove(old.group); scene.fog = next.environment.fog; selection = null; pointer = null; flight = null; elapsed = 0; speech = null; speechTokens.clear(); reactionTime = 1.2; next.simulation.setMinute(state.minute); next.environment.setMobile(width <= 800); retire(old); refresh(); },
+    setNpcSpeech(cue) { if (disposed) return; if (!cue) { speech = null; reactionTime = 1.2; refresh(); return; } if (cue.walkerId !== encounter || !Number.isSafeInteger(cue.token) || typeof cue.text !== 'string' || !['greet', 'nod', 'explain', 'reflect'].includes(cue.reaction) || cue.token <= (speechTokens.get(cue.walkerId) ?? -Infinity)) return; speechTokens.set(cue.walkerId, cue.token); speech = { ...cue }; reactionTime = moving() ? 0 : 1.2; refresh(); },
     setSelection(value, config) { if (!disposed) setSelection(value, config?.focus !== false); },
     setState(next) {
       if (disposed) return; const previous = state; state = { ...next };
+      if (!moving()) reactionTime = 1.2;
       if (next.population !== previous.population) resources.simulation.setPopulation(next.population);
       if (Math.abs(next.minute - resources.simulation.snapshot().minute) > .00001) resources.simulation.setMinute(next.minute);
       controls.enableDamping = moving(); controls.minPolarAngle = next.birdseye ? 0 : T.MathUtils.degToRad(25);
@@ -338,19 +407,21 @@ export function createExplorerEngine(options: ExplorerEngineOptions): ExplorerEn
       if (next.birdseye !== previous.birdseye) { if (next.birdseye) flyTo(controls.target.clone(), new T.Vector3(.01, 42, 6)); else overview(); }
       refresh();
     },
-    setActive(value) { if (disposed || active === value) return; active = value; pointer = null; options.labelHost.hidden = !value; options.labelHost.inert = !value; controls.enabled = value; controls.enableDamping = moving(); if (value) controls.connect(options.canvas); else { controls.disconnect(); flight = null; } invalidate(); },
+    setActive(value) { if (disposed || active === value) return; active = value; pointer = null; options.labelHost.hidden = !value; options.labelHost.inert = !value; controls.enabled = value; controls.enableDamping = moving(); if (value) controls.connect(options.canvas); else { controls.disconnect(); flight = null; speech = null; reactionTime = 1.2; } refresh(); },
     resize(w, h) { width = Math.max(1, w); height = Math.max(1, h); camera.aspect = width / height; camera.updateProjectionMatrix(); labels.setSize(width, height); resources.environment.setMobile(width <= 800); if (!selection && !state.birdseye) overview(); invalidate(); },
     update(dtSeconds) {
       if (disposed || !active) return { dirty: false, continuous: false };
       const motion = moving(), dt = Number.isFinite(dtSeconds) ? Math.max(0, dtSeconds) : 0;
+      if (motion) reactionTime = Math.min(1.2, reactionTime + dt);
+      else reactionTime = 1.2;
       if (motion) { elapsed += dt; const events = resources.simulation.update(dt, true); if (events.length) options.onEvents(events.slice(-100)); const snapshot = resources.simulation.snapshot(); options.onMinute(snapshot.minute); resources.environment.update(dt); for (const flow of resources.flows) flow.shader.uniforms.time.value = elapsed; refresh(); }
       else resources.environment.update(0);
       if (flight && motion) { flight.time += dt; const p = Math.min(1, flight.time / .8), ease = p < .5 ? 4 * p ** 3 : 1 - (-2 * p + 2) ** 3 / 2; camera.position.copy(flight.from).lerp(flight.to, ease); controls.target.copy(flight.fromTarget).lerp(flight.target, ease); camera.lookAt(controls.target); if (p === 1) flight = null; dirty = true; }
       else if (motion) controls.update();
-      resources.updateWalkers(resources.simulation.snapshot().walkers, motion);
+      resources.updateWalkers(resources.simulation.snapshot().walkers, motion, dt);
       return { dirty, continuous: motion || !!flight };
     },
-    render(renderer) { if (disposed) return; renderer.toneMappingExposure = 1; resources.smallObjects.visible = camera.position.distanceTo(controls.target) < 26; scene.updateMatrixWorld(true); camera.updateMatrixWorld(true); renderer.render(scene, camera); if (active) { labels.render(scene, camera); collideLabels(); } dirty = false; },
+    render(renderer) { if (disposed) return; renderer.toneMappingExposure = 1; resources.updateWalkers(resources.simulation.snapshot().walkers, moving()); resources.smallObjects.visible = camera.position.distanceTo(controls.target) < 26; scene.updateMatrixWorld(true); camera.updateMatrixWorld(true); renderer.render(scene, camera); if (active) { labels.render(scene, camera); collideLabels(); } dirty = false; },
     thumbnail(itemId, renderer) {
       if (disposed) return null; const item = resources.data.items.find(i => i.id === itemId); if (!item) return null;
       let preview: ModelKit | undefined;
@@ -366,6 +437,6 @@ export function createExplorerEngine(options: ExplorerEngineOptions): ExplorerEn
       finally { preview?.dispose(); renderer.setRenderTarget(previousTarget, cubeFace, mipmap); renderer.setViewport(viewport); renderer.setScissor(scissor); renderer.setScissorTest(scissorTest); renderer.setClearColor(clearColor, clearAlpha); renderer.autoClear = autoClear; renderer.toneMappingExposure = exposure; renderer.shadowMap.enabled = shadowEnabled; renderer.shadowMap.autoUpdate = shadowAuto; }
     },
     getWalkers() { return resources.simulation.snapshot().walkers; },
-    dispose() { if (disposed) return; disposed = true; active = false; controls.removeEventListener('change', onChange); controls.dispose(); resources.dispose(); targetRT?.dispose(); labels.domElement.remove(); options.labelHost.hidden = true; options.labelHost.inert = true; options.canvas.removeEventListener('pointerdown', down); options.canvas.removeEventListener('pointermove', move); options.canvas.removeEventListener('pointerup', up); options.canvas.removeEventListener('pointercancel', cancel); options.canvas.removeEventListener('keydown', keydown); scene.clear(); if (originalTabindex === null) options.canvas.removeAttribute('tabindex'); }
+    dispose() { if (disposed) return; disposed = true; active = false; controls.removeEventListener('change', onChange); controls.dispose(); retire(resources); targetRT?.dispose(); labels.domElement.remove(); options.labelHost.hidden = true; options.labelHost.inert = true; options.canvas.removeEventListener('pointerdown', down); options.canvas.removeEventListener('pointermove', move); options.canvas.removeEventListener('pointerup', up); options.canvas.removeEventListener('pointercancel', cancel); options.canvas.removeEventListener('keydown', keydown); scene.clear(); if (originalTabindex === null) options.canvas.removeAttribute('tabindex'); }
   };
 }

@@ -52,3 +52,37 @@ test('uncurated editions retain local walking readers and never inherit previous
   assert.notDeepEqual(sim.snapshot().walkers.map(w => w.position), before.walkers.map(w => w.position));
   assert.ok(sim.snapshot().walkers.every(w => w.flowId === '' && w.position.every(Number.isFinite)));
 });
+
+test('encounter holds only its walker with exact route and gait continuity through release', () => {
+  const graph = buildPathGraph(data), sim = createSimulation(data, graph, 100), control = createSimulation(data, graph, 100);
+  sim.update(2.3, true); control.update(2.3, true);
+  const before = sim.snapshot(), target = before.walkers[0];
+  sim.setEncounter(target.id); sim.setEncounter(target.id);
+  const events = sim.update(31.7, true), held = sim.snapshot();
+  assert.deepEqual(held.walkers[0], { ...target, status: 'talking' });
+  assert.notDeepEqual(held.walkers[1].position, before.walkers[1].position);
+  assert.equal(held.minute, (before.minute + 317) % 1440);
+  assert.ok(events.every(event => event.walkerId !== target.id));
+  sim.setEncounter(null); assert.deepEqual(sim.snapshot().walkers[0], target);
+  sim.update(.37, true); control.update(.37, true);
+  assert.deepEqual(sim.snapshot().walkers[0], control.snapshot().walkers[0]);
+  sim.setEncounter('missing'); assert.ok(sim.snapshot().walkers.every(w => w.status !== 'talking'));
+  sim.setEncounter(sim.snapshot().walkers[99].id); sim.setPopulation(10); sim.setPopulation(100);
+  assert.ok(sim.snapshot().walkers.every(w => w.status !== 'talking'));
+});
+
+test('encounter preserves an endpoint wait and emits its real handoff only after release', () => {
+  const graph = buildPathGraph(data), sim = createSimulation(data, graph, 10), control = createSimulation(data, graph, 10);
+  let target;
+  for (let i = 0; i < 10000 && !target; i++) { sim.update(.05, true); control.update(.05, true); target = sim.snapshot().walkers.find(w => w.flowId && w.status === 'waiting'); }
+  assert.ok(target, 'a flow walker reaches an endpoint');
+  sim.setEncounter(target.id); assert.ok(sim.update(100, true).every(e => e.walkerId !== target.id));
+  assert.deepEqual(sim.snapshot().walkers.find(w => w.id === target.id), { ...target, status: 'talking' });
+  sim.setEncounter(null);
+  for (const dt of [.1, .3, .6, .5, .2]) {
+    const actual = sim.update(dt, true).filter(e => e.walkerId === target.id).map(e => [e.type, e.flowId, e.islandId]);
+    const expected = control.update(dt, true).filter(e => e.walkerId === target.id).map(e => [e.type, e.flowId, e.islandId]);
+    assert.deepEqual(actual, expected);
+    assert.deepEqual(sim.snapshot().walkers.find(w => w.id === target.id), control.snapshot().walkers.find(w => w.id === target.id));
+  }
+});

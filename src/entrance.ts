@@ -1,4 +1,4 @@
-export const ENTRANCE_DURATION_MS = 6500;
+export const ENTRANCE_DURATION_MS = 900;
 
 type Point = [number, number, number];
 export type EntranceSample = {

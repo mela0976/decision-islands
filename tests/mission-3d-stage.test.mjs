@@ -344,7 +344,7 @@ test('real WebGL mission actors articulate, interact, retarget, and stop renderi
     await mkdir('test-results/mission-3d',{recursive:true});
     await page.screenshot({path:'test-results/mission-3d/initial.png'});
     await page.evaluate(() => {window.input.previewChoiceId='a';window.stage.update(window.input);});
-    await page.clock.fastForward(420);
+    await page.clock.fastForward(210);
     const moving = await snapshot(page);
     assert.equal(moving.animating,true);
     assert.ok(person(moving).position[0] > -3 && person(moving).position[0] < .6,'actor walks through real 3D positions');
@@ -353,7 +353,7 @@ test('real WebGL mission actors articulate, interact, retarget, and stop renderi
     await page.evaluate(() => {window.input.previewChoiceId=null;window.input.choiceId='a';window.stage.update(window.input);});
     const adopted = await snapshot(page);
     assert.ok(adopted.progress>=moving.progress,'accepting preview preserves ongoing physical animation');
-    await page.clock.fastForward(780);
+    await page.clock.fastForward(390);
     const working = await snapshot(page);
     assert.ok(working.progress>.4 && working.progress<.85);
     assert.ok(Math.abs(person(working).joints[9])>.4,'actor reaches forward during performance');

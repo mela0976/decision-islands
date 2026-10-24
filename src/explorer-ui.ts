@@ -1,7 +1,7 @@
 import './explorer.css';
 import { HOLIDAYS } from './season';
 import { createNpcRoster } from './explorer-npcs';
-import { buildNpcDialogueProfile, createNpcReply, getNpcDialogueQuestions, type NpcQuestionId } from './npc-dialogue';
+import { buildNpcDialogueProfile, createNpcReply, getNpcDialogueQuestions, getNpcSituation, type NpcQuestionId } from './npc-dialogue';
 import type { Article, Chapter } from './types';
 import type {
   ExplorerCommand,
@@ -17,6 +17,7 @@ import type {
   ExplorerUICallbacks,
   FlowEvidence,
   ModelKind,
+  NpcSpeechCue,
   WalkerSnapshot,
 } from './explorer-types';
 
@@ -24,7 +25,7 @@ type CopyKey = keyof typeof COPY;
 type ChapterFilter = Chapter | null;
 type ListFocusKey = { attribute: 'data-item-id' | 'data-island-id' | 'data-flow-id' | 'data-article-id'; value: string };
 type NpcDialogueTurn = { articleId: string; questionId: NpcQuestionId };
-type ActiveNpcDialogue = { dataVersion: number; npcId: string; articleId: string | null; history: NpcDialogueTurn[] };
+type ActiveNpcDialogue = { dataVersion: number; npcId: string; roleId: string; articleId: string | null; history: NpcDialogueTurn[]; openingSpeechPending: boolean };
 
 const COPY = {
   region: { zh: '決策群島探索介面', en: 'Decision Islands explorer interface' },
@@ -105,7 +106,10 @@ const COPY = {
   npcNoSummary: { zh: '目前書目沒有提供這篇文章的摘要。', en: 'This edition does not provide a summary for this article.' },
   npcSiteSummary: { zh: '本站摘要', en: 'Site summary' },
   npcMoreArticles: { zh: '更多文章', en: 'More articles' },
-  npcQuestionsTitle: { zh: '想聊哪個問題？', en: 'Choose a question' },
+  npcScenarioTitle: { zh: '目前情境', en: 'Current situation' },
+  npcQuestionsTitle: { zh: '接著可以問', en: 'Ask about this situation' },
+  npcOtherTopics: { zh: '聊聊其他文章', en: 'Browse other articles' },
+  npcHistory: { zh: '最近的問答', en: 'Recent questions' },
   npcNextTopic: { zh: '換個話題', en: 'Change topic' },
   npcRestart: { zh: '重新開始', en: 'Restart conversation' },
   npcBackToList: { zh: '返回閱讀夥伴清單', en: 'Back to reading partners' },
@@ -178,6 +182,11 @@ const MODEL_SHAPES: Record<ModelKind, string> = {
 };
 
 const EVENT_LIMIT = 100;
+const NPC_QUESTION_REACTIONS: Record<NpcQuestionId, NpcSpeechCue['reaction']> = {
+  summary: 'explain',
+  highlight: 'reflect',
+  source: 'nod',
+};
 const PRESETS = [
   { minute: 360, label: 'dawn' as const, icon: '◒' },
   { minute: 720, label: 'day' as const, icon: '☼' },
@@ -219,6 +228,23 @@ function minuteLabel(minute: number): string {
   return `${String(Math.floor(normalized / 60)).padStart(2, '0')}:${String(normalized % 60).padStart(2, '0')}`;
 }
 
+function npcSpeechPreview(text: string): string {
+  const normalized = text.trim().replace(/\s+/gu, ' ');
+  let boundary = -1;
+  for (const punctuation of normalized.matchAll(/[。！？.!?]/gu)) {
+    const index = punctuation.index ?? -1;
+    if (punctuation[0] === '.' && /^\s*\d/u.test(normalized.slice(index + 1))) continue;
+    boundary = index;
+    break;
+  }
+  const sentence = boundary >= 0 ? normalized.slice(0, boundary + 1) : normalized;
+  const characters = Array.from(sentence);
+  if (characters.length <= 140) return sentence;
+  const shortened = characters.slice(0, 139).join('');
+  const space = shortened.lastIndexOf(' ');
+  return `${(space > 100 ? shortened.slice(0, space) : shortened).trimEnd()}…`;
+}
+
 function focusableTarget(target: EventTarget | null): target is HTMLElement {
   return target instanceof HTMLElement;
 }
@@ -245,6 +271,14 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
   let npcRoster: readonly ExplorerNpc[] = [];
   let lastRenderedSelectionKey = 'none';
   let activeNpcDialogue: ActiveNpcDialogue | null = null;
+  let npcSpeechRevision = 0;
+  let npcSpeechToken = 0;
+  let speakingNpcId: string | null = null;
+  let speechLayoutObserver: ResizeObserver | null = null;
+  let observingSpeechLayout = false;
+  let layoutFrame: number | null = null;
+  let layoutPending = false;
+  let disposed = false;
   let events: ExplorerEvent[] = [];
   let eventRevision = 0;
   const eventIds = new Set<number>();
@@ -255,6 +289,107 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
   let detailWasOpen = false;
   let npcListTrigger: HTMLElement | null = null;
   let npcListWasOpen = false;
+
+  function canNpcSpeak(walkerId: string): boolean {
+    return !disposed
+      && active
+      && !fallback
+      && state?.detailOpen === true
+      && state.listOpen === false
+      && !npcListOpen
+      && !document.querySelector('dialog[open]')
+      && state.selection?.kind === 'walker'
+      && state.selection.walkerId === walkerId
+      && currentNpcRoster().some(npc => npc.id === walkerId);
+  }
+
+  function requestLayoutInvalidation(): void {
+    if (disposed || !active || layoutPending) return;
+    layoutPending = true;
+    if (typeof requestAnimationFrame !== 'function') {
+      queueMicrotask(() => {
+        layoutPending = false;
+        if (!disposed && active) callbacks.onLayout?.();
+      });
+      return;
+    }
+    layoutFrame = requestAnimationFrame(() => {
+      layoutFrame = null;
+      layoutPending = false;
+      if (!disposed && active) callbacks.onLayout?.();
+    });
+  }
+
+  function syncSpeechLayoutObserver(): void {
+    const shouldObserve = !!speakingNpcId && canNpcSpeak(speakingNpcId);
+    if (!shouldObserve) {
+      if (observingSpeechLayout) speechLayoutObserver?.disconnect();
+      observingSpeechLayout = false;
+      return;
+    }
+    if (observingSpeechLayout || typeof ResizeObserver === 'undefined') return;
+    speechLayoutObserver ??= new ResizeObserver(requestLayoutInvalidation);
+    speechLayoutObserver.observe(detailPanel);
+    speechLayoutObserver.observe(toolbar);
+    observingSpeechLayout = true;
+  }
+
+  function clearNpcSpeech(): void {
+    npcSpeechRevision += 1;
+    const wasSpeaking = !!speakingNpcId;
+    speakingNpcId = null;
+    syncSpeechLayoutObserver();
+    if (wasSpeaking) callbacks.onNpcSpeech(null);
+  }
+
+  function emitNpcSpeech(walkerId: string, text: string, reaction: NpcSpeechCue['reaction']): void {
+    npcSpeechRevision += 1;
+    if (!canNpcSpeak(walkerId)) {
+      clearNpcSpeech();
+      return;
+    }
+    const preview = npcSpeechPreview(text);
+    if (!preview) {
+      clearNpcSpeech();
+      return;
+    }
+    speakingNpcId = walkerId;
+    callbacks.onNpcSpeech({ walkerId, token: ++npcSpeechToken, text: preview, reaction });
+    syncSpeechLayoutObserver();
+    requestLayoutInvalidation();
+  }
+
+  function queueNpcOpeningSpeech(dialogue: ActiveNpcDialogue, text: string): void {
+    if (!dialogue.openingSpeechPending || !canNpcSpeak(dialogue.npcId)) return;
+    const revision = ++npcSpeechRevision;
+    const expectedDataVersion = dataVersion;
+    const expectedArticleId = dialogue.articleId;
+    queueMicrotask(() => {
+      if (revision !== npcSpeechRevision
+        || dataVersion !== expectedDataVersion
+        || activeNpcDialogue !== dialogue
+        || dialogue.articleId !== expectedArticleId
+        || !dialogue.openingSpeechPending
+        || !canNpcSpeak(dialogue.npcId)) return;
+      const preview = npcSpeechPreview(text);
+      if (!preview) return;
+      dialogue.openingSpeechPending = false;
+      speakingNpcId = dialogue.npcId;
+      callbacks.onNpcSpeech({ walkerId: dialogue.npcId, token: ++npcSpeechToken, text: preview, reaction: 'greet' });
+      syncSpeechLayoutObserver();
+      requestLayoutInvalidation();
+    });
+  }
+
+  function queueCurrentNpcOpeningSpeech(): void {
+    const selection = state?.selection;
+    const dialogue = activeNpcDialogue;
+    if (!state?.detailOpen || selection?.kind !== 'walker' || dialogue?.npcId !== selection.walkerId || !dialogue.openingSpeechPending) return;
+    const article = dialogue.articleId ? data.articles.find(value => value.id === dialogue.articleId) : undefined;
+    if (!article) return;
+    const situation = getNpcSituation(article, dialogue.roleId, state.language, data.bookTitle);
+    queueNpcOpeningSpeech(dialogue, situation.opening);
+  }
 
   const root = node('div', 'explorer-ui');
   root.setAttribute('role', 'region');
@@ -610,6 +745,7 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
       closeNpcList(true);
       return;
     }
+    clearNpcSpeech();
     npcListTrigger = npcListButton;
     if (state.listOpen) callbacks.onCommand({ type: 'panel', panel: 'list', open: false });
     if (state.detailOpen) callbacks.onCommand({ type: 'panel', panel: 'detail', open: false });
@@ -623,6 +759,7 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
   function selectNpc(walkerId: string): void {
     const npc = currentNpcRoster().find(value => value.id === walkerId);
     if (!npc) return;
+    clearNpcSpeech();
     detailTrigger = npcListButton;
     npcListOpen = false;
     callbacks.onSelection({ kind: 'walker', walkerId });
@@ -666,6 +803,10 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
     if (!state) return;
     const listOpen = state.listOpen;
     const detailOpen = state.detailOpen && state.selection !== null;
+    if (active && detailOpen && !detailWasOpen && state.selection?.kind === 'walker' && activeNpcDialogue?.npcId === state.selection.walkerId) {
+      activeNpcDialogue.openingSpeechPending = true;
+    }
+    if (!detailOpen || listOpen || !active || (speakingNpcId && !canNpcSpeak(speakingNpcId))) clearNpcSpeech();
     listPanel.hidden = !listOpen;
     listPanel.inert = !listOpen || !active;
     detailPanel.hidden = !detailOpen;
@@ -675,7 +816,7 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
     if (active && listWasOpen && !listOpen) (listTrigger ?? listButton).focus();
     if (active && detailWasOpen && !detailOpen) (findDetailReturnTarget() ?? (listOpen ? listButton : overviewButton)).focus();
     listWasOpen = listOpen;
-    detailWasOpen = detailOpen;
+    detailWasOpen = active && detailOpen;
     listHandle.setAttribute('aria-expanded', String(listOpen && listPanel.dataset.expanded === 'true'));
     detailHandle.setAttribute('aria-expanded', String(detailOpen && detailPanel.dataset.expanded === 'true'));
   }
@@ -1094,8 +1235,10 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
       activeNpcDialogue = {
         dataVersion,
         npcId: npc.id,
+        roleId: profileNpc.roleId,
         articleId: profile.topics[0]?.id ?? profile.moreArticles[0]?.id ?? null,
         history: [],
+        openingSpeechPending: true,
       };
     }
     const dialogue = activeNpcDialogue;
@@ -1107,16 +1250,29 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
     else detailTitle.style.removeProperty('--npc-role-color');
     detailContent.replaceChildren();
 
-    const greeting = node('p', 'explorer-npc-greeting', profile.greeting);
-    if (profile.roleColor) greeting.style.setProperty('--npc-role-color', profile.roleColor);
+    const situationPanel = node('section', 'explorer-npc-situation');
+    situationPanel.dataset.npcSituation = '';
+    situationPanel.setAttribute('aria-label', tr('npcScenarioTitle'));
     const topicChoices = node('div', 'explorer-npc-topics');
     topicChoices.setAttribute('aria-label', COPY.npcListTitle[language]);
+    const topicsDisclosure = node('details', 'explorer-npc-topics-shell');
+    const topicsLabel = node('summary', '', `${tr('npcOtherTopics')} (${articles.length})`);
+    topicsDisclosure.append(topicsLabel, topicChoices);
     const articleCard = node('section', 'explorer-npc-article');
+    const latestReply = node('section', 'explorer-npc-latest');
+    latestReply.hidden = true;
+    latestReply.setAttribute('role', 'status');
+    latestReply.setAttribute('aria-label', tr('npcGuide'));
+    const latestQuestion = node('p', 'explorer-npc-user-message');
+    const latestAnswer = node('p', 'explorer-npc-reply');
+    latestAnswer.dataset.npcReply = '';
+    latestReply.append(latestQuestion, latestAnswer);
+    const historyDisclosure = node('details', 'explorer-npc-history');
+    historyDisclosure.hidden = true;
+    const historySummary = node('summary', '', tr('npcHistory'));
     const chatLog = node('ol', 'explorer-npc-chat');
-    chatLog.setAttribute('role', 'log');
-    chatLog.setAttribute('aria-live', 'polite');
-    chatLog.setAttribute('aria-relevant', 'additions');
     chatLog.setAttribute('aria-label', `${profile.roleTitle} ${language === 'zh' ? '對話' : 'conversation'}`);
+    historyDisclosure.append(historySummary, chatLog);
 
     const topicButtons = new Map<string, HTMLButtonElement>();
     const makeTopicButton = (article: Article, more = false): HTMLButtonElement => {
@@ -1129,7 +1285,7 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
     let moreTopics: HTMLDetailsElement | null = null;
     if (profile.moreArticles.length) {
       moreTopics = node('details', 'explorer-npc-more');
-      const moreLabel = node('summary', '', `${tr('npcMoreArticles')} · ${profile.moreArticles.length}`);
+      const moreLabel = node('summary', '', `${tr('npcMoreArticles')} (${profile.moreArticles.length})`);
       moreTopics.append(moreLabel);
       const moreList = node('div', 'explorer-npc-more-list');
       for (const article of profile.moreArticles) moreList.append(makeTopicButton(article, true));
@@ -1156,10 +1312,36 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
     const back = button('←', 'explorer-secondary-button explorer-npc-action', tr('npcBackToList'), () => returnToNpcList());
     back.append(node('span', '', tr('npcBackToList')));
     actions.append(changeTopic, restart, back);
-    detailContent.append(greeting, topicChoices, articleCard, questions, chatLog, actions);
+    detailContent.append(situationPanel, questions, latestReply, topicsDisclosure, articleCard, historyDisclosure, actions);
 
     function selectedArticle(): Article | undefined {
       return dialogue.articleId ? data.articles.find(article => article.id === dialogue.articleId) : undefined;
+    }
+
+    function renderSituation(): ReturnType<typeof getNpcSituation> | undefined {
+      const article = selectedArticle();
+      if (!article) {
+        situationPanel.replaceChildren(node('p', 'explorer-empty', COPY.npcNoArticles[language]));
+        return undefined;
+      }
+      const situation = getNpcSituation(article, profileNpc.roleId, language, data.bookTitle);
+      const scene = node('p', 'explorer-npc-situation-scene', situation.scene);
+      scene.hidden = !situation.scene.trim();
+      situationPanel.replaceChildren(
+        node('span', 'explorer-eyebrow', tr('npcScenarioTitle')),
+        node('strong', 'explorer-npc-situation-article', article.title),
+        node('p', 'explorer-npc-situation-opening', situation.opening),
+        scene,
+      );
+      if (profile.roleColor) situationPanel.style.setProperty('--npc-role-color', profile.roleColor);
+      else situationPanel.style.removeProperty('--npc-role-color');
+      return situation;
+    }
+
+    function clearLatestReply(): void {
+      latestReply.hidden = true;
+      latestQuestion.textContent = '';
+      latestAnswer.textContent = '';
     }
 
     function createExchange(turn: NpcDialogueTurn): HTMLElement | null {
@@ -1168,13 +1350,30 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
       const question = getNpcDialogueQuestions(language).find(value => value.id === turn.questionId);
       const exchange = node('li', 'explorer-npc-exchange');
       exchange.append(node('p', 'explorer-npc-user-message', `${tr('npcYou')}: ${question?.label ?? ''}`));
-      const reply = node('p', 'explorer-npc-reply', `${profile.roleTitle}: ${createNpcReply(article, turn.questionId, language)}`);
-      reply.dataset.npcReply = '';
+      const reply = node('p', 'explorer-npc-reply', `${profile.roleTitle}: ${createNpcReply(article, turn.questionId, language, profileNpc.roleId, data.bookTitle)}`);
       exchange.append(reply);
       return exchange;
     }
 
     function renderHistory(): void {
+      historyDisclosure.hidden = dialogue.history.length === 0;
+      setText(historySummary, `${tr('npcHistory')} (${dialogue.history.length})`);
+      const latestTurn = dialogue.history.at(-1);
+      const latestArticle = latestTurn
+        ? data.articles.find(value => value.id === latestTurn.articleId)
+        : undefined;
+      const questionForLatest = latestTurn
+        ? getNpcDialogueQuestions(language).find(value => value.id === latestTurn.questionId)
+        : undefined;
+      if (latestTurn && latestArticle && questionForLatest) {
+        latestReply.hidden = false;
+        setText(latestQuestion, `${tr('npcYou')}: ${questionForLatest.label}`);
+        setText(latestAnswer, `${profile.roleTitle}: ${createNpcReply(latestArticle, latestTurn.questionId, language, profileNpc.roleId, data.bookTitle)}`);
+        for (const control of questionButtons) control.setAttribute('aria-pressed', String(control.dataset.npcQuestion === latestTurn.questionId));
+      } else {
+        clearLatestReply();
+        for (const control of questionButtons) control.setAttribute('aria-pressed', 'false');
+      }
       chatLog.replaceChildren();
       for (const turn of dialogue.history) {
         const exchange = createExchange(turn);
@@ -1182,52 +1381,64 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
       }
     }
 
-    function renderArticle(): void {
+    function renderArticle(): ReturnType<typeof getNpcSituation> | undefined {
       const article = selectedArticle();
       if (!article) {
         articleCard.removeAttribute('data-npc-article-id');
         articleCard.replaceChildren(node('p', 'explorer-empty', COPY.npcNoArticles[language]));
+        topicsDisclosure.hidden = true;
+        const situation = renderSituation();
+        clearLatestReply();
         for (const question of questionButtons) question.disabled = true;
         changeTopic.disabled = true;
-        return;
+        return situation;
       }
       articleCard.dataset.npcArticleId = article.id;
       articleCard.replaceChildren();
       articleCard.append(node('h3', 'explorer-npc-article-title', article.title));
       articleCard.append(node('p', 'explorer-npc-article-meta', `${article.authors || (language === 'zh' ? '作者未列出' : 'Author not listed')} · ${article.year}`));
-      const summary = node('div', 'explorer-npc-summary');
-      summary.append(node('span', 'explorer-eyebrow', tr('npcSiteSummary')));
+      const summary = node('details', 'explorer-npc-summary explorer-npc-summary-details');
+      summary.append(node('summary', '', tr('npcSiteSummary')));
       summary.append(node('p', 'explorer-article-summary', article.summary.trim() || tr('npcNoSummary')));
       articleCard.append(summary);
-      const read = button('↗', 'explorer-primary-button explorer-npc-read', tr('readArticle'), () => callbacks.onReadArticle(article.id));
+      const read = button('↗', 'explorer-primary-button explorer-npc-read', tr('readArticle'), () => {
+        clearNpcSpeech();
+        callbacks.onReadArticle(article.id);
+      });
       read.dataset.npcRead = '';
       read.dataset.articleId = article.id;
       read.setAttribute('aria-label', `${tr('readArticle')}: ${article.title}`);
       read.append(node('span', '', tr('readArticle')));
       articleCard.append(read);
+      const situation = renderSituation();
+      topicsDisclosure.hidden = articles.length === 0;
       for (const [id, topic] of topicButtons) topic.setAttribute('aria-pressed', String(id === article.id));
       for (const question of questionButtons) question.disabled = false;
       changeTopic.disabled = articles.length <= 1;
+      return situation;
     }
 
     function selectTopic(articleId: string): void {
       if (!articles.some(article => article.id === articleId) || dialogue.articleId === articleId) return;
       dialogue.articleId = articleId;
       dialogue.history = [];
-      renderArticle();
+      dialogue.openingSpeechPending = false;
+      clearLatestReply();
+      const situation = renderArticle();
       renderHistory();
+      if (situation) emitNpcSpeech(npc.id, situation.opening, 'greet');
     }
 
     function askNpcQuestion(questionId: NpcQuestionId): void {
       const article = selectedArticle();
       if (!article) return;
+      const reply = createNpcReply(article, questionId, language, profileNpc.roleId, data.bookTitle);
       const turn = { articleId: article.id, questionId };
       dialogue.history.push(turn);
-      const removed = dialogue.history.length > 6;
-      if (removed) dialogue.history.shift();
-      if (removed) chatLog.firstElementChild?.remove();
-      const exchange = createExchange(turn);
-      if (exchange) chatLog.append(exchange);
+      if (dialogue.history.length > 6) dialogue.history.shift();
+      dialogue.openingSpeechPending = false;
+      renderHistory();
+      emitNpcSpeech(npc.id, reply, NPC_QUESTION_REACTIONS[questionId]);
     }
 
     function moveToNextTopic(): void {
@@ -1239,11 +1450,15 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
     function restartNpcDialogue(): void {
       dialogue.articleId = profile.topics[0]?.id ?? profile.moreArticles[0]?.id ?? null;
       dialogue.history = [];
-      renderArticle();
+      dialogue.openingSpeechPending = false;
+      clearLatestReply();
+      const situation = renderArticle();
       renderHistory();
+      if (situation) emitNpcSpeech(npc.id, situation.opening, 'greet');
     }
 
     function returnToNpcList(): void {
+      clearNpcSpeech();
       detailTrigger = npcListButton;
       callbacks.onCommand({ type: 'panel', panel: 'detail', open: false });
       npcListTrigger = npcListButton;
@@ -1468,6 +1683,7 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
       detailKey = nextDetailKey;
       renderDetail();
     }
+    queueCurrentNpcOpeningSpeech();
     setText(hudTime, minuteLabel(state.minute));
     for (const preset of PRESETS) {
       const control = timeButtons.find(item => item.dataset.minute === String(preset.minute));
@@ -1496,6 +1712,7 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
 
   function closeWithFocus(panel: 'detail' | 'list'): void {
     if (panel === 'detail') {
+      clearNpcSpeech();
       const returnTarget = findDetailReturnTarget() ?? detailTrigger;
       callbacks.onCommand({ type: 'panel', panel, open: false });
       queueMicrotask(() => {
@@ -1541,6 +1758,7 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
         dragged = true;
       }
       if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+      requestLayoutInvalidation();
     };
     handle.addEventListener('pointerup', finish, { signal: abort.signal });
     handle.addEventListener('pointercancel', finish, { signal: abort.signal });
@@ -1552,6 +1770,7 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
       if (dragging) return;
       panel.dataset.expanded = String(panel.dataset.expanded !== 'true');
       handle.setAttribute('aria-expanded', panel.dataset.expanded);
+      requestLayoutInvalidation();
     }, { signal: abort.signal });
   }
 
@@ -1601,6 +1820,7 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
 
   const ui: ExplorerUI = {
     setData(nextData) {
+      clearNpcSpeech();
       data = nextData;
       dataVersion += 1;
       activeNpcDialogue = null;
@@ -1643,6 +1863,7 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
       renderJournal();
     },
     setActive(nextActive) {
+      if (!nextActive) clearNpcSpeech();
       active = nextActive;
       if (!active) npcListOpen = false;
       root.hidden = !active;
@@ -1653,12 +1874,14 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
         updatePanelVisibility();
         updateNpcListVisibility(false);
         renderJournal();
+        if (active) queueCurrentNpcOpeningSpeech();
       }
     },
     setFallback(nextFallback, message = '') {
       fallback = nextFallback;
       fallbackMessage = message;
       if (fallback) {
+        clearNpcSpeech();
         events = [];
         eventIds.clear();
         eventRevision += 1;
@@ -1667,6 +1890,14 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
       render();
     },
     dispose() {
+      disposed = true;
+      clearNpcSpeech();
+      speechLayoutObserver?.disconnect();
+      speechLayoutObserver = null;
+      observingSpeechLayout = false;
+      if (layoutFrame !== null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(layoutFrame);
+      layoutFrame = null;
+      layoutPending = false;
       abort.abort();
       root.remove();
       events = [];

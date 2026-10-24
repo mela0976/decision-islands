@@ -1,14 +1,17 @@
 import './style.css';
-import { createWorld } from './world';
+import './publication-fonts.css';
+import { mountReadingNotes } from './reading-notes';
+import { initializeBrowserCache } from './browser-cache';
+import type { createWorld } from './world';
 import { createExplorerUI } from './explorer-ui';
-import { createReadingJourneyUI } from './reading-journey-ui';
+import type { createReadingJourneyUI } from './reading-journey-ui';
 import { buildReadingJourneys } from './reading-journeys';
 import type { JourneyDefinition } from './journey-types';
 import { DATA, buildExplorerData, initialExplorerState, isExplorerCurated } from './explorer-data';
 import { clampNpcPopulation, createNpcRoster } from './explorer-npcs';
 import { applySeason, HOLIDAYS, readSeason, saveSeason } from './season';
 import type { Season } from './season';
-import type { ExplorerCommand, ExplorerData, ExplorerSelection, ExplorerUI, ExplorerUICallbacks } from './explorer-types';
+import type { ExplorerCommand, ExplorerData, ExplorerSelection, ExplorerUI, ExplorerUICallbacks, NpcSpeechCue } from './explorer-types';
 import { chapters, paths, findArticles, readState, saveState, escapeHtml as h } from './library';
 import type { Catalog, Chapter, Edition, ReadingPath } from './types';
 
@@ -40,7 +43,12 @@ let guidedReading = false;
 let hasCuratedJourneys = false;
 let editionRequest = 0;
 let world: ReturnType<typeof createWorld> | undefined;
+let npcSpeech: NpcSpeechCue | null = null;
+let journeyReady: Promise<void> = Promise.resolve();
+let journeyFailure: unknown;
+let worldStarting = false;
 let lastFocus: HTMLElement | null = null;
+let cleanupReadingNotes: (() => void) | undefined;
 
 root.innerHTML = `
   <a class="skip-link" href="#library">跳到文章目錄</a>
@@ -121,11 +129,25 @@ function selectChapter(value: Chapter | null) {
 }
 
 async function enter(animate = true, guide = true) {
+  if (!edition) return;
   if (entered) return;
   entered = true;
   document.body.classList.add('entering');
-  if (!animate) world?.setMotion(false);
-  await world?.enter();
+  try {
+    if (guide) {
+      if (journeyFailure) await loadEdition(edition.year);
+      await journeyReady;
+      if (journeyFailure) throw journeyFailure;
+    }
+    if (!animate) world?.setMotion(false);
+    await world?.enter();
+  } catch {
+    entered = false;
+    document.body.classList.remove('entering');
+    setLibrary(true, true);
+    toast(t('情境任務暫時無法載入，仍可從目錄閱讀；請重試或重新整理。', 'Scenarios could not load. You can still read the directory; retry or reload.'));
+    return;
+  }
   if (!animate) world?.setMotion(motion);
   document.body.classList.add('exploring');
   document.body.classList.remove('entering');
@@ -144,6 +166,9 @@ async function enter(animate = true, guide = true) {
 function openArticle(id: string, updateHash = true) {
   const a = edition.articles.find(item => item.id === id);
   if (!a) { toast(t('這篇文章尚未收錄。', 'This article is not available yet.')); return; }
+  explorerState.detailOpen = false;
+  npcSpeech = null;
+  world?.setNpcSpeech(null);
   const journeyContext = !activePath && guidedReading ? journeyUI?.getContext(a.id) : null;
   if (journeyContext) journeyUI?.syncArticle(a.id);
   const item = explorerData?.items.find(item => item.articleId === a.id);
@@ -154,14 +179,16 @@ function openArticle(id: string, updateHash = true) {
     explorerState.selection = { kind: 'item', itemId: item.id };
     if (journeyContext || document.body.classList.contains('library-open')) explorerState.detailOpen = false;
     world?.setSelection(explorerState.selection, false);
-    syncExplorer();
   }
+  syncExplorer();
   state.last = a.id; storage();
   const color = chapters[a.chapter].color;
   const pathIndex = activePath?.orders.indexOf(a.order) ?? -1;
   const nextOrder = activePath && pathIndex >= 0 ? activePath.orders[pathIndex + 1] : null;
   const next = journeyContext ? edition.articles.find(x => x.id === journeyContext.nextArticleId) : activePath ? (nextOrder ? edition.articles.find(x=>x.order===nextOrder) : undefined) : edition.articles.find(x=>x.order===a.order+1);
   const related = edition.articles.filter(x => x.id!==a.id && x.chapter===a.chapter).slice(0,2);
+  cleanupReadingNotes?.();
+  cleanupReadingNotes = undefined;
   $('#reader-content').innerHTML = `<article class="reading-article" style="--chapter-color:${color};--reading-size:${state.fontSize}px">
     ${activePath ? `<div class="path-context">${h(activePath.title)}<span>${pathIndex + 1} / ${activePath.orders.length} 篇</span></div>` : ''}
     ${journeyContext ? `<div class="path-context journey-reader-context">${h(journeyContext.questionTitle)}<span>${journeyContext.stepIndex + 1} / ${journeyContext.total}</span></div>` : ''}
@@ -176,6 +203,7 @@ function openArticle(id: string, updateHash = true) {
     <footer class="article-end"><p>讀到這裡，你帶走了什麼？</p><button id="complete" class="primary">${state.completed.includes(a.id) ? '已完成閱讀 ✓' : '留下閱讀足跡'}</button>
     ${next ? `<div class="next-reading"><span>${journeyContext ? t('補上另一個角度', 'Add another perspective') : activePath ? '沿著這條路線' : '繼續探索'}</span><h2>${h(next.title)}</h2>${journeyContext?.nextReason ? `<p>${h(journeyContext.nextReason)}</p>` : ''}${activePath && pathIndex >= 0 && activePath.connections[pathIndex] ? `<p>${h(activePath.connections[pathIndex])}</p>` : ''}<button id="next-article" class="text-button">閱讀下一篇 ↗</button></div>` : `<p>${journeyContext?.hasMission ? t('回到情境，整理你的選擇與尚待確認的條件。', 'Return to the task to review your choices and open questions.') : t('你已走完這條閱讀路線。', 'You have reached the end of this reading path.')}</p>${journeyContext ? `<button id="return-journey" class="text-button">${t('回到我的閱讀路線', 'Back to my reading path')} ↗</button>` : ''}`}
     <div class="related"><h2>同一座島，其他觀點</h2>${related.map(r=>`<button class="text-button" data-related="${r.id}">${h(r.title)} ↗</button>`).join('')}</div></footer></article>`;
+  cleanupReadingNotes = mountReadingNotes($('#reader-content'), a, edition.title);
   const bookmarked = () => { const value = state.bookmarks.includes(a.id); $('#bookmark').textContent = value ? '已收藏 ★' : '收藏 ☆'; $('#bookmark').setAttribute('aria-pressed',String(value)); };
   bookmarked();
   localizeChrome($('#reader'));
@@ -194,6 +222,7 @@ function openArticle(id: string, updateHash = true) {
   $('#return-journey')?.addEventListener('click', closeReader);
   document.querySelectorAll<HTMLElement>('[data-related]').forEach(b=>b.onclick=()=>{activePath=null;openArticle(b.dataset.related!);});
   if (!reader.open) { lastFocus = document.activeElement as HTMLElement; reader.showModal(); }
+  world?.setMotion(false);
   journeyUI?.setMotion(false);
   reader.scrollTop = 0; $('#reader-title').setAttribute('tabindex','-1'); $('#reader-title').focus({preventScroll:true});
   $('#reading-progress-fill').style.width='0%';
@@ -201,7 +230,10 @@ function openArticle(id: string, updateHash = true) {
 }
 
 function closeReader() {
+  cleanupReadingNotes?.();
+  cleanupReadingNotes = undefined;
   reader.close();
+  syncExplorer();
   journeyUI?.setMotion(motion);
   if (location.hash.startsWith('#read/')) history.replaceState(null,'',location.pathname+location.search);
   const original = lastFocus?.isConnected && lastFocus.tabIndex>=0 && !reader.contains(lastFocus) ? lastFocus : state.last ? document.querySelector<HTMLElement>(`[data-article="${CSS.escape(state.last)}"]`) : null;
@@ -218,7 +250,8 @@ for (const [id, delta] of [['font-down',-2],['font-up',2]] as const) $(`#${id}`)
 $('#enter').onclick = () => void enter();
 $('#my-reading').onclick = async () => {
   if (reader.open) closeReader();
-  await enter(false, false);
+  await enter(false);
+  if (!journeyUI) return;
   guidedReading = true; journeyUI?.setActive(true); journeyUI?.showPicker();
 };
 $('.skip-link').onclick = e => {e.preventDefault();void enter(false, false);setLibrary(true,true);};
@@ -255,7 +288,7 @@ function syncExplorer() {
   motion = !explorerState.reducedMotion && !explorerState.paused;
   journeyUI?.setMotion(motion && !reader.open);
   world?.setState(explorerState);
-  world?.setMotion(motion && !guidedReading);
+  world?.setMotion(motion && !guidedReading && !reader.open);
   explorerUI?.render(explorerState);
   $('#motion').textContent = motion ? t('◌ 動態開啟', '◌ Motion on') : t('◌ 動態暫停', '◌ Motion paused');
   $('#motion').setAttribute('aria-pressed', String(motion));
@@ -299,7 +332,10 @@ function commandExplorer(command: ExplorerCommand) {
     case 'tab': explorerState.tab = command.tab; break;
     case 'panel':
       if (command.open) { guidedReading = false; journeyUI?.setActive(false); setLibrary(false); }
-      if (command.panel === 'list') explorerState.listOpen = command.open;
+      if (command.panel === 'list') {
+        explorerState.listOpen = command.open;
+        if (command.open) explorerState.detailOpen = false;
+      }
       else explorerState.detailOpen = command.open;
       break;
     case 'journalFilter': explorerState.journalFilter = command.flowId; break;
@@ -365,6 +401,30 @@ function localizeChrome(host: HTMLElement) {
   }
 }
 
+function initializeWorld() {
+  if (worldStarting) return;
+  worldStarting = true;
+  const nextPaint = new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  void Promise.all([import('./world').catch(() => null), nextPaint]).then(([module]) => {
+    if (!module) { explorerUI?.setFallback(true); return; }
+    world = module.createWorld($('#world'), {
+      reducedMotion: explorerState.reducedMotion, season: explorerState.season, language,
+      onSelection: selection => { void enter(false); selectExplorer(selection, false); },
+      onMinute: minute => { explorerState.minute = minute; explorerUI?.render(explorerState); },
+      onEvents: events => explorerUI?.appendEvents(events),
+      onFallback: (fallback, message) => explorerUI?.setFallback(fallback, message),
+    });
+    if (explorerData) world.setData(explorerData);
+    syncExplorer();
+    world.setNpcSpeech(npcSpeech);
+    explorerUI?.setFallback(world.getFallback());
+    if (entered) {
+      world.setMotion(false);
+      void world.enter().then(() => world?.setMotion(motion && !guidedReading && !reader.open));
+    }
+  }).catch(() => explorerUI?.setFallback(true));
+}
+
 async function loadEdition(year: number) {
   const item = catalog.years.find(y => y.year === year);
   if (!item) return;
@@ -387,6 +447,8 @@ async function loadEdition(year: number) {
   if (explorerUI) { explorerUI.setData(nextData); explorerUI.clearEvents(); }
   else {
     const callbacks: ExplorerUICallbacks = {
+      onNpcSpeech: cue => { npcSpeech = cue; world?.setNpcSpeech(cue); },
+      onLayout: () => world?.setState(explorerState),
       onSelection: selection => selectExplorer(selection),
       onReadArticle: id => { activePath = null; openArticle(id); },
       onCommand: commandExplorer,
@@ -397,6 +459,20 @@ async function loadEdition(year: number) {
     explorerUI?.setActive(entered && document.body.classList.contains('exploring'));
   }
   explorerUI?.setFallback(world?.getFallback() ?? true);
+  $('.brand-meta b').textContent = String(year);
+  $('.world-caption .small-line').textContent = `${year} · ${t('決策智慧', 'Decision Wisdom')}`;
+  $('.world-caption h1').textContent = edition.title;
+  document.title = `${t('決策群島', 'Decision Islands')} | ${year} ${t('決策智慧', 'Decision Wisdom')}`;
+  $<HTMLSelectElement>('#year').value = String(year);
+  $('#edition-stats').textContent = t(`${year} 年刊 ／ ${edition.articles.length} 篇觀點 ／ 人、模型與 AI`, `${year} edition / ${edition.articles.length} articles / People, models and AI`);
+  world?.setSelection(null, false);
+  syncExplorer(); renderList();
+  const journeyModule = import('./reading-journey-ui');
+  journeyReady = journeyModule.then(() => { journeyFailure = undefined; }, error => { journeyFailure = error; });
+  const loadedJourney = await journeyModule.catch(() => null);
+  if (!loadedJourney) return;
+  const { createReadingJourneyUI } = loadedJourney;
+  if (request !== editionRequest) return;
   if (!journeyUI) {
     journeyUI = createReadingJourneyUI($('#reading-journey'), {
       onFocusArticle: id => {
@@ -431,27 +507,13 @@ async function loadEdition(year: number) {
   if (entered && !reader.open && !document.body.classList.contains('library-open')) {
     guidedReading = true; journeyUI.setActive(true); journeyUI.showPicker();
   }
-  $('.brand-meta b').textContent = String(year);
-  $('.world-caption .small-line').textContent = `${year} · ${t('決策智慧', 'Decision Wisdom')}`;
-  $('.world-caption h1').textContent = edition.title;
-  document.title = `${t('決策群島', 'Decision Islands')} | ${year} ${t('決策智慧', 'Decision Wisdom')}`;
-  $<HTMLSelectElement>('#year').value = String(year);
-  $('#edition-stats').textContent = t(`${year} 年刊 ／ ${edition.articles.length} 篇觀點 ／ 人、模型與 AI`, `${year} edition / ${edition.articles.length} articles / People, models and AI`);
-  world?.setSelection(null, false);
   syncExplorer(); renderList();
 }
 
 async function boot() {
   try {
-    world = createWorld($('#world'), {
-      reducedMotion: explorerState.reducedMotion, season: explorerState.season, language,
-      onSelection: selection => { void enter(false); selectExplorer(selection, false); },
-      onMinute: minute => { explorerState.minute = minute; explorerUI?.render(explorerState); },
-      onEvents: events => explorerUI?.appendEvents(events),
-      onFallback: (fallback, message) => explorerUI?.setFallback(fallback, message),
-    });
     syncExplorer();
-    const response = await fetch(asset('data/catalog.json'));
+    const response = await fetch(asset('data/catalog.json'), { priority: 'high' });
     if (!response.ok) throw new Error('目錄載入失敗');
     catalog = await response.json();
     if (catalog.schemaVersion!==1 || !Array.isArray(catalog.years)) throw new Error('目錄格式錯誤');
@@ -459,6 +521,7 @@ async function boot() {
     $<HTMLSelectElement>('#year').onchange=e=>{void loadEdition(Number((e.target as HTMLSelectElement).value)).catch(() => { $<HTMLSelectElement>('#year').value = String(edition.year); toast(t('無法載入這個年度，請重新整理。', 'Could not load this edition. Please retry.')); });};
     const linkedYear = Number(location.hash.match(/^#read\/(\d{4})-/)?.[1]);
     await loadEdition(catalog.years.some(y=>y.year===linkedYear)?linkedYear:catalog.years.some(y=>y.year===2026)?2026:catalog.years[0].year);
+    initializeWorld();
     if(location.hash.startsWith('#read/')){void enter(false, false);openArticle(location.hash.slice(6),false);}
     else if(state.last && edition.articles.some(a=>a.id===state.last)) {
       const resume=document.createElement('button');resume.className='resume-reading';resume.textContent=t('接著上次的觀點讀下去 ↗', 'Continue your last article ↗');resume.onclick=()=>{void enter(false, false);openArticle(state.last!);};$('#library-content').prepend(resume);
@@ -470,3 +533,4 @@ async function boot() {
 }
 localizeChrome(root);
 void boot();
+initializeBrowserCache();

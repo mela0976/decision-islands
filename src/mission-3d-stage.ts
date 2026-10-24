@@ -5,7 +5,7 @@ import type { Mission3DAssets, Mission3DModel, Mission3DStage, Mission3DSnapshot
 import type { MissionSceneEntity, MissionStageInput, MissionVisualFrame } from './mission-stage-types';
 
 const ACTORS = new Set(['adult', 'child', 'elder', 'robot']);
-const DURATION = 2800;
+const DURATION = 1400;
 const MIN_USER_ZOOM = .65;
 const MAX_USER_ZOOM = 2.4;
 const ZOOM_STEP = 1.2;

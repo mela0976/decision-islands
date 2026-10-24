@@ -10,7 +10,7 @@ const { sampleEntrance, treeRotationForElapsed, ENTRANCE_DURATION_MS } = await i
 const distance = (a, b) => Math.hypot(...a.map((value, i) => value - b[i]));
 
 test('入口在桌面與直式裝置保持有限座標及有效視角', () => {
-  assert.ok(ENTRANCE_DURATION_MS >= 6000 && ENTRANCE_DURATION_MS <= 8000);
+  assert.ok(ENTRANCE_DURATION_MS > 0 && ENTRANCE_DURATION_MS <= 1000, 'entry leaves time for interaction within the two-second target');
   for (const aspect of [.3, .56, 1, 1.78, 4, NaN, Infinity, 0, -1]) {
     for (const progress of [NaN, -Infinity, Infinity, -1, ...Array.from({ length: 1001 }, (_, i) => i / 1000), 2]) {
       const sample = sampleEntrance(progress, aspect);

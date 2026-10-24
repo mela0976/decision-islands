@@ -27,6 +27,10 @@
   display: none !important;
 }
 
+#explorer-ui:has(.explorer-panel[data-expanded="true"]:not([hidden])) {
+  z-index: 13;
+}
+
 .explorer-ui *,
 .explorer-ui *::before,
 .explorer-ui *::after {
@@ -954,11 +958,78 @@
   padding: 11px 13px;
 }
 
+.explorer-npc-situation {
+  background: color-mix(in srgb, var(--holiday-sky, #e9f2ee) 75%, white);
+  border-left: 3px solid var(--npc-role-color, var(--holiday-accent, #db6a41));
+  border-radius: 0 12px 12px 0;
+  color: var(--holiday-ink, #203c35);
+  line-height: 1.65;
+  margin: 0 0 13px;
+  padding: 12px 14px;
+}
+
+.explorer-npc-situation > p {
+  margin: 0;
+}
+
+.explorer-npc-situation-scene {
+  color: var(--explorer-muted);
+  font-size: 12px;
+  margin-top: 7px !important;
+}
+
+.explorer-npc-latest {
+  background: #fffdf9;
+  border: 1px solid var(--explorer-border);
+  border-radius: 13px;
+  color: #332a24;
+  line-height: 1.65;
+  margin: 0 0 16px;
+  min-height: 48px;
+  padding: 12px 14px;
+}
+
+.explorer-npc-latest:empty {
+  display: none;
+}
+
+.explorer-npc-latest > p {
+  margin: 0;
+}
+
 .explorer-npc-topics,
 .explorer-npc-questions {
   display: grid;
   gap: 7px;
   margin: 0 0 14px;
+}
+
+.explorer-npc-topics-shell,
+.explorer-npc-history {
+  border-bottom: 1px solid var(--explorer-border);
+  border-top: 1px solid var(--explorer-border);
+  margin: 0 0 14px;
+}
+
+.explorer-npc-topics-shell > summary,
+.explorer-npc-history > summary {
+  align-items: center;
+  color: var(--holiday-ink, #203c35);
+  cursor: pointer;
+  display: flex;
+  font-size: 12px;
+  font-weight: 700;
+  justify-content: space-between;
+  min-height: 46px;
+  padding: 0 3px;
+}
+
+.explorer-npc-topics-shell > .explorer-npc-topics {
+  padding-bottom: 10px;
+}
+
+.explorer-npc-history > .explorer-npc-chat {
+  padding-bottom: 10px;
 }
 
 .explorer-npc-topic,
@@ -1011,6 +1082,20 @@
   border-radius: 15px;
   margin: 0 0 14px;
   padding: 14px;
+}
+
+.explorer-npc-summary-details {
+  margin: 0 0 12px;
+}
+
+.explorer-npc-summary-details > summary {
+  align-items: center;
+  color: var(--holiday-ink, #203c35);
+  cursor: pointer;
+  display: flex;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 44px;
 }
 
 .explorer-npc-article-title {

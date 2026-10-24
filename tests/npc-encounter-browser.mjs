@@ -1,0 +1,23 @@
+import {chromium} from '@playwright/test';
+import assert from 'node:assert/strict';
+import {mkdir,writeFile} from 'node:fs/promises';
+const base=process.env.TEST_URL||'http://127.0.0.1:4173/';
+const browser=await chromium.launch({headless:true});
+const results=[],errors=[];
+const click=(p,s)=>p.locator(s).evaluate(el=>el.click());
+await mkdir('test-results/npc-encounter',{recursive:true});
+async function talk(p,id){await click(p,'[data-npc-open]');const value=id||await p.locator('[data-npc-select] option[data-walker-id]').first().getAttribute('value');await p.locator('[data-npc-select]').selectOption(value);await p.waitForFunction(id=>document.querySelector('.island-world canvas')?.dataset.npcEncounter===id,value);await p.locator('.explorer-npc-speech:visible').waitFor();return value;}
+try{
+ for(const width of [1280,390]){
+  const ctx=await browser.newContext({viewport:{width,height:width===390?844:900},reducedMotion:'reduce'});const p=await ctx.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto(base);await p.locator('.article-row').first().waitFor({state:'attached'});await click(p,'#enter');await click(p,'#journey-picker [data-free-explore]');await p.locator('.island-world[data-rendered="true"] canvas').waitFor();const id=await talk(p);const canvas=p.locator('.island-world canvas');
+  const before=await canvas.getAttribute('data-npc-position');await click(p,'[data-npc-question="summary"]');assert.ok((await p.locator('[data-npc-reply]').last().innerText()).length>20);assert.ok((await p.locator('[data-npc-situation]').innerText()).length>15);await p.waitForTimeout(300);assert.equal(await canvas.getAttribute('data-npc-position'),before,'talking NPC stays at its actual scene position');
+  const facing=await canvas.evaluate(c=>Math.abs(Math.atan2(Math.sin(Number(c.dataset.npcHeading)-Number(c.dataset.npcFacingTarget)),Math.cos(Number(c.dataset.npcHeading)-Number(c.dataset.npcFacingTarget)))));assert.ok(facing<.001);
+  const first=await p.locator('.explorer-npc-speech').innerText();await click(p,'[data-npc-question="highlight"]');assert.notEqual(await p.locator('.explorer-npc-speech').innerText(),first,'choice updates visible bubble');
+  await p.locator('.explorer-detail .explorer-close').click();await p.waitForFunction(()=>document.querySelector('.island-world canvas').dataset.npcEncounter==='');assert.equal(await p.locator('.explorer-npc-speech:not([hidden])').count(),0);await talk(p,id);assert.equal(await p.locator('.explorer-npc-chat .explorer-npc-exchange').count(),2,'same-NPC reentry retains conversation history and shows a new bubble');
+  if(width===390){await p.locator('.explorer-detail .explorer-sheet-handle').click();await p.waitForFunction(()=>document.querySelector('.explorer-detail').getBoundingClientRect().height>800);await p.waitForTimeout(150);const overlap=await p.evaluate(()=>{const b=document.querySelector('.explorer-npc-speech'),r=b.getBoundingClientRect(),d=document.querySelector('.explorer-detail').getBoundingClientRect();return getComputedStyle(b).visibility!=='hidden'&&r.left<d.right&&r.right>d.left&&r.top<d.bottom&&r.bottom>d.top;});assert.equal(overlap,false,'paused expanded sheet never leaves a bubble covering the dialogue');await p.locator('.explorer-detail .explorer-sheet-handle').click();}
+  assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await p.screenshot({path:`test-results/npc-encounter/${width}-conversation.png`,timeout:30000});
+  await click(p,'[data-npc-read]');await p.locator('#reader[open]').waitFor();await p.waitForFunction(()=>document.querySelector('.island-world canvas').dataset.npcEncounter==='');assert.equal(await p.locator('.explorer-npc-speech:not([hidden])').count(),0);
+  await p.evaluate(()=>document.fonts.ready);const family=await p.locator('#reader-title').evaluate(el=>getComputedStyle(el).fontFamily);assert.match(family,/Publication Latin/);assert.match(family,/Publication Sans TW/);const cdp=await ctx.newCDPSession(p);await cdp.send('DOM.enable');await cdp.send('CSS.enable');const {root}=await cdp.send('DOM.getDocument');const {nodeId}=await cdp.send('DOM.querySelector',{nodeId:root.nodeId,selector:'#reader-title'});const {fonts}=await cdp.send('CSS.getPlatformFontsForNode',{nodeId});assert.ok(fonts.some(f=>f.isCustomFont&&f.glyphCount>0),JSON.stringify(fonts));results.push(`${width}px real NPC hold/facing, scenario reply/bubble, close/reopen, paused sheet layout, reader cleanup and actual custom font rendering`);await ctx.close();
+ }
+ assert.deepEqual(errors,[]);await writeFile('test-results/npc-encounter/results.json',JSON.stringify({base,results,errors},null,2));console.log(results.join('\n'));
+}finally{await browser.close();}
