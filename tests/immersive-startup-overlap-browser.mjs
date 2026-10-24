@@ -11,7 +11,7 @@ const instrumentation = `
   renderer.compile = (objects, view, target) => {
     let visibleMaterials = 0;
     target.traverseVisible(object => { if (object.material) visibleMaterials++; });
-    window.__compile = { objects: objects.children.length, visibleMaterials, revision: THREE.REVISION };
+    window.__compile = { objects: objects.children.length, visibleMaterials, revision: THREE.REVISION, parallelShaderCompile: Boolean(renderer.getContext().getExtension('KHR_parallel_shader_compile')) };
     originalCompile(objects, view, target);
     window.__compile.finished = true;
     if (window.__loseAfterCompile) {
@@ -28,7 +28,7 @@ const instrumentation = `
     return originalRender(...args);
   };
   const originalDispose = renderer.dispose.bind(renderer);
-  renderer.dispose = () => { window.__rendererDisposed = true; return originalDispose(); };
+  renderer.dispose = () => { window.__rendererDisposed = true; window.__releasedOwnership = { geometries: geometries.size, materials: materials.size, textures: textures.size }; return originalDispose(); };
 `;
 const instrumented = source.replace("  renderer.setPixelRatio(", `${instrumentation}\n  renderer.setPixelRatio(`);
 assert.notEqual(instrumented, source);
@@ -38,8 +38,8 @@ const browser = await chromium.launch({ headless: true, args: ['--enable-webgl',
 const origin = `http://127.0.0.1:${server.httpServer.address().port}`;
 const records = [], errors = [];
 try {
-  for (const kind of ['success', 'font-failure', 'context-loss']) {
-    const failFont = kind === 'font-failure';
+  for (const kind of ['success', 'font-failure', 'mixed-font-failure', 'context-loss']) {
+    const failFont = kind === 'font-failure' || kind === 'mixed-font-failure';
     const page = await browser.newPage({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block', reducedMotion: 'reduce' });
     page.on('pageerror', error => errors.push(error.message));
     page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
@@ -77,6 +77,7 @@ try {
       document.fonts.load = (font, text) => {
         const faces = originalLoad(font, text);
         if (++calls > 2) return faces;
+        if (kind === 'mixed-font-failure' && calls === 2) { window.__fontKeptPending = true; return new Promise(() => {}); }
         return faces.then(async result => {
           await gate;
           if (failFont) throw new Error('intentional startup font rejection');
@@ -107,7 +108,8 @@ try {
     assert.equal(pending.ready, false, 'world API waits for initial font barrier');
     assert.equal(pending.drawn, false, 'no scene frame before initial font barrier');
     await page.evaluate(() => window.__releaseFonts());
-    await page.evaluate(() => window.__startupPromise);
+    const settled = await page.evaluate(() => Promise.race([window.__startupPromise.then(() => true), new Promise(resolve => setTimeout(() => resolve(false), 2000))]));
+    assert.equal(settled, true, `${kind} startup settles within bounded observation`);
     if (kind === 'context-loss') {
       const lost = await page.evaluate(async () => {
         window.__world.dispose();
@@ -121,13 +123,15 @@ try {
       assert.deepEqual(lost.listeners, []);
       records.push({ kind, pending, lost });
     } else if (failFont) {
-      const failed = await page.evaluate(() => ({ error: window.__startupError, disposed: window.__rendererDisposed, drawn: Boolean(window.__firstRender), compile: window.__compile, pendingFrames: window.__pendingFrames.size, listeners: window.__worldListeners.map(item => item.type) }));
+      const failed = await page.evaluate(() => ({ error: window.__startupError, disposed: window.__rendererDisposed, drawn: Boolean(window.__firstRender), compile: window.__compile, releasedOwnership: window.__releasedOwnership, fontKeptPending: Boolean(window.__fontKeptPending), pendingFrames: window.__pendingFrames.size, listeners: window.__worldListeners.map(item => item.type) }));
       assert.match(failed.error, /intentional startup font rejection/);
       assert.equal(failed.disposed, true);
       assert.equal(failed.drawn, false);
       assert.equal(failed.pendingFrames, 0);
       assert.deepEqual(failed.listeners, []);
-      assert.equal(failed.compile.finished, true, 'release waits until compile polling is finished');
+      assert.equal(failed.compile.finished, true, 'visible shader submission completed');
+      assert.deepEqual(failed.releasedOwnership, { geometries: 0, materials: 0, textures: 0 });
+      if (kind === 'mixed-font-failure') assert.equal(failed.fontKeptPending, true, 'other initial font remains unresolved');
       records.push({ kind, pending, failed });
     } else {
       await page.waitForFunction(() => window.__world.getRenderState().renderedFrames > 0);

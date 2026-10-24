@@ -18,7 +18,7 @@ root 提供的 `8a6b542` 診斷中，r160 `onFirstUse` 取樣加權約 997 ms。
 
 最終只保留同步 `compile` 提交候選，沒有 compileAsync polling。原有 `await createWorld(options)` 介面不變，字型成功後 redraw，首 render 仍由原本的 onFirstUse 確認 program 並保留 diagnostics。
 
-資料形狀是初始 font loads 的 settled 結果及原有資源 ownership collections。採 Model the Domain 原則，沿用 `disposed` 與共用 `dispose`，沒有另添必須同步的生命週期布林值。startupObjects 是可見 material object 的 shallow clones，保留 Sprite／InstancedMesh 類型，共享 geometry／material。真實 scene 作第三參數提供光線、fog 與 environment。提交後字型 barrier 結束即清空 clone 容器。scope 不納入隱藏物件，但可能包含 frustum 外可見輪廓及 r160 為雙面材質準備的 variants。
+資料形狀是初始 font loads 的 fail-fast outcome 及原有資源 ownership collections。Promise.all 立即掛上成功與失敗 handler，讓建構期間的拒絕受到觀察；一個字型拒絕即釋放場景，不等待其他字型 settle。採 Model the Domain 原則，沿用 `disposed` 與共用 `dispose`，沒有另添必須同步的生命週期布林值。startupObjects 是可見 material object 的 shallow clones，保留 Sprite／InstancedMesh 類型，共享 geometry／material。真實 scene 作第三參數提供光線、fog 與 environment。提交後字型 barrier 結束即清空 clone 容器。scope 不納入隱藏物件，但可能包含 frustum 外可見輪廓及 r160 為雙面材質準備的 variants。
 
 ## 不變量
 
@@ -32,7 +32,7 @@ root 提供的 `8a6b542` 診斷中，r160 `onFirstUse` 取樣加權約 997 ms。
 
 ## 實際檢查
 
-`node tests/immersive-startup-overlap-browser.mjs` 通過 3 個真 r160、390×844 案例，errors=[]。fixture 用正式 `buildData(raw)` 轉換資料。
+`node tests/immersive-startup-overlap-browser.mjs` 通過 4 個真 r160、390×844 案例，errors=[]。fixture 用正式 `buildData(raw)` 轉換資料。
 
 1. 延遲前兩個字型 Promise 時，compile 已完成提交，API 尚未公開且未 render。字型釋放後首次 render 有實際 loaded Publication Sans TW FontFace。每一段初始 canvas text 的最後一次 draw 都在 barrier 釋放後。22 島及材質 ownership 保留。
 2. 字型拒絕後 renderer 已 dispose，未 render，world／OrbitControls 的 canvas/window/document listener 與 pending RAF 均為 0。
@@ -45,3 +45,7 @@ root 提供的 `8a6b542` 診斷中，r160 `onFirstUse` 取樣加權約 997 ms。
 其他檢查包含 world 與測試的 node --check、git diff --check、npm run build，以及 publication-fonts／editorial-textures／arrival-data 共 7 項通過。Build 保留既有 publication.css runtime resolution 提示。
 
 正式接受由 root 對凍結版本做至少五次 A/B 交錯，含實際首互動、錯誤數及內容完整性。若首用 uniform／attribute 初始化仍是主要成本，或字型等待與 shader 提交成本不能有效重疊，本候選不一定改善使用者首互動。
+
+## Fail-fast 回歸修正
+
+獨立審查指出初版 allSettled 會在一個字型拒絕、另一個永遠 pending 時卡住。已恢復 Promise.all 的 fail-fast 語意，並立即轉成 fulfilled／rejected outcome，避免同步建構失敗後字型拒絕成為 unhandled rejection。新增第四個 mixed-font-failure 案例，以 2 秒有界觀察要求 world reject，且另一個初始字型確實保持 pending。失敗案例另外讀回自有 geometry/material/texture 為 0。本輪真 r160 四案例全部通過，errors=[]。混合案例讀回 fontKeptPending=true、renderer disposed=true、未 render、自有 geometry/material/texture=0、listeners=[]、pending RAF=0。成功案例的同一 canvas GL 讀回 KHR_parallel_shader_compile=false，限制仍是本機無法驗證具 extension 裝置的 polling 分支。原始結果已更新於同一 results.json；所有 browser/server 已關閉。

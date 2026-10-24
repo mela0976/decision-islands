@@ -32,10 +32,10 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
   const initialArticleId = data.islands[0].articleId || data.articles?.[0]?.id;
   const initialScene = data.scenes?.find(item => item.articleId === initialArticleId);
   const initialFontText = `${data.islands[0].id} · ${initialScene?.coreDevice?.label || data.articles?.[0]?.title || ''} 阿綺小岳映蓁芬姐`;
-  const initialFontsReady = Promise.allSettled(document.fonts ? [
+  const initialFontsReady = Promise.all(document.fonts ? [
     document.fonts.load('600 42px "Publication Sans TW"', initialFontText),
     document.fonts.load('600 28px "Publication Sans TW"', '阿綺小岳映蓁芬姐'),
-  ] : []);
+  ] : []).then(() => ({ status: 'fulfilled' }), reason => ({ status: 'rejected', reason }));
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, innerWidth < 700 ? 1.4 : 1.8));
   renderer.shadowMap.enabled = true;
@@ -1243,9 +1243,8 @@ export async function createWorld({ canvas, data, onIslandSelect = () => {}, onO
   try {
     scene.traverseVisible(object => { if (object.material) startupObjects.add(object.clone(false)); });
     renderer.compile(startupObjects, camera, scene);
-    const fontResults = await initialFontsReady;
-    const fontFailure = fontResults.find(result => result.status === 'rejected');
-    if (fontFailure) throw fontFailure.reason;
+    const fontResult = await initialFontsReady;
+    if (fontResult.status === 'rejected') throw fontResult.reason;
   } catch (error) { dispose(); throw error; }
   finally { startupObjects.clear(); }
   labels.forEach(sprite => sprite.userData.redraw?.());
