@@ -43,4 +43,8 @@ body:not(.exploring) #my-reading{display:none}
 .top-actions{flex-wrap:wrap;justify-content:flex-end}
 #my-reading{white-space:nowrap}
 .journey-reader-context{border-left:3px solid var(--holiday-accent);padding-left:14px}
+.masthead .brand{display:grid;grid-template-columns:max-content max-content;width:max-content;flex-shrink:0;align-items:center}
+.masthead .brand-mark{white-space:nowrap;line-height:1.08}
+.masthead .brand-meta{white-space:nowrap}
+@media(max-width:900px){.masthead .brand{grid-template-columns:max-content}}
 @media(max-width:600px){.top-actions{align-content:flex-start}.top-actions #my-reading{flex:1 0 45%;font-size:11px}.top-actions .season-picker{flex:1 0 45%}.top-actions #motion,.top-actions #toggle-library{flex:1 0 40%}body:not(.exploring) .top-actions .season-picker{flex:1 0 28%}body:not(.exploring) .top-actions #motion,body:not(.exploring) .top-actions #toggle-library{flex:0 1 auto}}
