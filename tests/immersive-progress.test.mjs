@@ -20,3 +20,6 @@ test('backup restore merges footprints and preserves existing notes',()=>{
 test('opening an empty note does not hide a restored backup note',()=>{
  const p=createProgress(memory());p.state.notes['2026-01']='';p.restore({notes:{'2026-01':'從備份取回的筆記'}});assert.equal(p.state.notes['2026-01'],'從備份取回的筆記');
 });
+test('recent routes preserve repeated journeys in chronological order',()=>{
+ const value=parseProgress({routes:['2026-01>2026-02','2026-02>2026-01','2026-01>2026-02']});assert.equal(value.routes.length,3);assert.equal(value.routes.at(-1),'2026-01>2026-02');
+});
