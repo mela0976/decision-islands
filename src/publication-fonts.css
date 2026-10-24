@@ -1,0 +1,6 @@
+
+:root{--publication-font:"Publication Latin","Publication Sans TW","PingFang TC",sans-serif}
+body,body *{font-family:var(--publication-font)!important}
+body{font-weight:300}
+h1,h2,h3,h4,h5,h6{font-weight:500}
+strong,b{font-weight:700}
