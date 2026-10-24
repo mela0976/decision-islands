@@ -10,10 +10,10 @@
 - [x] `architect` for parallel design exploration.
 - [x] Write the throughput checkpoint as four todo items.
 - [x] Delegate code-writing to a subagent using your configured feature model.
-- [ ] Verify on the matching surface.
-- [ ] Rebase into small, ordered commits. Stack follow-ups.
-- [ ] If the design is contested, `interrogate` before shipping.
-- [ ] Run Opening a PR. 沿用既有直接更新GitHub Pages授權。
+- [x] Verify on the matching surface. 本機完整3D、SVG與手機驗證通過。
+- [x] Rebase into small, ordered commits. Stack follow-ups. 引擎6b3943f、介面7a1a792、整合驗證59d8526。
+- [x] If the design is contested, `interrogate` before shipping. 比較三種介面後選單畫布切換，Astra獨立審查沒有未解爭議。
+- [x] Run Opening a PR. 沿用既有直接更新GitHub Pages授權，不另建PR。
 
 ## Throughput checkpoint
 
@@ -43,3 +43,11 @@ SVG全站檢查初次在手動切換後立即斷言零動畫失敗，讀回17項
 最終本機build為index-D8zx1Hcf.js與index-C76R6Q75.css。完整3d-missions-browser通過48回合96分支的before/after真像素不同、切回精確還原、單一canvas、預覽不採用與retry。390×844及360×740的前後按鈕均至少44px且在螢幕內，保留節慶選擇。代表動畫有準備、操作及結果差異，重播、暫停精確終態、拖曳，以及preview+before中真context loss切SVG保留答案、預覽與before狀態通過。errors空。
 
 主代理檢視兩張360px手機前後截圖，人物聚集、手持物件、桌面呈現均有差異，按鈕與原選項未遮擋。桌上道具的暖色工作區原被桌面遮住，移至實際支撐高度，半徑不變，owned資源仍正常回收。獨立Astra diff審查沒有未解P1/P2，另實測318px英文44px按鈕、與重播相距14.53px，以及相同target更新與模擬context loss保留before。實體手機、96段動畫每一格及GPU內部佇列未全量測量。
+
+## 正式發布
+
+5f3a1c6425281ae064e859c979c27f81dee69394已推送main。GitHub Actions run40058676936的build與deploy成功，Linux完整60項Node測試通過，Python、公開檢查和建置步驟成功。正式HTML讀回index-D8zx1Hcf.js及index-C76R6Q75.css，與本機產物一致。
+
+正式網址完整3d-missions-browser再次通過48回合96分支的前後像素差異及還原、8角色、360/390px手機按鈕與畫面、節慶保留答案、預覽/重做、代表動畫、重播、暫停、拖曳，以及preview+before時真context loss保留狀態後切回after。test-results/3d-mission-results.json的base指向正式站?v=5f3a1c6，errors空。主代理再次檢視360px正式截圖，前後同為聖誕主題，人物聚集與桌面物件差異清楚。已停止本次preview服務。
+
+發布後發現工作目錄另有package.json、package-lock.json與requirements.txt套件升級修改，非本次寫入責任，原樣保留且未提交到本次發布。驗收與正式版本以上述commit及asset為準，不宣稱目前整個工作目錄乾淨。
