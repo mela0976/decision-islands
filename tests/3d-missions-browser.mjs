@@ -36,9 +36,10 @@ async function pixels(page) {
     await canvas.scrollIntoViewIfNeeded();
     bounds = await canvas.boundingBox();
   }
-  return hash(await page.screenshot({clip:{x:Math.ceil(bounds.x)+2,y:Math.ceil(bounds.y)+2,width:Math.floor(bounds.width)-4,height:Math.floor(bounds.height)-4}}));
+  return hash(await page.screenshot({style:'.mission-stage-replay { visibility: hidden !important; }',clip:{x:Math.ceil(bounds.x)+2,y:Math.ceil(bounds.y)+2,width:Math.floor(bounds.width)-4,height:Math.floor(bounds.height)-4}}));
 }
 try {
+  if (!process.env.TEST_MOTION_ONLY) {
   const { ctx, page } = await boot();
   const routes = [];
   for (const audience of ['marketing', 'everyday']) {
@@ -92,23 +93,26 @@ try {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await ctx.close(); results.push(`${width}x${height}: real 3D stage and both actions visible, holiday retains answer`);
   }
+  }
   {
     const { ctx, page } = await boot();
     await task(page, 'everyday', 'family');
     const before = await pixels(page);
     await page.clock.install(); await page.clock.pauseAt(new Date());
     await page.emulateMedia({ reducedMotion: 'no-preference' });
-    if ((await page.locator('#motion').getAttribute('aria-pressed')) === 'false') await page.locator('#motion').evaluate(button => button.click());
+    await page.clock.fastForward(32);
+    await page.waitForFunction(() => !matchMedia('(prefers-reduced-motion: reduce)').matches && document.querySelector('#motion').getAttribute('aria-pressed') === 'true');
     await page.locator('.journey-mission-choices [data-mission-choice="a"]').evaluate(button => button.click());
-    await page.clock.runFor(550);
+    assert.equal(await page.locator('.mission-stage-canvas').getAttribute('data-animating'), 'true');
+    await page.clock.fastForward(550);
     const mid = await pixels(page);
-    await page.clock.runFor(2400);
+    await page.clock.fastForward(2400);
     const after = await pixels(page);
     assert.notEqual(before, mid); assert.notEqual(mid, after, 'animation has visible intermediate rendered frames');
-    await page.locator('.mission-stage-replay').evaluate(button => button.click()); await page.clock.runFor(450);
+    await page.locator('.mission-stage-replay').evaluate(button => button.click()); await page.clock.fastForward(450);
     assert.notEqual(await pixels(page), after, 'replay visibly restarts the action');
     await page.locator('#motion').evaluate(button => button.click());
-    await page.clock.runFor(100);
+    await page.clock.fastForward(100);
     assert.equal(await pixels(page), after, 'pause settles at the correct outcome');
     const bounds = await page.locator('.mission-stage-canvas').boundingBox();
     await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
@@ -139,12 +143,13 @@ try {
     const before = await pixels(page);
     await page.clock.install(); await page.clock.pauseAt(new Date());
     await page.emulateMedia({reducedMotion:'no-preference'});
-    if ((await page.locator('#motion').getAttribute('aria-pressed')) === 'false') await page.locator('#motion').evaluate(button => button.click());
+    await page.clock.fastForward(32);
+    await page.waitForFunction(() => !matchMedia('(prefers-reduced-motion: reduce)').matches && document.querySelector('#motion').getAttribute('aria-pressed') === 'true');
     await page.locator('.journey-mission-choices [data-mission-choice="b"]').evaluate(button => button.click());
-    await page.clock.runFor(650);
+    await page.clock.fastForward(650);
     const middle = await pixels(page);
     await page.screenshot({path:`test-results/3d-action-${sample.name}-middle.png`});
-    await page.clock.runFor(2200);
+    await page.clock.fastForward(2200);
     const after = await pixels(page);
     assert.notEqual(before,middle); assert.notEqual(middle,after);
     await page.screenshot({path:`test-results/3d-action-${sample.name}-after.png`});
@@ -152,7 +157,7 @@ try {
   }
   assert.deepEqual(errors, []);
 } finally {
-  await writeFile('test-results/3d-mission-results.json', JSON.stringify({ base, results, errors }, null, 2));
+  await writeFile(`test-results/3d-mission${process.env.TEST_MOTION_ONLY ? '-motion' : ''}-results.json`, JSON.stringify({ base, results, errors }, null, 2));
   await browser.close();
 }
 console.log(results.join('\n'));
