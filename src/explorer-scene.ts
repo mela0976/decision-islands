@@ -5,6 +5,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { ExplorerData, ExplorerEngine, ExplorerEngineOptions, ExplorerSelection, ExplorerState, WalkerSnapshot, ModelKit, Vec3 } from './explorer-types';
 import { initialExplorerState } from './explorer-data';
 import { axialToWorld, buildPathGraph, findRoute, itemPlacements } from './explorer-graph';
+import { createNpcRoster } from './explorer-npcs';
 import { createSimulation } from './explorer-simulation';
 import { createModelKit } from './explorer-modelkit';
 import { createExplorerEnvironment } from './explorer-environment';
@@ -73,7 +74,7 @@ export function createExplorerEngine(options: ExplorerEngineOptions): ExplorerEn
       const object = new CSS2DObject(element); object.position.copy(position); group.add(object); dom.push({ object, element, full, short, selection: sel, hidden: false, compact: false, type, owner });
     };
     try {
-      const graph = buildPathGraph(data), simulation = createSimulation(data, graph), placements = itemPlacements(data);
+      const graph = buildPathGraph(data), simulation = createSimulation(data, graph, state.population), placements = itemPlacements(data);
       let lastSeason = state.season;
       const builtKit = createModelKit(placements, data.seed); kit = builtKit; group.add(builtKit.group); hits.push(...builtKit.hitMeshes);
       environment = createExplorerEnvironment(data); environment.setSeason(state.season); group.add(environment.group);
@@ -177,10 +178,10 @@ export function createExplorerEngine(options: ExplorerEngineOptions): ExplorerEn
         addLabel(v3(p.position).add(new T.Vector3(0, p.scale * 1.55 + .16, 0)), ['①', '②', '③', '④', '⑤', '⑥', '⑦'][n - 1] ?? String(n), String(n), { kind: 'item', itemId: p.id }, 'item', p.id);
         const line = new T.Line(geometry(new T.BufferGeometry().setFromPoints([v3(p.position).add(new T.Vector3(0, p.scale * .9, 0)), v3(p.position).add(new T.Vector3(0, p.scale * 1.5, 0))])), own(new T.LineBasicMaterial({ color: coral, depthTest: false }))); line.userData.pinIsland = island.id; group.add(line);
       }
-      const walkers = simulation.snapshot().walkers, count = walkers.length, parts: Part[] = [], walkerGroup = new T.Group(); walkerGroup.name = 'explorer-walkers'; group.add(walkerGroup);
+      const roster = createNpcRoster(data, 100), capacity = 100, parts: Part[] = [], walkerGroup = new T.Group(); walkerGroup.name = 'explorer-walkers'; group.add(walkerGroup);
       const sphere = geometry(new T.SphereGeometry(1, 10, 8)), box = geometry(new T.BoxGeometry(1, 1, 1)), cylinder = geometry(new T.CylinderGeometry(1, 1, 1, 10)), torus = geometry(new T.TorusGeometry(1, .16, 5, 12)), capsule = geometry(new T.CapsuleGeometry(.5, .5, 3, 8));
       const addPart = (g: T.BufferGeometry, offset: number[], scale: number[], color: string, swing?: number, filter?: string, rotation?: number) => {
-        const m = own(new T.InstancedMesh(g, material(color), count)); m.instanceMatrix.setUsage(T.DynamicDrawUsage); m.frustumCulled = false; walkerGroup.add(m); hits.push(m); parts.push({ mesh: m, offset: new T.Vector3(...offset), scale: new T.Vector3(...scale), swing, filter, rotation }); return m;
+        const m = own(new T.InstancedMesh(g, material(color), capacity)); m.instanceMatrix.setUsage(T.DynamicDrawUsage); m.frustumCulled = false; walkerGroup.add(m); hits.push(m); parts.push({ mesh: m, offset: new T.Vector3(...offset), scale: new T.Vector3(...scale), swing, filter, rotation }); return m;
       };
       addPart(capsule, [0, .14, 0], [.105, .14, .085], '#ffffff');
       addPart(sphere, [0, .28, 0], [.07, .07, .065], '#ffffff');
@@ -196,28 +197,39 @@ export function createExplorerEngine(options: ExplorerEngineOptions): ExplorerEn
       addPart(geometry(new T.ConeGeometry(1, 1, 12)), [0, .345, 0], [.115, .065, .115], '#d7b879', undefined, 'hat');
       addPart(sphere, [0, .33, 0], [.078, .044, .073], '#fcea8b', undefined, 'helmet'); addPart(box, [0, .35, 0], [.02, .025, .12], '#e2bc58', undefined, 'helmet');
       addPart(box, [.105, .07, 0], [.07, .12, .055], '#a97f65', undefined, 'suitcase'); addPart(torus, [.105, .15, 0], [.022, .03, .01], ink, undefined, 'suitcase');
-      const shadow = own(new T.InstancedMesh(geometry(new T.CircleGeometry(.09, 12).rotateX(-Math.PI / 2)), own(new T.MeshBasicMaterial({ color: '#211d1d', transparent: true, opacity: .22, depthWrite: false })), count)); shadow.instanceMatrix.setUsage(T.DynamicDrawUsage); shadow.frustumCulled = false; walkerGroup.add(shadow);
+      const shadow = own(new T.InstancedMesh(geometry(new T.CircleGeometry(.09, 12).rotateX(-Math.PI / 2)), own(new T.MeshBasicMaterial({ color: '#211d1d', transparent: true, opacity: .22, depthWrite: false })), capacity)); shadow.instanceMatrix.setUsage(T.DynamicDrawUsage); shadow.frustumCulled = false; walkerGroup.add(shadow);
       const cargos = new Map(['book', 'idea', 'memory', 'data'].map(kind => [kind, own(new T.SpriteMaterial({ map: own(cargoTexture(kind)), depthTest: false, transparent: true }))]));
-      const sprites = walkers.map(w => { const sprite = new T.Sprite(cargos.get(w.cargo)); sprite.scale.setScalar(.24); walkerGroup.add(sprite); addLabel(v3(w.position).add(new T.Vector3(0, .6, 0)), '', '', { kind: 'walker', walkerId: w.id }, 'walker', w.id); return sprite; });
+      const walkerLabels: Label[] = [];
+      const sprites = roster.map(npc => { const sprite = new T.Sprite(cargos.get('book')); sprite.scale.setScalar(.24); sprite.visible = false; walkerGroup.add(sprite); addLabel(new T.Vector3(), '', '', { kind: 'walker', walkerId: npc.id }, 'walker', npc.id); walkerLabels.push(dom.at(-1)!); return sprite; });
       const matrix = new T.Matrix4(), object = new T.Object3D(), rootMatrix = new T.Matrix4(), localMatrix = new T.Matrix4(), q = new T.Quaternion(), scale = new T.Vector3();
       function updateWalkers(snapshot: readonly WalkerSnapshot[], _animate: boolean) {
+        options.canvas.dataset.npcPopulation = String(snapshot.length);
         walkerGroup.visible = state.walkers;
+        for (const part of parts) part.mesh.count = snapshot.length;
+        shadow.count = snapshot.length;
+        sprites.forEach((sprite, index) => { if (index >= snapshot.length) sprite.visible = false; });
         if (!state.walkers) return;
-        const seasonalAccent = new T.Color(HOLIDAYS[state.season].accent), seasonalSecondary = new T.Color(HOLIDAYS[state.season].secondary);
+        const seasonalAccent = new T.Color(HOLIDAYS[state.season].accent);
         snapshot.forEach((w, index) => {
-          const role = data.roles.find(r => r.id === w.role)!, distance = camera.position.distanceTo(v3(w.position)), size = T.MathUtils.clamp(distance / 20, 1, 1.45), phase = w.phase * 20, bob = w.status === 'moving' ? Math.abs(Math.sin(phase)) * .012 : 0;
+          const role = data.roles.find(r => r.id === w.role) ?? { accessory: 'badge', color: '#547d8a', skin: '#dbac8a' }, distance = camera.position.distanceTo(v3(w.position)), size = T.MathUtils.clamp(distance / 18, 1.15, 1.65) * (1 + (index % 5 - 2) * .035), phase = w.phase * 20, bob = w.status === 'moving' ? Math.abs(Math.sin(phase)) * .012 : 0;
           q.setFromAxisAngle(new T.Vector3(0, 1, 0), w.heading); rootMatrix.compose(v3(w.position).add(new T.Vector3(0, bob, 0)), q, scale.setScalar(size));
           for (const part of parts) {
-            object.position.copy(part.offset); object.rotation.set(part.swing && w.status === 'moving' ? Math.sin(phase) * part.swing : 0, part.rotation ?? 0, 0); object.scale.copy(part.scale);
+            const walking = w.status === 'moving', arm = part.offset.y === .153, leg = part.offset.y === .056;
+            let swing = walking && part.swing ? Math.sin(phase) * part.swing : 0;
+            if (arm && (role.accessory === 'stroller' || role.accessory === 'bicycle')) swing = -.7;
+            if (leg && role.accessory === 'bicycle') swing = -.45 + (walking ? Math.sin(phase) * (part.swing ?? 0) * .55 : 0);
+            object.position.copy(part.offset);
+            if (arm || leg) { const pivot = arm ? .21 : .105, length = pivot - part.offset.y; object.position.y = pivot - Math.cos(swing) * length; object.position.z -= Math.sin(swing) * length; }
+            object.rotation.set(swing, part.rotation ?? 0, 0); object.scale.copy(part.scale);
             if (part.filter && role.accessory !== part.filter) object.scale.setScalar(0);
             object.updateMatrix(); localMatrix.copy(object.matrix); matrix.multiplyMatrices(rootMatrix, localMatrix); part.mesh.setMatrixAt(index, matrix);
             if (!part.filter && part.offset.y === .14) part.mesh.setColorAt(index, new T.Color(role.color).lerp(seasonalAccent, .22));
-            if (part.filter && role.accessory === part.filter) part.mesh.setColorAt(index, new T.Color('#ffffff').lerp(seasonalSecondary, .2));
+            if (!part.filter && part.offset.y === .056) part.mesh.setColorAt(index, new T.Color(['#3f505b', '#6c4e44', '#354d46', '#6b607a'][index % 4]));
             if (!part.filter && part.offset.y === .28 && part.offset.z === 0) part.mesh.setColorAt(index, new T.Color(role.skin));
           }
           object.position.copy(v3(w.position)).add(new T.Vector3(0, .006, 0)); object.rotation.set(0, 0, 0); object.scale.setScalar(size); object.updateMatrix(); shadow.setMatrixAt(index, object.matrix);
-          sprites[index].position.copy(v3(w.position)).add(new T.Vector3(0, .49, 0)); sprites[index].visible = distance < 16;
-          const label = dom.find(l => l.type === 'walker' && l.owner === w.id)!; label.object.position.copy(v3(w.position)).add(new T.Vector3(0, .68, 0));
+          sprites[index].material = cargos.get(w.cargo)!; sprites[index].position.copy(v3(w.position)).add(new T.Vector3(0, .49, 0)); sprites[index].visible = distance < 16;
+          const label = walkerLabels[index]; label.object.position.copy(v3(w.position)).add(new T.Vector3(0, .68, 0));
           const cargo = { book: ['書本', 'books'], idea: ['想法', 'ideas'], memory: ['記憶', 'memories'], data: ['資料', 'data'] }[w.cargo]; label.full = state.language === 'en' ? `Reading companion · ${cargo[1]}` : `閱讀夥伴 · ${cargo[0]}`;
         });
         for (const part of parts) { part.mesh.instanceMatrix.needsUpdate = true; part.mesh.boundingSphere = null; if (part.mesh.instanceColor) part.mesh.instanceColor.needsUpdate = true; } shadow.instanceMatrix.needsUpdate = true;
@@ -317,6 +329,7 @@ export function createExplorerEngine(options: ExplorerEngineOptions): ExplorerEn
     setSelection(value, config) { if (!disposed) setSelection(value, config?.focus !== false); },
     setState(next) {
       if (disposed) return; const previous = state; state = { ...next };
+      if (next.population !== previous.population) resources.simulation.setPopulation(next.population);
       if (Math.abs(next.minute - resources.simulation.snapshot().minute) > .00001) resources.simulation.setMinute(next.minute);
       controls.enableDamping = moving(); controls.minPolarAngle = next.birdseye ? 0 : T.MathUtils.degToRad(25);
       if (!moving() && flight) { camera.position.copy(flight.to); controls.target.copy(flight.target); camera.lookAt(controls.target); flight = null; }

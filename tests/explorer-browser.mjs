@@ -29,6 +29,8 @@ try {
  await page.locator('.island-world canvas').focus();await page.keyboard.press('Escape');assert.equal(await page.locator('.explorer-detail:not([hidden])').count(),0);
  await page.locator('#explorer-tab-connections').click();assert.equal(await page.locator('.explorer-list .explorer-flow-select').count(),10);
  await page.locator('.explorer-list .explorer-flow-select').first().click();assert.match(await page.locator('.explorer-detail .explorer-flow-facts').innerText(),/原刊順序/);assert.ok(await page.locator('.explorer-detail .explorer-source-link').count()>0);
+ assert.equal(await page.locator('[data-toggle="walkers"]').getAttribute('aria-pressed'),'true');
+ await page.locator('[data-toggle="walkers"]').click();assert.equal(await page.locator('[data-toggle="walkers"]').getAttribute('aria-pressed'),'false');
  await page.locator('[data-toggle="walkers"]').click();assert.equal(await page.locator('[data-toggle="walkers"]').getAttribute('aria-pressed'),'true');
  await page.locator('[data-toggle="names"]').click();
  await page.locator('[data-toggle="flows"]').click();assert.equal(await page.locator('[data-toggle="flows"]').getAttribute('aria-pressed'),'true');

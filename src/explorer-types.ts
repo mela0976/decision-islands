@@ -45,15 +45,16 @@ export interface ExplorerConfig {
   daySegments: readonly (Omit<DaySegment, 'itemIds'> & { islandIds: readonly string[] })[];
   dayKeyframes: readonly DayKeyframe[];
 }
+export interface ExplorerNpc { id: string; roleId: string; flowId: string | null; homeIslandId: string; articleIds: readonly string[] }
 export type ExplorerSelection = null | { kind: 'island'; islandId: string } | { kind: 'item'; itemId: string } | { kind: 'walker'; walkerId: string } | { kind: 'flow'; flowId: string };
 export type ExplorerCommand = { type: 'overview' } | { type: 'birdseye'; enabled: boolean } | { type: 'minute'; minute: number } | { type: 'paused'; paused: boolean }
-  | { type: 'season'; season: Season } | { type: 'chapter'; chapter: Chapter | null }
+  | { type: 'population'; count: number } | { type: 'season'; season: Season } | { type: 'chapter'; chapter: Chapter | null }
   | { type: 'toggle'; key: 'names' | 'walkers' | 'flows' | 'journal'; value: boolean }
   | { type: 'query'; query: string } | { type: 'tab'; tab: 'themes' | 'connections' }
   | { type: 'panel'; panel: 'list' | 'detail'; open: boolean } | { type: 'journalFilter'; flowId: string | null };
 export interface ExplorerState {
   selection: ExplorerSelection; language: 'zh' | 'en'; query: string; tab: 'themes' | 'connections';
-  season: Season;
+  season: Season; population: number;
   minute: number; paused: boolean; reducedMotion: boolean; names: boolean; walkers: boolean; flows: boolean;
   journal: boolean; journalFilter: string | null; birdseye: boolean; listOpen: boolean; detailOpen: boolean;
   chapter: Chapter | null; completedArticleIds: readonly string[]; bookmarkedArticleIds: readonly string[];
@@ -75,7 +76,7 @@ export interface WalkerSnapshot {
 export interface SimulationSnapshot { minute: number; day: DaySnapshot; activeItemIds: readonly string[]; walkers: readonly WalkerSnapshot[] }
 export interface ExplorerSimulation {
   update(dtSeconds: number, moving: boolean): readonly ExplorerEvent[];
-  setMinute(minute: number): void; snapshot(): SimulationSnapshot; reset(): void;
+  setPopulation(count: number): void; setMinute(minute: number): void; snapshot(): SimulationSnapshot; reset(): void;
 }
 export interface ModelPlacement { id: string; model: ModelKind; position: Vec3; scale: number; color: string; rotation?: number }
 export interface ModelKit {

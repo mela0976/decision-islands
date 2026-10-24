@@ -5,6 +5,7 @@ import { createReadingJourneyUI } from './reading-journey-ui';
 import { buildReadingJourneys } from './reading-journeys';
 import type { JourneyDefinition } from './journey-types';
 import { DATA, buildExplorerData, initialExplorerState, isExplorerCurated } from './explorer-data';
+import { clampNpcPopulation, createNpcRoster } from './explorer-npcs';
 import { applySeason, HOLIDAYS, readSeason, saveSeason } from './season';
 import type { Season } from './season';
 import type { ExplorerCommand, ExplorerData, ExplorerSelection, ExplorerUI, ExplorerUICallbacks } from './explorer-types';
@@ -278,6 +279,14 @@ function commandExplorer(command: ExplorerCommand) {
       world?.reset(); break;
     case 'birdseye': explorerState.birdseye = command.enabled; break;
     case 'minute': explorerState.minute = ((command.minute % 1440) + 1440) % 1440; break;
+    case 'population': {
+      explorerState.population = clampNpcPopulation(command.count);
+      const selected = explorerState.selection;
+      if (selected?.kind === 'walker' && explorerData && !createNpcRoster(explorerData, explorerState.population).some(npc => npc.id === selected.walkerId)) {
+        explorerState.selection = null; explorerState.detailOpen = false;
+      }
+      break;
+    }
     case 'paused': explorerState.paused = command.paused; break;
     case 'season':
       explorerState.season = command.season; applySeason(command.season); world?.setSeason(command.season);

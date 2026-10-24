@@ -1,14 +1,34 @@
-import type { ExplorerData, ExplorerEvent, ExplorerSimulation, PathGraph, WalkerSnapshot } from './explorer-types';
+import type { ExplorerData, ExplorerEvent, ExplorerSimulation, PathGraph, RoutePath, WalkerSnapshot } from './explorer-types';
 import { hashSeed, mulberry32 } from './explorer-random';
 import { findRoute, pointOnRoute } from './explorer-graph';
+import { createNpcRoster } from './explorer-npcs';
 import { activeItemIds, sampleDay } from './explorer-daycycle';
-export function createSimulation(data: ExplorerData, graph: PathGraph): ExplorerSimulation {
+export function createSimulation(data: ExplorerData, graph: PathGraph, population = 30): ExplorerSimulation {
     let minute = 600, eventId = 0, time = 0;
-    const walkers = data.flows.flatMap(flow => {
-        const route = findRoute(graph, flow.from, flow.to), random = mulberry32(hashSeed(data.seed, flow.id));
-        return Array.from({ length: flow.walkerCount }, (_, index) => ({ id: `${flow.id}:${index}`, flow, route, distance: random() * route.length, direction: (index % 2 ? -1 : 1) as 1 | -1, speed: (data.roles.find(r => r.id === flow.role)?.accessory === 'bicycle' ? .62 : .32) + random() * .08, phase: random(), wait: 0, status: 'moving' as 'moving' | 'waiting' }));
-    });
-    const original = walkers.map(w => ({ distance: w.distance, direction: w.direction }));
+    const routes = new Map<string, RoutePath>();
+    function localRoute(islandId: string): RoutePath {
+        const nodes = graph.nodes.filter(n => n.islandId === islandId);
+        const points = [...nodes.map(n => n.position), nodes[0].position];
+        const cumulative = [0];
+        for (let i = 1; i < points.length; i++) cumulative.push(cumulative[i - 1] + Math.hypot(...points[i].map((v, k) => v - points[i - 1][k])));
+        return { nodeIds: nodes.map(n => n.id), points, cumulative, length: cumulative.at(-1)! };
+    }
+    function makeWalker(npc: ReturnType<typeof createNpcRoster>[number]) {
+        const flow = data.flows.find(f => f.id === npc.flowId);
+        const routeKey = flow?.id ?? npc.homeIslandId;
+        let route = routes.get(routeKey);
+        if (!route) { route = flow ? findRoute(graph, flow.from, flow.to) : localRoute(npc.homeIslandId); routes.set(routeKey, route); }
+        const random = mulberry32(hashSeed(data.seed, npc.id));
+        const distance = random() * route.length, direction = (random() > .5 ? -1 : 1) as 1 | -1;
+        const speed = (data.roles.find(r => r.id === npc.roleId)?.accessory === 'bicycle' ? .62 : .32) + random() * .08;
+        return { id: npc.id, role: npc.roleId, flow, route, distance, direction, speed, phase: random(), wait: 0, status: 'moving' as 'moving' | 'waiting', original: { distance, direction } };
+    }
+    let walkers: ReturnType<typeof makeWalker>[] = [];
+    function setPopulation(count: number) {
+        const previous = new Map(walkers.map(w => [w.id, w]));
+        walkers = createNpcRoster(data, count).map(npc => previous.get(npc.id) ?? makeWalker(npc));
+    }
+    setPopulation(population);
     function update(dtSeconds: number, moving: boolean): readonly ExplorerEvent[] {
         if (!moving || !Number.isFinite(dtSeconds) || dtSeconds <= 0)
             return [];
@@ -18,7 +38,7 @@ export function createSimulation(data: ExplorerData, graph: PathGraph): Explorer
         const startMinute = minute;
         for (const w of walkers) {
             let remaining = dtSeconds, elapsed = 0;
-            const emit = (type: ExplorerEvent['type']) => { events.push({ id: 0, elapsed, type, flowId: w.flow.id, walkerId: w.id, islandId: w.direction === 1 ? w.flow.to : w.flow.from, minute: (startMinute + elapsed * 10) % 1440 }); };
+            const emit = (type: ExplorerEvent['type']) => { if (!w.flow) return; events.push({ id: 0, elapsed, type, flowId: w.flow.id, walkerId: w.id, islandId: w.direction === 1 ? w.flow.to : w.flow.from, minute: (startMinute + elapsed * 10) % 1440 }); };
             if (w.route.length <= 0)
                 continue;
             while (remaining > 1e-10) {
@@ -54,6 +74,6 @@ export function createSimulation(data: ExplorerData, graph: PathGraph): Explorer
         time += dtSeconds;
         return events.sort((a, b) => a.elapsed - b.elapsed || a.walkerId.localeCompare(b.walkerId)).slice(-100).map(({ elapsed: _elapsed, ...event }) => ({ ...event, id: ++eventId }));
     }
-    return { update, setMinute(value) { if (Number.isFinite(value))
-            minute = ((value % 1440) + 1440) % 1440; }, snapshot() { return { minute, day: sampleDay(data.dayKeyframes, minute), activeItemIds: activeItemIds(data, minute), walkers: walkers.map(w => { const p = pointOnRoute(w.route, w.distance); return { id: w.id, flowId: w.flow.id, role: w.flow.role, cargo: w.flow.cargo, position: p.position, heading: p.heading + (w.direction === -1 ? Math.PI : 0), phase: w.phase + time * .45, direction: w.direction, status: w.status } satisfies WalkerSnapshot; }) }; }, reset() { minute = 600; eventId = 0; time = 0; walkers.forEach((w, i) => { w.distance = original[i].distance; w.direction = original[i].direction; w.wait = 0; w.status = 'moving'; }); } };
+    return { update, setPopulation, setMinute(value) { if (Number.isFinite(value))
+            minute = ((value % 1440) + 1440) % 1440; }, snapshot() { return { minute, day: sampleDay(data.dayKeyframes, minute), activeItemIds: activeItemIds(data, minute), walkers: walkers.map(w => { const p = pointOnRoute(w.route, w.distance); return { id: w.id, flowId: w.flow?.id ?? '', role: w.role, cargo: w.flow?.cargo ?? 'book', position: p.position, heading: p.heading + (w.direction === -1 ? Math.PI : 0), phase: w.phase + time * w.speed * 1.4, direction: w.direction, status: w.status } satisfies WalkerSnapshot; }) }; }, reset() { minute = 600; eventId = 0; time = 0; walkers.forEach(w => { w.distance = w.original.distance; w.direction = w.original.direction; w.wait = 0; w.status = 'moving'; }); } };
 }
