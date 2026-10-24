@@ -115,6 +115,41 @@
   white-space: nowrap;
 }
 
+.explorer-population-control {
+  align-items: center;
+  background: color-mix(in srgb, var(--holiday-paper, #fff8ef) 86%, white);
+  border: 1px solid #ffffffc4;
+  border-radius: 14px;
+  box-shadow: 0 4px 18px #32251c1a;
+  display: inline-flex;
+  gap: 8px;
+  height: 46px;
+  padding: 0 10px;
+}
+
+.explorer-population-label,
+.explorer-population-count {
+  color: var(--holiday-ink, var(--explorer-ink));
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.explorer-population-range {
+  accent-color: var(--holiday-accent, #db6a41);
+  cursor: pointer;
+  height: 44px;
+  margin: 0;
+  min-width: 88px;
+  touch-action: pan-x;
+  width: clamp(88px, 11vw, 132px);
+}
+
+.explorer-population-count {
+  min-width: 2ch;
+  text-align: right;
+}
+
 .explorer-tool-button:active,
 .explorer-close:active,
 .explorer-time-mobile:active {
@@ -843,6 +878,220 @@
   right: 0;
   top: 0;
   width: 318px;
+}
+
+.explorer-npc-list {
+  border-radius: 22px 0 0 22px;
+  max-height: calc(100vh - 220px);
+  right: 0;
+  top: 200px;
+  width: 318px;
+}
+
+.explorer-npc-list-header {
+  border-bottom: 1px solid var(--explorer-border);
+  flex: 0 0 auto;
+  padding: 22px 16px 12px;
+}
+
+.explorer-npc-list-header h2 {
+  min-width: 0;
+}
+
+.explorer-npc-select-label {
+  display: grid;
+  gap: 8px;
+  padding: 0 16px 16px;
+}
+
+.explorer-npc-select-label > span {
+  color: var(--explorer-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.explorer-npc-select {
+  background: #fffdf9;
+  border: 1px solid var(--explorer-border);
+  border-radius: 12px;
+  min-height: 46px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.explorer-npc-fallback-note {
+  background: color-mix(in srgb, var(--holiday-sky, #e9f2ee) 65%, white);
+  border-radius: 10px;
+  color: var(--holiday-ink, #203c35);
+  font-size: 11px;
+  line-height: 1.55;
+  margin: 4px 16px 12px;
+  padding: 9px 10px;
+}
+
+.explorer-npc-selected {
+  align-items: center;
+  background: #fffdf9;
+  border: 1px solid var(--explorer-border);
+  border-radius: 12px;
+  display: flex;
+  font-weight: 700;
+  justify-content: flex-start;
+  margin: 0 16px 12px;
+  min-height: 46px;
+  padding: 8px 12px;
+  text-align: left;
+  width: calc(100% - 32px);
+}
+
+.explorer-npc-greeting {
+  background: color-mix(in srgb, var(--holiday-sky, #e9f2ee) 75%, white);
+  border-left: 3px solid var(--npc-role-color, var(--holiday-accent, #db6a41));
+  border-radius: 0 12px 12px 0;
+  color: var(--holiday-ink, #203c35);
+  line-height: 1.65;
+  margin: 0 0 14px;
+  padding: 11px 13px;
+}
+
+.explorer-npc-topics,
+.explorer-npc-questions {
+  display: grid;
+  gap: 7px;
+  margin: 0 0 14px;
+}
+
+.explorer-npc-topic,
+.explorer-npc-question-button {
+  background: #fffdf9;
+  border: 1px solid var(--explorer-border);
+  border-radius: 12px;
+  color: var(--explorer-ink);
+  line-height: 1.4;
+  min-height: 44px;
+  padding: 9px 12px;
+  text-align: left;
+  width: 100%;
+}
+
+.explorer-npc-topic[aria-pressed="true"],
+.explorer-npc-question-button:hover {
+  background: color-mix(in srgb, var(--holiday-glow, #fcea8b) 24%, white);
+  border-color: var(--holiday-accent, #db6a41);
+}
+
+.explorer-npc-more {
+  background: color-mix(in srgb, var(--holiday-paper, #fff8ef) 76%, white);
+  border: 1px solid var(--explorer-border);
+  border-radius: 12px;
+  padding: 0 10px;
+}
+
+.explorer-npc-more > summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 44px;
+}
+
+.explorer-npc-more-list {
+  display: grid;
+  gap: 6px;
+  max-height: 210px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 0 0 10px;
+}
+
+.explorer-npc-article {
+  background: #fffdf9;
+  border: 1px solid var(--explorer-border);
+  border-radius: 15px;
+  margin: 0 0 14px;
+  padding: 14px;
+}
+
+.explorer-npc-article-title {
+  color: var(--holiday-ink, #203c35);
+  font-size: 16px;
+  line-height: 1.4;
+  margin: 0 0 7px;
+}
+
+.explorer-npc-article-meta {
+  color: var(--explorer-muted);
+  font-size: 11px;
+  margin: 0 0 12px;
+}
+
+.explorer-npc-summary .explorer-eyebrow {
+  margin-bottom: 5px;
+}
+
+.explorer-npc-summary .explorer-article-summary {
+  font-size: 13px;
+  margin: 0 0 12px;
+}
+
+.explorer-npc-read {
+  min-height: 44px;
+  width: 100%;
+}
+
+.explorer-npc-question-button:disabled,
+.explorer-npc-action:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+.explorer-npc-chat {
+  display: grid;
+  gap: 9px;
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+}
+
+.explorer-npc-exchange {
+  background: color-mix(in srgb, var(--holiday-paper, #fff8ef) 75%, white);
+  border: 1px solid var(--explorer-border);
+  border-radius: 13px;
+  padding: 10px 12px;
+}
+
+.explorer-npc-user-message,
+.explorer-npc-reply {
+  line-height: 1.6;
+  margin: 0;
+}
+
+.explorer-npc-user-message {
+  color: var(--explorer-muted);
+  font-size: 11px;
+  margin-bottom: 5px;
+}
+
+.explorer-npc-reply {
+  color: #332a24;
+  font-size: 13px;
+}
+
+.explorer-npc-actions {
+  display: grid;
+  gap: 7px;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+}
+
+.explorer-npc-action {
+  justify-content: center;
+  min-height: 44px;
+  text-align: center;
+}
+
+.explorer-npc-action span {
+  white-space: normal;
 }
 
 .explorer-list-head {
@@ -1701,6 +1950,65 @@
 
   .explorer-metric {
     padding: 7px;
+  }
+}
+
+@media (max-width: 800px) {
+  .explorer-toolbar {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: calc(100vw - 24px);
+    width: calc(100vw - 24px);
+  }
+
+  .explorer-toolbar > .explorer-more-tools {
+    order: 4;
+  }
+
+  .explorer-toolbar > .explorer-help-trigger {
+    order: 5;
+  }
+
+  .explorer-toolbar > .explorer-population-control {
+    order: 6;
+  }
+
+  .explorer-population-range {
+    width: clamp(88px, 26vw, 128px);
+  }
+
+  .explorer-npc-list {
+    top: auto;
+    max-height: none;
+    height: 38vh;
+    height: 38svh;
+    z-index: 35;
+  }
+
+  .explorer-npc-list-header {
+    padding: 9px 16px 12px;
+  }
+
+  .explorer-detail[data-detail-kind="walker"]:not([data-expanded="true"]) {
+    height: 48vh;
+    height: 48svh;
+  }
+}
+
+@media (max-width: 420px) {
+  .explorer-toolbar {
+    max-width: calc(100vw - 16px);
+    right: 8px;
+    width: calc(100vw - 16px);
+  }
+
+  .explorer-population-control {
+    gap: 6px;
+    padding: 0 8px;
+  }
+
+  .explorer-population-range {
+    width: clamp(88px, 28vw, 108px);
   }
 }
 

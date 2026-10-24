@@ -1,5 +1,7 @@
 import './explorer.css';
 import { HOLIDAYS } from './season';
+import { createNpcRoster } from './explorer-npcs';
+import { buildNpcDialogueProfile, createNpcReply, getNpcDialogueQuestions, type NpcQuestionId } from './npc-dialogue';
 import type { Article, Chapter } from './types';
 import type {
   ExplorerCommand,
@@ -8,6 +10,7 @@ import type {
   ExplorerFlow,
   ExplorerIsland,
   ExplorerItem,
+  ExplorerNpc,
   ExplorerSelection,
   ExplorerState,
   ExplorerUI,
@@ -20,6 +23,8 @@ import type {
 type CopyKey = keyof typeof COPY;
 type ChapterFilter = Chapter | null;
 type ListFocusKey = { attribute: 'data-item-id' | 'data-island-id' | 'data-flow-id' | 'data-article-id'; value: string };
+type NpcDialogueTurn = { articleId: string; questionId: NpcQuestionId };
+type ActiveNpcDialogue = { dataVersion: number; npcId: string; articleId: string | null; history: NpcDialogueTurn[] };
 
 const COPY = {
   region: { zh: '決策群島探索介面', en: 'Decision Islands explorer interface' },
@@ -86,6 +91,27 @@ const COPY = {
   walkerDisclosure: { zh: '閱讀夥伴是場景引導動畫，並非真實讀者或文章因果證據。', en: 'Reading companions are scene guide animations, not real readers or evidence of causation between articles.' },
   walker: { zh: '閱讀夥伴', en: 'Reading companion' },
   walkerUnavailable: { zh: '目前沒有可用的閱讀夥伴場景動畫。', en: 'No reading companion scene animation is available.' },
+  npcList: { zh: '閱讀夥伴', en: 'Reading partners' },
+  npcListTitle: { zh: '選擇閱讀夥伴', en: 'Choose a reading partner' },
+  npcPopulation: { zh: 'NPC 數量', en: 'NPC count' },
+  npcPopulationUnit: { zh: '位', en: '' },
+  npcListCount: { zh: '位閱讀夥伴', en: 'reading partners' },
+  npcFallbackNote: { zh: '3D 場景動畫目前無法使用，仍可選擇閱讀夥伴並開啟文字導讀。', en: 'The 3D scene is unavailable. You can still choose a reading partner and open the text guide.' },
+  npcSelectLabel: { zh: '依角色選擇閱讀夥伴', en: 'Choose a reading partner by role' },
+  npcSelectPlaceholder: { zh: '選擇一位閱讀夥伴', en: 'Choose a reading partner' },
+  npcOpenSelected: { zh: '開啟所選夥伴的對話', en: 'Open the selected partner’s conversation' },
+  npcNoArticles: { zh: '目前書目沒有可用文章。', en: 'No articles are available in this edition.' },
+  npcUnavailable: { zh: '這位閱讀夥伴已不在目前清單。', en: 'This reading partner is no longer in the current list.' },
+  npcNoSummary: { zh: '目前書目沒有提供這篇文章的摘要。', en: 'This edition does not provide a summary for this article.' },
+  npcSiteSummary: { zh: '本站摘要', en: 'Site summary' },
+  npcMoreArticles: { zh: '更多文章', en: 'More articles' },
+  npcQuestionsTitle: { zh: '想聊哪個問題？', en: 'Choose a question' },
+  npcNextTopic: { zh: '換個話題', en: 'Change topic' },
+  npcRestart: { zh: '重新開始', en: 'Restart conversation' },
+  npcBackToList: { zh: '返回閱讀夥伴清單', en: 'Back to reading partners' },
+  npcYou: { zh: '你', en: 'You' },
+  npcGuide: { zh: '導讀', en: 'Guide' },
+  npcNoMoreArticles: { zh: '這期書目只有目前這篇文章。', en: 'This edition has no other articles.' },
   overviewHint: { zh: '場景時間', en: 'Scene time' },
   time: { zh: '時間', en: 'Time' },
   dawn: { zh: '清晨', en: 'Morning' },
@@ -213,6 +239,12 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
   let moreToolsOpen = false;
   let helpOpen = false;
   let mobileTimeOpen = false;
+  let npcListOpen = false;
+  let npcListKey = '';
+  let npcRosterKey = '';
+  let npcRoster: readonly ExplorerNpc[] = [];
+  let lastRenderedSelectionKey = 'none';
+  let activeNpcDialogue: ActiveNpcDialogue | null = null;
   let events: ExplorerEvent[] = [];
   let eventRevision = 0;
   const eventIds = new Set<number>();
@@ -221,7 +253,8 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
   let detailTrigger: HTMLElement | null = null;
   let listWasOpen = false;
   let detailWasOpen = false;
-  let walkerLiveFields: { status: HTMLElement; destination: HTMLElement } | null = null;
+  let npcListTrigger: HTMLElement | null = null;
+  let npcListWasOpen = false;
 
   const root = node('div', 'explorer-ui');
   root.setAttribute('role', 'region');
@@ -241,6 +274,12 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
   });
   const listLabel = node('span', 'explorer-toolbar-label', COPY.themes.zh);
   listButton.append(listLabel);
+  const npcListButton = button('♙', 'explorer-tool-button explorer-npc-open', COPY.npcList.zh, () => toggleNpcList());
+  const npcListLabel = node('span', 'explorer-toolbar-label', COPY.npcList.zh);
+  npcListButton.append(npcListLabel);
+  npcListButton.dataset.npcOpen = '';
+  npcListButton.setAttribute('aria-expanded', 'false');
+  npcListButton.setAttribute('aria-controls', 'explorer-npc-list');
   const moreToolsButton = button('⋯', 'explorer-tool-button explorer-more-tools', COPY.moreTools.zh, () => setMoreToolsOpen(!moreToolsOpen));
   const moreToolsLabel = node('span', 'explorer-toolbar-label', COPY.moreTools.zh);
   moreToolsButton.append(moreToolsLabel);
@@ -251,7 +290,22 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
   helpButton.hidden = true;
   helpButton.setAttribute('aria-expanded', 'false');
   helpButton.setAttribute('aria-controls', 'explorer-help');
-  toolbar.append(overviewButton, listButton, moreToolsButton, helpButton);
+  const populationControl = node('label', 'explorer-population-control');
+  const populationLabel = node('span', 'explorer-population-label', COPY.npcPopulation.zh);
+  const populationInput = node('input', 'explorer-population-range');
+  populationInput.type = 'range';
+  populationInput.id = 'explorer-npc-population';
+  populationInput.min = '10';
+  populationInput.max = '100';
+  populationInput.step = '1';
+  populationInput.value = '30';
+  populationInput.dataset.npcPopulation = '';
+  const populationReadout = node('output', 'explorer-population-count', '30');
+  populationReadout.htmlFor = populationInput.id;
+  populationReadout.dataset.npcCount = '';
+  populationReadout.setAttribute('aria-live', 'off');
+  populationControl.append(populationLabel, populationInput, populationReadout);
+  toolbar.append(overviewButton, listButton, npcListButton, populationControl, moreToolsButton, helpButton);
 
   const detailPanel = node('aside', 'explorer-panel explorer-detail');
   detailPanel.setAttribute('aria-label', COPY.detail.zh);
@@ -325,6 +379,40 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
   listPanel.append(listHandle, listHead, listContent);
   listHead.append(listTop, listCount, searchLabel, chapterLabel, tabList);
   tabList.append(themesTab, connectionsTab);
+
+  const npcListPanel = node('aside', 'explorer-panel explorer-npc-list');
+  npcListPanel.id = 'explorer-npc-list';
+  npcListPanel.hidden = true;
+  npcListPanel.inert = true;
+  npcListPanel.setAttribute('aria-labelledby', 'explorer-npc-list-title');
+  const npcListHandle = node('button', 'explorer-sheet-handle');
+  npcListHandle.type = 'button';
+  npcListHandle.setAttribute('aria-label', COPY.npcListTitle.zh);
+  npcListHandle.setAttribute('aria-expanded', 'false');
+  npcListHandle.append(node('span', 'explorer-sheet-grip'));
+  const npcListHeader = node('div', 'explorer-list-title-row explorer-npc-list-header');
+  const npcListTitle = node('h2', '', COPY.npcListTitle.zh);
+  npcListTitle.id = 'explorer-npc-list-title';
+  const npcListClose = button('×', 'explorer-close', COPY.closeList.zh, () => closeNpcList(true));
+  const npcListCount = node('p', 'explorer-list-count');
+  const npcFallbackNote = node('p', 'explorer-npc-fallback-note', COPY.npcFallbackNote.zh);
+  npcFallbackNote.hidden = true;
+  const npcSelectLabel = node('label', 'explorer-npc-select-label');
+  const npcSelectLabelText = node('span', '', COPY.npcSelectLabel.zh);
+  const npcSelect = node('select', 'explorer-npc-select');
+  npcSelect.dataset.npcSelect = '';
+  const npcPlaceholder = node('option', '', COPY.npcSelectPlaceholder.zh);
+  npcPlaceholder.value = '';
+  npcPlaceholder.disabled = true;
+  npcPlaceholder.selected = true;
+  npcSelect.append(npcPlaceholder);
+  npcSelectLabel.append(npcSelectLabelText, npcSelect);
+  const npcSelectedButton = button('↗', 'explorer-npc-selected', '', () => {
+    if (state?.selection?.kind === 'walker') selectNpc(state.selection.walkerId);
+  });
+  npcSelectedButton.hidden = true;
+  npcListHeader.append(npcListTitle, npcListClose);
+  npcListPanel.append(npcListHandle, npcListHeader, npcListCount, npcFallbackNote, npcSelectedButton, npcSelectLabel);
 
   const hud = node('nav', 'explorer-hud');
   hud.id = 'explorer-hud';
@@ -420,8 +508,8 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
   fallbackHeader.firstElementChild?.append(fallbackTitle, fallbackText);
   fallbackPanel.append(fallbackHeader, fallbackMap);
 
-  for (const panel of [toolbar, detailPanel, listPanel, hud, journalPanel, helpPanel, fallbackPanel]) panel.dataset.explorerPanel = '';
-  root.append(toolbar, detailPanel, listPanel, hud, journalPanel, helpPanel, fallbackPanel);
+  for (const panel of [toolbar, detailPanel, listPanel, npcListPanel, hud, journalPanel, helpPanel, fallbackPanel]) panel.dataset.explorerPanel = '';
+  root.append(toolbar, detailPanel, listPanel, npcListPanel, hud, journalPanel, helpPanel, fallbackPanel);
   host.append(root);
 
   function tr(key: CopyKey): string {
@@ -430,6 +518,119 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
 
   function localized(value: { zh: string; en: string }): string {
     return value[state?.language ?? 'zh'];
+  }
+
+  function currentNpcRoster(): readonly ExplorerNpc[] {
+    if (!state) return [];
+    const key = `${dataVersion}:${state.population}`;
+    if (key !== npcRosterKey) {
+      npcRosterKey = key;
+      npcRoster = createNpcRoster(data, state.population);
+    }
+    return npcRoster;
+  }
+
+  function updateNpcListVisibility(restoreFocus = true): void {
+    const open = npcListOpen && active;
+    npcListPanel.hidden = !open;
+    npcListPanel.inert = !open || !active;
+    npcListButton.setAttribute('aria-expanded', String(open));
+    if (active && npcListWasOpen && !open && restoreFocus) (npcListTrigger ?? npcListButton).focus();
+    npcListWasOpen = open;
+    npcListHandle.setAttribute('aria-expanded', String(open && npcListPanel.dataset.expanded === 'true'));
+  }
+
+  function renderNpcList(): void {
+    if (!state) return;
+    const roster = currentNpcRoster();
+    const key = [dataVersion, state.population, state.language, state.selection?.kind === 'walker' ? state.selection.walkerId : '', fallback].join('|');
+    if (key === npcListKey) return;
+    npcListKey = key;
+    const language = state.language;
+    npcListTitle.textContent = COPY.npcListTitle[language];
+    npcListClose.setAttribute('aria-label', COPY.closeList[language]);
+    npcListHandle.setAttribute('aria-label', COPY.npcListTitle[language]);
+    npcListCount.textContent = `${roster.length} ${COPY.npcListCount[language]}`;
+    npcFallbackNote.textContent = COPY.npcFallbackNote[language];
+    npcFallbackNote.hidden = !fallback;
+    npcSelectLabelText.textContent = COPY.npcSelectLabel[language];
+    npcSelect.setAttribute('aria-label', COPY.npcSelectLabel[language]);
+    const selectedWalkerId = state.selection?.kind === 'walker' ? state.selection.walkerId : null;
+    const selectedNpc = selectedWalkerId ? roster.find(npc => npc.id === selectedWalkerId) : undefined;
+    npcSelectedButton.hidden = !selectedNpc;
+    if (selectedNpc) {
+      const role = data.roles.find(value => value.id === selectedNpc.roleId);
+      const roleTitle = role ? localized(role.title) : selectedNpc.roleId;
+      const assignedArticle = selectedNpc.articleIds.map(id => data.articles.find(article => article.id === id)).find(Boolean);
+      const name = `${roleTitle}${assignedArticle ? ` · ${assignedArticle.title}` : ''}`;
+      npcSelectedButton.textContent = COPY.npcOpenSelected[language];
+      npcSelectedButton.setAttribute('aria-label', `${COPY.npcOpenSelected[language]}: ${name}`);
+    }
+    npcSelect.replaceChildren();
+    const placeholder = node('option', '', COPY.npcSelectPlaceholder[language]);
+    placeholder.value = '';
+    placeholder.disabled = true;
+    npcSelect.append(placeholder);
+
+    const groups = new Map<string, ExplorerNpc[]>();
+    for (const npc of roster) {
+      const group = groups.get(npc.roleId) ?? [];
+      group.push(npc);
+      groups.set(npc.roleId, group);
+    }
+    const roleIds = [...data.roles.map(role => role.id), ...[...groups.keys()].filter(id => !data.roles.some(role => role.id === id))];
+    for (const roleId of roleIds) {
+      const entries = groups.get(roleId);
+      if (!entries?.length) continue;
+      const role = data.roles.find(value => value.id === roleId);
+      const roleTitle = role ? localized(role.title) : roleId;
+      const group = node('optgroup');
+      group.label = `${roleTitle} (${entries.length})`;
+      for (const [index, npc] of entries.entries()) {
+        const articleId = npc.articleIds.find(id => data.articles.some(article => article.id === id));
+        const article = articleId ? data.articles.find(value => value.id === articleId) : undefined;
+        const option = node('option', '', `${String(index + 1).padStart(2, '0')} · ${article?.title ?? npc.id}`);
+        option.value = npc.id;
+        option.dataset.walkerId = npc.id;
+        group.append(option);
+      }
+      npcSelect.append(group);
+    }
+    npcSelect.value = selectedWalkerId && roster.some(npc => npc.id === selectedWalkerId) ? selectedWalkerId : '';
+  }
+
+  function closeNpcList(restoreFocus: boolean): void {
+    npcListOpen = false;
+    updateNpcListVisibility(restoreFocus);
+  }
+
+  function toggleNpcList(): void {
+    if (!state) return;
+    if (npcListOpen) {
+      closeNpcList(true);
+      return;
+    }
+    npcListTrigger = npcListButton;
+    if (state.listOpen) callbacks.onCommand({ type: 'panel', panel: 'list', open: false });
+    if (state.detailOpen) callbacks.onCommand({ type: 'panel', panel: 'detail', open: false });
+    if (moreToolsOpen) setMoreToolsOpen(false);
+    npcListOpen = true;
+    renderNpcList();
+    updateNpcListVisibility(false);
+    npcSelect.focus({ preventScroll: true });
+  }
+
+  function selectNpc(walkerId: string): void {
+    const npc = currentNpcRoster().find(value => value.id === walkerId);
+    if (!npc) return;
+    detailTrigger = npcListButton;
+    npcListOpen = false;
+    callbacks.onSelection({ kind: 'walker', walkerId });
+    queueMicrotask(() => {
+      if (!active || state?.selection?.kind !== 'walker' || state.selection.walkerId !== walkerId) return;
+      const target = detailContent.querySelector<HTMLElement>('[data-npc-question], [data-npc-read]') ?? detailTitle;
+      target.focus({ preventScroll: true });
+    });
   }
 
   function setHelpOpen(open: boolean): void {
@@ -480,7 +681,7 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
   }
 
   function findDetailReturnTarget(): HTMLElement | null {
-    if (detailTrigger?.isConnected && !detailTrigger.closest('[inert]')) return detailTrigger;
+    if (detailTrigger?.isConnected && !detailTrigger.closest('[inert], [hidden]')) return detailTrigger;
     const selection = state?.selection;
     if (!selection) return null;
     const candidates = Array.from(listContent.querySelectorAll<HTMLElement>('[data-item-id], [data-island-id], [data-flow-id]'));
@@ -490,7 +691,7 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
       if (selection.kind === 'flow') return element.dataset.flowId === selection.flowId;
       return false;
     });
-    return target?.closest('[inert]') ? null : target ?? null;
+    return target?.closest('[inert], [hidden]') ? null : target ?? null;
   }
 
   function applyLanguageChrome(): void {
@@ -507,6 +708,12 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
     listButton.setAttribute('aria-label', COPY.themes[language]);
     listButton.title = COPY.themes[language];
     listLabel.textContent = COPY.themes[language];
+    npcListButton.setAttribute('aria-label', COPY.npcList[language]);
+    npcListButton.title = COPY.npcList[language];
+    npcListLabel.textContent = COPY.npcList[language];
+    populationLabel.textContent = COPY.npcPopulation[language];
+    populationInput.setAttribute('aria-label', COPY.npcPopulation[language]);
+    populationReadout.setAttribute('aria-label', COPY.npcPopulation[language]);
     moreToolsButton.setAttribute('aria-label', COPY.moreTools[language]);
     moreToolsButton.title = COPY.moreTools[language];
     moreToolsLabel.textContent = COPY.moreTools[language];
@@ -875,6 +1082,183 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
     appendArticleActions(article, item);
   }
 
+  function renderNpcDialogue(npc: ExplorerNpc, snapshot?: WalkerSnapshot): void {
+    if (!state) return;
+    const language = state.language;
+    const profileNpc = snapshot
+      ? { ...npc, flowId: snapshot.flowId, roleId: snapshot.role }
+      : npc;
+    const profile = buildNpcDialogueProfile(data, profileNpc, language);
+    const articles = [...profile.topics, ...profile.moreArticles];
+    if (!activeNpcDialogue || activeNpcDialogue.dataVersion !== dataVersion || activeNpcDialogue.npcId !== npc.id) {
+      activeNpcDialogue = {
+        dataVersion,
+        npcId: npc.id,
+        articleId: profile.topics[0]?.id ?? profile.moreArticles[0]?.id ?? null,
+        history: [],
+      };
+    }
+    const dialogue = activeNpcDialogue;
+    const index = currentNpcRoster().findIndex(value => value.id === npc.id);
+    const ordinal = String(index >= 0 ? index + 1 : 1).padStart(2, '0');
+    detailKicker.textContent = `${tr('walker')} · ${profile.roleTitle}`;
+    detailTitle.textContent = `${profile.roleTitle} · ${ordinal}`;
+    if (profile.roleColor) detailTitle.style.setProperty('--npc-role-color', profile.roleColor);
+    else detailTitle.style.removeProperty('--npc-role-color');
+    detailContent.replaceChildren();
+
+    const greeting = node('p', 'explorer-npc-greeting', profile.greeting);
+    if (profile.roleColor) greeting.style.setProperty('--npc-role-color', profile.roleColor);
+    const topicChoices = node('div', 'explorer-npc-topics');
+    topicChoices.setAttribute('aria-label', COPY.npcListTitle[language]);
+    const articleCard = node('section', 'explorer-npc-article');
+    const chatLog = node('ol', 'explorer-npc-chat');
+    chatLog.setAttribute('role', 'log');
+    chatLog.setAttribute('aria-live', 'polite');
+    chatLog.setAttribute('aria-relevant', 'additions');
+    chatLog.setAttribute('aria-label', `${profile.roleTitle} ${language === 'zh' ? '對話' : 'conversation'}`);
+
+    const topicButtons = new Map<string, HTMLButtonElement>();
+    const makeTopicButton = (article: Article, more = false): HTMLButtonElement => {
+      const topic = button(article.title, `explorer-npc-topic${more ? ' is-more' : ''}`, article.title, () => selectTopic(article.id));
+      topic.dataset.npcTopicId = article.id;
+      topicButtons.set(article.id, topic);
+      return topic;
+    };
+    for (const article of profile.topics) topicChoices.append(makeTopicButton(article));
+    let moreTopics: HTMLDetailsElement | null = null;
+    if (profile.moreArticles.length) {
+      moreTopics = node('details', 'explorer-npc-more');
+      const moreLabel = node('summary', '', `${tr('npcMoreArticles')} · ${profile.moreArticles.length}`);
+      moreTopics.append(moreLabel);
+      const moreList = node('div', 'explorer-npc-more-list');
+      for (const article of profile.moreArticles) moreList.append(makeTopicButton(article, true));
+      moreTopics.append(moreList);
+      topicChoices.append(moreTopics);
+    }
+
+    const questions = node('div', 'explorer-npc-questions');
+    questions.setAttribute('role', 'group');
+    questions.setAttribute('aria-label', COPY.npcQuestionsTitle[language]);
+    questions.append(node('h3', 'explorer-section-title', COPY.npcQuestionsTitle[language]));
+    const questionButtons = getNpcDialogueQuestions(language).map(question => {
+      const control = button(question.label, 'explorer-npc-question-button', question.label, () => askNpcQuestion(question.id));
+      control.dataset.npcQuestion = question.id;
+      questions.append(control);
+      return control;
+    });
+
+    const actions = node('div', 'explorer-npc-actions');
+    const changeTopic = button('↻', 'explorer-secondary-button explorer-npc-action', tr('npcNextTopic'), () => moveToNextTopic());
+    changeTopic.append(node('span', '', tr('npcNextTopic')));
+    const restart = button('↺', 'explorer-secondary-button explorer-npc-action', tr('npcRestart'), () => restartNpcDialogue());
+    restart.append(node('span', '', tr('npcRestart')));
+    const back = button('←', 'explorer-secondary-button explorer-npc-action', tr('npcBackToList'), () => returnToNpcList());
+    back.append(node('span', '', tr('npcBackToList')));
+    actions.append(changeTopic, restart, back);
+    detailContent.append(greeting, topicChoices, articleCard, questions, chatLog, actions);
+
+    function selectedArticle(): Article | undefined {
+      return dialogue.articleId ? data.articles.find(article => article.id === dialogue.articleId) : undefined;
+    }
+
+    function createExchange(turn: NpcDialogueTurn): HTMLElement | null {
+      const article = data.articles.find(value => value.id === turn.articleId);
+      if (!article) return null;
+      const question = getNpcDialogueQuestions(language).find(value => value.id === turn.questionId);
+      const exchange = node('li', 'explorer-npc-exchange');
+      exchange.append(node('p', 'explorer-npc-user-message', `${tr('npcYou')}: ${question?.label ?? ''}`));
+      const reply = node('p', 'explorer-npc-reply', `${profile.roleTitle}: ${createNpcReply(article, turn.questionId, language)}`);
+      reply.dataset.npcReply = '';
+      exchange.append(reply);
+      return exchange;
+    }
+
+    function renderHistory(): void {
+      chatLog.replaceChildren();
+      for (const turn of dialogue.history) {
+        const exchange = createExchange(turn);
+        if (exchange) chatLog.append(exchange);
+      }
+    }
+
+    function renderArticle(): void {
+      const article = selectedArticle();
+      if (!article) {
+        articleCard.removeAttribute('data-npc-article-id');
+        articleCard.replaceChildren(node('p', 'explorer-empty', COPY.npcNoArticles[language]));
+        for (const question of questionButtons) question.disabled = true;
+        changeTopic.disabled = true;
+        return;
+      }
+      articleCard.dataset.npcArticleId = article.id;
+      articleCard.replaceChildren();
+      articleCard.append(node('h3', 'explorer-npc-article-title', article.title));
+      articleCard.append(node('p', 'explorer-npc-article-meta', `${article.authors || (language === 'zh' ? '作者未列出' : 'Author not listed')} · ${article.year}`));
+      const summary = node('div', 'explorer-npc-summary');
+      summary.append(node('span', 'explorer-eyebrow', tr('npcSiteSummary')));
+      summary.append(node('p', 'explorer-article-summary', article.summary.trim() || tr('npcNoSummary')));
+      articleCard.append(summary);
+      const read = button('↗', 'explorer-primary-button explorer-npc-read', tr('readArticle'), () => callbacks.onReadArticle(article.id));
+      read.dataset.npcRead = '';
+      read.dataset.articleId = article.id;
+      read.setAttribute('aria-label', `${tr('readArticle')}: ${article.title}`);
+      read.append(node('span', '', tr('readArticle')));
+      articleCard.append(read);
+      for (const [id, topic] of topicButtons) topic.setAttribute('aria-pressed', String(id === article.id));
+      for (const question of questionButtons) question.disabled = false;
+      changeTopic.disabled = articles.length <= 1;
+    }
+
+    function selectTopic(articleId: string): void {
+      if (!articles.some(article => article.id === articleId) || dialogue.articleId === articleId) return;
+      dialogue.articleId = articleId;
+      dialogue.history = [];
+      renderArticle();
+      renderHistory();
+    }
+
+    function askNpcQuestion(questionId: NpcQuestionId): void {
+      const article = selectedArticle();
+      if (!article) return;
+      const turn = { articleId: article.id, questionId };
+      dialogue.history.push(turn);
+      const removed = dialogue.history.length > 6;
+      if (removed) dialogue.history.shift();
+      if (removed) chatLog.firstElementChild?.remove();
+      const exchange = createExchange(turn);
+      if (exchange) chatLog.append(exchange);
+    }
+
+    function moveToNextTopic(): void {
+      if (articles.length <= 1) return;
+      const current = articles.findIndex(article => article.id === dialogue.articleId);
+      selectTopic(articles[(current + 1 + articles.length) % articles.length].id);
+    }
+
+    function restartNpcDialogue(): void {
+      dialogue.articleId = profile.topics[0]?.id ?? profile.moreArticles[0]?.id ?? null;
+      dialogue.history = [];
+      renderArticle();
+      renderHistory();
+    }
+
+    function returnToNpcList(): void {
+      detailTrigger = npcListButton;
+      callbacks.onCommand({ type: 'panel', panel: 'detail', open: false });
+      npcListTrigger = npcListButton;
+      npcListOpen = true;
+      renderNpcList();
+      updateNpcListVisibility(false);
+      npcSelect.value = npc.id;
+      npcSelect.focus({ preventScroll: true });
+    }
+
+    renderArticle();
+    renderHistory();
+    if (moreTopics) moreTopics.open = false;
+  }
+
   function appendRelatedArticles(flow: ExplorerFlow): void {
     detailContent.append(node('h3', 'explorer-section-title', tr('relatedArticles')));
     const articles = flow.articleIds.flatMap(id => data.articles.filter(article => article.id === id));
@@ -887,21 +1271,12 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
     }
   }
 
-  function renderFlowDetail(flow: ExplorerFlow, snapshot?: WalkerSnapshot): void {
+  function renderFlowDetail(flow: ExplorerFlow): void {
     const from = islandFor(flow.from);
     const to = islandFor(flow.to);
-    detailKicker.textContent = snapshot ? `${tr('walker')} · ${snapshot.id}` : tr(EVIDENCE_KEYS[flow.evidence.kind]);
+    detailKicker.textContent = tr(EVIDENCE_KEYS[flow.evidence.kind]);
     detailTitle.textContent = `${localized(from?.title ?? { zh: flow.from, en: flow.from })} → ${localized(to?.title ?? { zh: flow.to, en: flow.to })}`;
     detailContent.replaceChildren();
-    if (snapshot) {
-      const role = data.roles.find(value => value.id === snapshot.role);
-      detailContent.append(node('p', 'explorer-walker-summary', `${tr('readerRole')}: ${localized(role?.title ?? { zh: snapshot.role, en: snapshot.role })} · ${tr('cargo')}: ${localized(CARGO[snapshot.cargo])}`));
-      detailContent.append(node('p', 'explorer-editorial-note', tr('walkerDisclosure')));
-      const status = node('p', 'explorer-walker-status');
-      const destination = node('p', 'explorer-destination');
-      walkerLiveFields = { status, destination };
-      detailContent.append(status, destination);
-    }
     const route = node('dl', 'explorer-flow-facts');
     const facts: Array<[CopyKey, string]> = [
       ['from', localized(from?.title ?? { zh: flow.from, en: flow.from })],
@@ -929,9 +1304,10 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
 
   function renderDetail(): void {
     if (!state) return;
-    walkerLiveFields = null;
     const selection = state.selection;
+    detailPanel.dataset.detailKind = selection?.kind ?? '';
     detailContent.replaceChildren();
+    if (selection?.kind !== 'walker') activeNpcDialogue = null;
     if (!selection) {
       detailKicker.textContent = tr('detail');
       detailTitle.textContent = tr('noSelection');
@@ -957,14 +1333,14 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
       else renderUnavailableDetail();
       return;
     }
-    const snapshot = resolveWalker(selection.walkerId);
-    const flow = snapshot && flowFor(snapshot.flowId);
-    detailKicker.textContent = tr('walker');
-    if (flow && snapshot) renderFlowDetail(flow, snapshot);
-    else {
+    const npc = currentNpcRoster().find(value => value.id === selection.walkerId);
+    if (!npc) {
+      activeNpcDialogue = null;
       detailTitle.textContent = `${tr('walker')} · ${selection.walkerId}`;
-      detailContent.append(node('p', 'explorer-empty', tr('walkerUnavailable')));
+      detailContent.append(node('p', 'explorer-empty', tr('npcUnavailable')));
+      return;
     }
+    renderNpcDialogue(npc, resolveWalker(selection.walkerId));
   }
 
   function renderUnavailableDetail(): void {
@@ -1068,9 +1444,19 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
 
   function render(): void {
     if (!state) return;
+    const nextSelectionKey = selectionKey(state.selection);
+    if (npcListOpen && state.selection && (state.detailOpen || nextSelectionKey !== lastRenderedSelectionKey)) npcListOpen = false;
+    lastRenderedSelectionKey = nextSelectionKey;
     setSeasonVariables();
     applyLanguageChrome();
     updatePanelVisibility();
+    updateNpcListVisibility();
+    const populationValue = String(state.population);
+    if (populationInput.value !== populationValue) populationInput.value = populationValue;
+    setText(populationReadout, populationValue);
+    const selection = state.selection;
+    if (selection?.kind !== 'walker' || !currentNpcRoster().some(npc => npc.id === selection.walkerId)) activeNpcDialogue = null;
+    if (npcListOpen) renderNpcList();
     if (searchInput.value !== state.query) searchInput.value = state.query;
     const nextListKey = [dataVersion, state.language, state.query, state.tab, state.chapter, selectionKey(state.selection), state.bookmarkedArticleIds.join(','), state.completedArticleIds.join(',')].join('|');
     if (nextListKey !== listKey) {
@@ -1081,18 +1467,6 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
     if (nextDetailKey !== detailKey) {
       detailKey = nextDetailKey;
       renderDetail();
-    }
-    if (state.selection?.kind === 'walker' && walkerLiveFields) {
-      const snapshot = resolveWalker(state.selection.walkerId);
-      const flow = snapshot && flowFor(snapshot.flowId);
-      if (snapshot && flow) {
-        const destination = snapshot.direction === 1 ? islandFor(flow.to) : islandFor(flow.from);
-        setText(walkerLiveFields.status, `${tr('walkerStatus')}: ${tr(snapshot.status === 'moving' ? 'walkerMoving' : 'walkerWaiting')}`);
-        setText(walkerLiveFields.destination, `${tr('destination')}: ${localized(destination?.title ?? { zh: tr('noWalkerDestination'), en: tr('noWalkerDestination') })}`);
-      } else {
-        setText(walkerLiveFields.status, `${tr('walkerStatus')}: ${tr('walkerStatusUnavailable')}`);
-        setText(walkerLiveFields.destination, `${tr('destination')}: ${tr('noWalkerDestination')}`);
-      }
     }
     setText(hudTime, minuteLabel(state.minute));
     for (const preset of PRESETS) {
@@ -1182,6 +1556,8 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
   }
 
   searchInput.addEventListener('input', () => callbacks.onCommand({ type: 'query', query: searchInput.value }), { signal: abort.signal });
+  populationInput.addEventListener('input', () => callbacks.onCommand({ type: 'population', count: Number(populationInput.value) }), { signal: abort.signal });
+  npcSelect.addEventListener('change', () => selectNpc(npcSelect.value), { signal: abort.signal });
   chapterSelect.addEventListener('change', () => callbacks.onCommand({ type: 'chapter', chapter: (chapterSelect.value || null) as ChapterFilter }), { signal: abort.signal });
   journalSelect.addEventListener('change', () => callbacks.onCommand({ type: 'journalFilter', flowId: journalSelect.value || null }), { signal: abort.signal });
   document.addEventListener('keydown', event => {
@@ -1199,6 +1575,12 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
       closeWithFocus('detail');
       return;
     }
+    if (npcListOpen) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeNpcList(true);
+      return;
+    }
     if (moreToolsOpen) {
       event.preventDefault();
       event.stopPropagation();
@@ -1213,6 +1595,7 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
   }, { signal: abort.signal });
   addSheetBehavior(listHandle, listPanel);
   addSheetBehavior(detailHandle, detailPanel);
+  addSheetBehavior(npcListHandle, npcListPanel);
   listHandle.setAttribute('aria-label', COPY.list.zh);
   detailHandle.setAttribute('aria-label', COPY.detail.zh);
 
@@ -1220,6 +1603,12 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
     setData(nextData) {
       data = nextData;
       dataVersion += 1;
+      activeNpcDialogue = null;
+      npcListOpen = false;
+      npcListKey = '';
+      npcRosterKey = '';
+      npcRoster = [];
+      if (state) state = { ...state, selection: null, detailOpen: false };
       listKey = '';
       detailKey = '';
       journalKey = '';
@@ -1255,12 +1644,14 @@ export function createExplorerUI(host: HTMLElement, initialData: ExplorerData, c
     },
     setActive(nextActive) {
       active = nextActive;
+      if (!active) npcListOpen = false;
       root.hidden = !active;
       root.inert = !active;
       hud.inert = !moreToolsOpen || !active;
       helpPanel.inert = !helpOpen || !active;
       if (state) {
         updatePanelVisibility();
+        updateNpcListVisibility(false);
         renderJournal();
       }
     },
